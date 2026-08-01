@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ParentRegisterForm } from './components/ParentRegisterForm';
-import { TenantRegisterForm } from './components/TenantRegisterForm';
+import { ParentRegisterForm } from './ParentRegisterForm';
+import { TenantRegisterForm } from './TenantRegisterForm';
 
 export function RegisterFormSwitch() {
   const searchParams = useSearchParams();

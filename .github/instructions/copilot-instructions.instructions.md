@@ -72,3 +72,21 @@ You are an Expert Performance and Technical SEO Engineer. When generating or ref
 ## 8. API Integration & Contracts
 - **Single Source of Truth:** Never guess API endpoints, request payloads, or response shapes. Always read the Swagger contracts located in the `/_docs/api` directory.
 - **Type Safety:** When writing Server Actions or fetch requests, strictly map your TypeScript interfaces and Zod validation schemas to the definitions found in the corresponding `swagger.json` file.
+
+## 9. Project Structure & App Router Conventions
+Strictly adhere to the official Next.js App Router project structure and file conventions. Never use the legacy `pages/` directory.
+
+- **Route Groups for Organization:** Use Route Groups (e.g., `(auth)`, `(dashboard)`, `(marketing)`) to logically group related routes without affecting the public-facing URL structure.
+- **Private Folders:** Use the underscore prefix (e.g., `_components`, `_docs`, `_lib`) to opt a folder out of routing. This is mandatory for storing internal documentation, local API contracts (like `_docs/api/identity_swagger.json`), or strictly internal domain logic that should never accidentally become a public route.
+- **Strict File Conventions:** Only use Next.js reserved filenames for routing behaviors:
+  - `page.tsx`: The unique UI of a route.
+  - `layout.tsx`: Shared UI for a segment and its children.
+  - `loading.tsx`: Loading UI for a segment (Suspense fallback).
+  - `error.tsx`: Error UI for a segment (React error boundary).
+  - `not-found.tsx`: 404 UI for a segment.
+  - `route.ts`: Server-side API endpoints (must not exist in the same segment as `page.tsx`).
+- **Feature Colocation:** Next.js App Router supports safe colocation. Place feature-specific components, custom hooks, and local schemas directly inside their respective route folders (e.g., `app/(auth)/login/components/LoginForm.tsx`). Do not dump every component into the global `components/` folder.
+- **Global Assets:** 
+  - Place universally shared UI components (e.g., Buttons, Inputs, standard Modals) in a root `/components` or `/src/components` directory.
+  - Place shared logic, API fetchers, and formatting functions in a root `/lib` or `/utils` directory.
+- **Advanced Routing:** Utilize Parallel Routes (`@folder`) for complex layouts (e.g., dashboards with independent loading states) and Intercepting Routes (`(..)folder`) for contextual overlays like modals, when requested by the architecture.

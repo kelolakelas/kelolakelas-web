@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
-import { registerTenant, type ActionResponse } from '../actions';
+import { registerTenant, type ActionResponse } from '../_actions/actions';
 
 const initialState: ActionResponse = {
   success: false,

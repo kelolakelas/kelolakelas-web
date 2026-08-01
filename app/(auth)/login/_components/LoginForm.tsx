@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { loginAction, type ActionResponse } from './actions';
+import { loginAction, type ActionResponse } from '../_actions/actions';
 
 const initialState: ActionResponse = {
   success: false,

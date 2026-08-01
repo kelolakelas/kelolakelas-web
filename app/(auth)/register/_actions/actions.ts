@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { parentRegisterSchema, tenantRegisterSchema } from './schema';
+import { parentRegisterSchema, tenantRegisterSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
   success: boolean;

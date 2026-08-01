@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { RegisterFormSwitch } from './RegisterFormSwitch';
+import { RegisterFormSwitch } from './_components/RegisterFormSwitch';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
