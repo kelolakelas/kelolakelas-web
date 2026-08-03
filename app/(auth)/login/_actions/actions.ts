@@ -1,5 +1,9 @@
 'use server';
 
+import { apiRequest, getAuthCookieName, getTenantCookieName } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/errors';
+import type { LoginResponse } from '@/lib/api/types';
+import { decodeTokenClaims } from '@/lib/auth/token';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { loginSchema } from '../_schemas/schema';
@@ -10,8 +14,12 @@ export interface ActionResponse {
   errors?: Record<string, string[]>;
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const DEFAULT_COOKIE_NAME = 'auth_token';
+
+function getSafeRedirect(value: FormDataEntryValue | null, fallback: string): string {
+  const redirectTo = typeof value === 'string' ? value : '';
+  return redirectTo.startsWith('/dashboard/') && !redirectTo.startsWith('//') ? redirectTo : fallback;
+}
 
 /**
  * Server Action for user authentication against the identity service API.
@@ -39,30 +47,22 @@ export async function loginAction(
   }
 
   const { email, password } = validatedFields.data;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-  const cookieName = process.env.AUTH_COOKIE_NAME || DEFAULT_COOKIE_NAME;
-
-  let isLoginSuccessful = false;
+  const cookieName = getAuthCookieName() || DEFAULT_COOKIE_NAME;
+  let destination: string;
 
   try {
     // 2. Request Authentication from Backend Identity Service
-    const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
+    const result = await apiRequest<LoginResponse>('/api/v1/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
       body: JSON.stringify({ email, password }),
-      cache: 'no-store',
     });
 
-    const result = await response.json();
+    if (!result.data?.token || !result.data.user) throw new ApiError('Respons login tidak lengkap.', 502);
 
-    if (!response.ok || result.status !== 'success' || !result.data?.token) {
-      return {
-        success: false,
-        message: result.message || 'Invalid email or password. Please try again.',
-      };
+    const tenantId = result.data.tenant_id || result.data.user.tenant_id || decodeTokenClaims(result.data.token).tenant_id;
+    const isParent = result.data.user.is_parent === true || result.data.user.role === 'parent';
+    if (!isParent && !tenantId) {
+      return { success: false, message: 'Login berhasil, tetapi tenant context tidak tersedia. Hubungi administrator.' };
     }
 
     // 3. Persist JWT Token in Secure HTTP-Only Cookie
@@ -75,22 +75,31 @@ export async function loginAction(
       maxAge: 60 * 60 * 24 * 7, // 7 Days
     });
 
-    isLoginSuccessful = true;
+    if (tenantId) {
+      cookieStore.set(
+        getTenantCookieName(),
+        tenantId,
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 7,
+        }
+      );
+    }
+
+    const fallback = isParent ? '/dashboard/parent' : '/dashboard/tenant';
+    destination = getSafeRedirect(formData.get('redirectTo'), fallback);
   } catch (error) {
+    if (error instanceof ApiError) {
+      return { success: false, message: error.message };
+    }
     console.error('[loginAction Error]:', error);
     return {
       success: false,
       message: 'An unexpected connection error occurred. Please try again later.',
     };
   }
-
-  // 4. Redirect Authenticated User to Dashboard
-  if (isLoginSuccessful) {
-    redirect('/dashboard');
-  }
-
-  return {
-    success: false,
-    message: 'Authentication failed.',
-  };
+  redirect(destination);
 }

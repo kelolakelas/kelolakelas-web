@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import type { Role } from '../_lib/schema';
+import { useActionState, useMemo, useState } from 'react';
+import { deleteTenantRole, updateTenantRole } from '../_actions/roleActions';
+import type { ActionResponse, Role } from '../_lib/schema';
 
 interface RoleListTableProps {
   roles: Role[];
@@ -10,6 +11,9 @@ interface RoleListTableProps {
 export function RoleListTable({ roles }: RoleListTableProps) {
   const [filterTab, setFilterTab] = useState<'all' | 'system' | 'custom'>('all');
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [updateState, updateAction] = useActionState<ActionResponse, FormData>(updateTenantRole, { success: false, message: '' });
+  const [deleteState, deleteAction] = useActionState<ActionResponse, FormData>(deleteTenantRole, { success: false, message: '' });
 
   const filteredRoles = useMemo(() => {
     if (filterTab === 'system') {
@@ -163,12 +167,35 @@ export function RoleListTable({ roles }: RoleListTableProps) {
                       )}
                     </div>
                   )}
+
+                  {!role.is_system_role && (
+                    <div className="flex gap-2 border-t border-gray-100 pt-3">
+                      <button type="button" onClick={() => setEditingRoleId(editingRoleId === role.id ? null : role.id)} className="min-h-10 rounded-lg border border-gray-300 px-3 text-xs font-semibold text-gray-700">
+                        {editingRoleId === role.id ? 'Tutup' : 'Edit'}
+                      </button>
+                      <form action={deleteAction} onSubmit={(event) => { if (!window.confirm(`Hapus role ${role.name}?`)) event.preventDefault(); }}>
+                        <input type="hidden" name="roleId" value={role.id} />
+                        <button type="submit" className="min-h-10 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-600">Hapus</button>
+                      </form>
+                    </div>
+                  )}
+
+                  {editingRoleId === role.id && !role.is_system_role && (
+                    <form action={updateAction} className="space-y-2 border-t border-gray-100 pt-3">
+                      <input type="hidden" name="roleId" value={role.id} />
+                      {permissionsList.map((permission) => <input key={permission.id} type="hidden" name="permissionIds" value={permission.id} />)}
+                      <input name="name" defaultValue={role.name} className="min-h-10 w-full rounded-lg border border-gray-300 px-3 text-xs" aria-label="Nama role" />
+                      <input name="description" defaultValue={role.description || ''} className="min-h-10 w-full rounded-lg border border-gray-300 px-3 text-xs" aria-label="Deskripsi role" />
+                      <button type="submit" className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white">Simpan role</button>
+                    </form>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       )}
+      {(updateState.message || deleteState.message) && <p role="status" className="text-sm text-gray-600">{updateState.message || deleteState.message}</p>}
     </div>
   );
 }

@@ -125,16 +125,14 @@ export default function TenantOverviewPage() {
           <div className="space-y-3 text-xs">
             <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
               <span className="font-medium text-gray-700 dark:text-gray-300">Identity Service</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Active
+              <span className="font-semibold text-gray-500 dark:text-gray-400">
+                Not checked
               </span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
               <span className="font-medium text-gray-700 dark:text-gray-300">Academic Service</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Active
+              <span className="font-semibold text-gray-500 dark:text-gray-400">
+                Not checked
               </span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">

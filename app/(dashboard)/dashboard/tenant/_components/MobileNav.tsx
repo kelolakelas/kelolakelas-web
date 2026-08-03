@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { TENANT_NAV_ITEMS } from '../_constants/constants';
+import { LogoutButton } from './LogoutButton';
 
 function NavIcon({ href }: { href: string }) {
   if (href === '/dashboard/tenant') {
@@ -53,11 +54,6 @@ function NavIcon({ href }: { href: string }) {
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-
-  // Close drawer automatically when route changes
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 md:hidden">
@@ -128,6 +124,7 @@ export function MobileNav() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={() => setIsOpen(false)}
                     className={`flex min-h-[44px] items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-semibold'
@@ -155,6 +152,7 @@ export function MobileNav() {
                   </span>
                 </div>
               </div>
+              <div className="mt-2"><LogoutButton /></div>
             </div>
           </div>
         </div>

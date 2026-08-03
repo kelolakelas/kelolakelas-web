@@ -1,0 +1,13 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { getEnrollments } from '../enrollments/_queries/queries';
+import { ReportForm } from './_components/ReportForm';
+import { getReports } from './_queries/queries';
+
+export const metadata: Metadata = { title: 'Reports - Tenant Dashboard', alternates: { canonical: '/dashboard/tenant/reports' } };
+
+export default async function TenantReportsPage({ searchParams }: { searchParams: Promise<{ page?: string; search?: string; student_id?: string; enrollment_id?: string; date_from?: string; date_to?: string }> }) {
+  const params = await searchParams;
+  const [reports, enrollments] = await Promise.all([getReports({ ...params, page: Math.max(1, Number(params.page) || 1) }), getEnrollments({ page: 1 })]);
+  return <main className="mx-auto w-full max-w-6xl space-y-6"><header className="border-b border-gray-200 pb-5"><h1 className="text-2xl font-bold text-gray-900">Reports</h1><p className="mt-1 text-sm text-gray-600">Buat dan kelola evaluasi dari enrollment tenant.</p></header><div className="grid gap-6 lg:grid-cols-[1fr_2fr]"><ReportForm enrollments={enrollments.data} /><section className="space-y-3"><form method="get" className="grid gap-2 sm:grid-cols-4"><input name="search" defaultValue={params.search} placeholder="Cari report" className="min-h-11 rounded-lg border border-gray-300 px-3" /><input name="date_from" type="date" defaultValue={params.date_from} className="min-h-11 rounded-lg border border-gray-300 px-3" /><input name="date_to" type="date" defaultValue={params.date_to} className="min-h-11 rounded-lg border border-gray-300 px-3" /><button className="min-h-11 rounded-lg bg-gray-900 text-sm font-semibold text-white">Filter</button></form>{reports.error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{reports.error}</div>}{reports.data.length === 0 ? <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Belum ada report.</div> : reports.data.map((report) => <article key={report.id} className="rounded-xl border border-gray-200 bg-white p-4"><div className="flex justify-between gap-3"><div><h2 className="font-semibold">{report.title}</h2><p className="text-sm text-gray-500">Score: {report.score ?? 'Belum dinilai'} · {report.created_at?.slice(0, 10) || 'Tanggal tidak tersedia'}</p></div><Link href={`/dashboard/tenant/reports/${report.id}`} className="text-sm font-semibold text-blue-700">Detail</Link></div></article>)}</section></div></main>;
+}

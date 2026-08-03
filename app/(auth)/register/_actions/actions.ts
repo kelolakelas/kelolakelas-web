@@ -1,5 +1,8 @@
 'use server';
 
+import { apiRequest, getAuthCookieName, getTenantCookieName } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/errors';
+import type { ParentRegistrationResponse, TenantRegistrationResponse } from '@/lib/api/types';
 import { cookies } from 'next/headers';
 import { parentRegisterSchema, tenantRegisterSchema } from '../_schemas/schema';
 
@@ -9,9 +12,6 @@ export interface ActionResponse {
   errors?: Record<string, string[]>;
   redirectTo?: string;
 }
-
-const DEFAULT_API_URL = 'http://localhost:3000';
-const DEFAULT_COOKIE_NAME = 'auth_token';
 
 /**
  * Server Action for Parent User Registration.
@@ -40,45 +40,21 @@ export async function registerParent(
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
-    const response = await fetch(`${baseUrl}/api/v1/auth/register`, {
+    const result = await apiRequest<ParentRegistrationResponse>('/api/v1/auth/register', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
       body: JSON.stringify(validatedFields.data),
-      cache: 'no-store',
     });
 
-    const result = await response.json();
-
-    if (!response.ok || result.status !== 'success') {
-      return {
-        success: false,
-        message: result.message || 'Registration failed. Please try again.',
-      };
-    }
-
-    if (result.data?.token) {
-      const cookieStore = await cookies();
-      cookieStore.set(process.env.AUTH_COOKIE_NAME || DEFAULT_COOKIE_NAME, result.data.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7,
-      });
-    }
+    if (!result.data?.user) return { success: false, message: 'Respons registrasi parent tidak lengkap.' };
 
     return {
       success: true,
-      message: 'Parent account registered successfully.',
-      redirectTo: '/dashboard/parent',
+      message: 'Parent account berhasil dibuat. Silakan masuk.',
+      redirectTo: '/login',
     };
   } catch (error) {
+    if (error instanceof ApiError) return { success: false, message: error.message };
     console.error('[registerParent Error]:', error);
     return {
       success: false,
@@ -116,37 +92,30 @@ export async function registerTenant(
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
-    const response = await fetch(`${baseUrl}/api/v1/tenants/register`, {
+    const result = await apiRequest<TenantRegistrationResponse>('/api/v1/tenants/register', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
       body: JSON.stringify(validatedFields.data),
-      cache: 'no-store',
     });
 
-    const result = await response.json();
-
-    if (!response.ok || result.status !== 'success') {
-      return {
-        success: false,
-        message: result.message || 'Tenant registration failed. Please try again.',
-      };
-    }
-
-    if (result.data?.token) {
+    if (result.data?.token && result.data.tenant?.id) {
       const cookieStore = await cookies();
-      cookieStore.set(process.env.AUTH_COOKIE_NAME || DEFAULT_COOKIE_NAME, result.data.token, {
+      cookieStore.set(getAuthCookieName(), result.data.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60 * 24 * 7,
       });
+      cookieStore.set(getTenantCookieName(), result.data.tenant.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    } else {
+      return { success: false, message: 'Respons registrasi tenant tidak lengkap.' };
     }
 
     return {
@@ -155,6 +124,7 @@ export async function registerTenant(
       redirectTo: '/dashboard/tenant',
     };
   } catch (error) {
+    if (error instanceof ApiError) return { success: false, message: error.message };
     console.error('[registerTenant Error]:', error);
     return {
       success: false,

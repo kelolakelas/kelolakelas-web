@@ -1,25 +1,28 @@
 'use client';
 
-import { useState } from 'react';
-import type { Category, ClassEntity } from '../_lib/schema';
+import { startTransition, useActionState, useEffect, useState } from 'react';
+import { createClassSetup, type ActionResponse } from '../_actions/classActions';
+import type { Category, CategoryDraft, ClassDraft, ScheduleItemInput } from '../_lib/schema';
 import { CategoryForm } from './CategoryForm';
 import { ClassForm } from './ClassForm';
 import { ScheduleForm } from './ScheduleForm';
 
 interface ClassCreationWizardProps {
-  existingCategories: Category[];
   onComplete?: () => void;
 }
 
 export function ClassCreationWizard({
-  existingCategories,
   onComplete,
 }: ClassCreationWizardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [createdClass, setCreatedClass] = useState<ClassEntity | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<(Category | CategoryDraft) | null>(null);
+  const [createdClass, setCreatedClass] = useState<ClassDraft | null>(null);
+  const [commitState, commitAction, isSubmitting] = useActionState<ActionResponse, FormData>(
+    createClassSetup,
+    { success: false, message: '' }
+  );
 
   const handleOpen = () => {
     setStep(1);
@@ -35,22 +38,31 @@ export function ClassCreationWizard({
     setCreatedClass(null);
   };
 
-  const handleCategorySelected = (category: Category) => {
+  const handleCategorySelected = (category: Category | CategoryDraft) => {
     setSelectedCategory(category);
     setStep(2);
   };
 
-  const handleClassCreated = (newClass: ClassEntity) => {
-    setCreatedClass(newClass);
+  const handleClassCreated = (classDraft: ClassDraft) => {
+    setCreatedClass(classDraft);
     setStep(3);
   };
 
-  const handleScheduleComplete = () => {
-    handleClose();
-    if (onComplete) {
-      onComplete();
-    }
+  const handleScheduleComplete = (schedules: ScheduleItemInput[]) => {
+    if (!selectedCategory || !createdClass) return;
+    const formData = new FormData();
+    formData.set('category', JSON.stringify(selectedCategory));
+    formData.set('class', JSON.stringify(createdClass));
+    formData.set('schedules', JSON.stringify(schedules));
+    startTransition(() => {
+      commitAction(formData);
+    });
   };
+
+  useEffect(() => {
+    if (!commitState.success) return;
+    onComplete?.();
+  }, [commitState.success, onComplete]);
 
   return (
     <>
@@ -130,8 +142,7 @@ export function ClassCreationWizard({
             <div className="py-2">
               {step === 1 && (
                 <CategoryForm
-                  existingCategories={existingCategories}
-                  onSelectCategory={handleCategorySelected}
+                  onCreateCategory={handleCategorySelected}
                 />
               )}
 
@@ -148,6 +159,9 @@ export function ClassCreationWizard({
                   createdClass={createdClass}
                   onScheduleSuccess={handleScheduleComplete}
                   onBack={() => setStep(2)}
+                  isSubmitting={isSubmitting}
+                  errorMessage={!commitState.success ? commitState.message : undefined}
+                  successMessage={commitState.success ? commitState.message : undefined}
                 />
               )}
             </div>

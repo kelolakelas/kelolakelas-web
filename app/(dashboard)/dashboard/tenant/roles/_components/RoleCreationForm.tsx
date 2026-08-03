@@ -1,13 +1,12 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useState } from 'react';
 import { createTenantRole } from '../_actions/roleActions';
 import type { ActionResponse, Permission } from '../_lib/schema';
 import { PermissionSelector } from './PermissionSelector';
 
 interface RoleCreationFormProps {
   availablePermissions: Permission[];
-  onSuccess?: () => void;
 }
 
 const initialState: ActionResponse = {
@@ -17,25 +16,12 @@ const initialState: ActionResponse = {
 
 export function RoleCreationForm({
   availablePermissions,
-  onSuccess,
 }: RoleCreationFormProps) {
   const [state, formAction, isPending] = useActionState(createTenantRole, initialState);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>([]);
-
-  // Reset form when action completes successfully
-  useEffect(() => {
-    if (state.success) {
-      setName('');
-      setDescription('');
-      setSelectedPermissionIds([]);
-      if (onSuccess) {
-        onSuccess();
-      }
-    }
-  }, [state.success, onSuccess]);
 
   const handleReset = () => {
     setName('');

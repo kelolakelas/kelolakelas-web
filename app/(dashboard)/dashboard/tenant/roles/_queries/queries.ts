@@ -1,93 +1,41 @@
-import { cookies } from 'next/headers';
+import { apiRequest, unwrapList } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/errors';
+import type { QueryResult } from '@/lib/api/types';
 import type { Permission, Role } from '../_lib/schema';
 
-const DEFAULT_API_URL = 'http://localhost:3000';
-const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
-const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
+interface ListOptions { page?: number; pageSize?: number; search?: string }
 
-/**
- * Extracts authorization and tenant headers from server cookies.
- */
-async function getAuthHeaders(): Promise<HeadersInit> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE)?.value || '';
-  const tenantId = cookieStore.get(TENANT_COOKIE)?.value || '';
+function withListQuery(path: string, options: ListOptions = {}): string {
+  const params = new URLSearchParams({ page: String(options.page || 1), page_size: String(options.pageSize || 20) });
+  if (options.search?.trim()) params.set('search', options.search.trim());
+  return `${path}?${params.toString()}`;
+}
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+async function getList<T>(path: string, options?: ListOptions): Promise<QueryResult<T[]>> {
+  try {
+    const response = await apiRequest<T[] | { items: T[]; pagination?: QueryResult<T[]>['pagination'] }>(withListQuery(path, options));
+    return unwrapList(response.data);
+  } catch (error) {
+    return {
+      data: [],
+      error: error instanceof ApiError ? error.message : 'Data gagal dimuat.',
+      status: error instanceof ApiError ? error.status : undefined,
+    };
   }
-  if (tenantId) {
-    headers['X-Tenant-ID'] = tenantId;
-  }
-
-  return headers;
 }
 
 /**
  * Fetches all available system permissions from the Identity API Gateway.
  * Target Endpoint: GET /api/v1/permissions
  */
-export async function getAvailablePermissions(): Promise<Permission[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
-  try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${baseUrl}/api/v1/permissions`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.warn('[getAvailablePermissions] Non-OK status:', response.status);
-      return [];
-    }
-
-    const result = await response.json();
-    if (result.status === 'success' && Array.isArray(result.data)) {
-      return result.data;
-    }
-
-    return [];
-  } catch (error) {
-    console.error('[getAvailablePermissions Error]:', error);
-    return [];
-  }
+export async function getAvailablePermissions(options?: ListOptions): Promise<QueryResult<Permission[]>> {
+  return getList<Permission>('/api/v1/permissions', options);
 }
 
 /**
  * Fetches all roles (system and custom) configured for the active tenant.
  * Target Endpoint: GET /api/v1/roles
  */
-export async function getTenantRoles(): Promise<Role[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
-  try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${baseUrl}/api/v1/roles`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.warn('[getTenantRoles] Non-OK status:', response.status);
-      return [];
-    }
-
-    const result = await response.json();
-    if (result.status === 'success' && Array.isArray(result.data)) {
-      return result.data;
-    }
-
-    return [];
-  } catch (error) {
-    console.error('[getTenantRoles Error]:', error);
-    return [];
-  }
+export async function getTenantRoles(options?: ListOptions): Promise<QueryResult<Role[]>> {
+  return getList<Role>('/api/v1/roles', options);
 }

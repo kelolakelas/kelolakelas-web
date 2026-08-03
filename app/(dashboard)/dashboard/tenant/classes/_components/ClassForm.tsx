@@ -1,9 +1,9 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
+import { useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { createClass, type ActionResponse } from '../_actions/classActions';
-import type { Category, ClassEntity } from '../_lib/schema';
+import type { Category, CategoryDraft, ClassDraft } from '../_lib/schema';
 
 function SubmitClassButton() {
   const { pending } = useFormStatus();
@@ -41,28 +41,28 @@ function SubmitClassButton() {
 }
 
 interface ClassFormProps {
-  selectedCategory: Category;
-  onClassCreated: (createdClass: ClassEntity) => void;
+  selectedCategory: Category | CategoryDraft;
+  onClassCreated: (classDraft: ClassDraft) => void;
   onBack: () => void;
 }
 
-const initialActionState: ActionResponse<ClassEntity> = {
-  success: false,
-  message: '',
-};
-
 export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFormProps) {
   const [classType, setClassType] = useState<'private' | 'group'>('group');
-  const [state, formAction] = useActionState(createClass, initialActionState);
 
-  useEffect(() => {
-    if (state.success && state.data) {
-      onClassCreated(state.data as ClassEntity);
-    }
-  }, [state, onClassCreated]);
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    onClassCreated({
+      name: String(formData.get('name') || '').trim(),
+      type: classType,
+      price: Number(formData.get('price') || 0),
+      capacity: formData.get('capacity') ? Number(formData.get('capacity')) : undefined,
+      description: String(formData.get('description') || '').trim() || undefined,
+    });
+  };
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {/* Category Indicator Banner */}
       <div className="flex items-center justify-between rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-4 py-3 text-xs">
         <div>
@@ -80,15 +80,6 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
         </button>
       </div>
 
-      <input type="hidden" name="category_id" value={selectedCategory.id} />
-
-      {/* Global Error Notice */}
-      {!state.success && state.message && (
-        <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/50 p-3 text-xs text-red-700 dark:text-red-300">
-          {state.message}
-        </div>
-      )}
-
       {/* Class Name */}
       <div className="space-y-1.5">
         <label
@@ -105,9 +96,6 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
           placeholder="e.g. Physics Grade 10 - Intensive"
           className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         />
-        {state.errors?.name && (
-          <p className="text-xs text-red-600 dark:text-red-400">{state.errors.name[0]}</p>
-        )}
       </div>
 
       {/* Class Type Selector (Private vs Group) */}
@@ -142,9 +130,6 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
             <span className="text-[11px] opacity-75">Single Student</span>
           </button>
         </div>
-        {state.errors?.type && (
-          <p className="text-xs text-red-600 dark:text-red-400">{state.errors.type[0]}</p>
-        )}
       </div>
 
       {/* Price & Capacity Grid */}
@@ -172,9 +157,6 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
               className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 pl-10 pr-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
-          {state.errors?.price && (
-            <p className="text-xs text-red-600 dark:text-red-400">{state.errors.price[0]}</p>
-          )}
         </div>
 
         {/* Capacity Input (relevant mainly for group) */}
@@ -194,11 +176,6 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
             placeholder="10"
             className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
-          {state.errors?.capacity && (
-            <p className="text-xs text-red-600 dark:text-red-400">
-              {state.errors.capacity[0]}
-            </p>
-          )}
         </div>
       </div>
 
@@ -217,11 +194,6 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
           placeholder="Brief overview of curriculum or requirements..."
           className="block w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         />
-        {state.errors?.description && (
-          <p className="text-xs text-red-600 dark:text-red-400">
-            {state.errors.description[0]}
-          </p>
-        )}
       </div>
 
       {/* Form Action Controls */}

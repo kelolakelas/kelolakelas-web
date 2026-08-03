@@ -71,6 +71,7 @@ export function LoginForm() {
       )}
 
       <form action={formAction} noValidate className="space-y-5">
+        <input type="hidden" name="redirectTo" value="/dashboard/tenant" />
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
             Email Address

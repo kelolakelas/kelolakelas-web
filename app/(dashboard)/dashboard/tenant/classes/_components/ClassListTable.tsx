@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { deleteCategory, deleteClass, deleteSchedule } from '../_actions/classActions';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 import { ClassCreationWizard } from './ClassCreationWizard';
+import { DeleteActionButton } from './DeleteActionButton';
 
 interface ClassListTableProps {
   categories: Category[];
@@ -44,7 +46,7 @@ export function ClassListTable({
     return matchName || matchCat;
   });
 
-  if (!classes || classes.length === 0) {
+  if (classes.length === 0 && categories.length === 0 && schedules.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 sm:p-12 text-center shadow-xs">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mb-4 shadow-xs">
@@ -64,7 +66,7 @@ export function ClassListTable({
           Get started by adding your academic categories, creating your first class, and setting up weekly schedules.
         </p>
         <div className="mt-6">
-          <ClassCreationWizard existingCategories={categories} />
+          <ClassCreationWizard />
         </div>
       </div>
     );
@@ -181,6 +183,14 @@ export function ClassListTable({
                     {cls.description}
                   </p>
                 )}
+                <div className="flex justify-end border-t border-gray-100 pt-2 dark:border-gray-800">
+                  <DeleteActionButton
+                    id={cls.id}
+                    label="class"
+                    action={deleteClass}
+                    description="Class akan dinonaktifkan. Schedule aktif terkait ikut dinonaktifkan, enrollment dan session historis tetap tersimpan, sedangkan session mendatang akan dibatalkan."
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -205,6 +215,7 @@ export function ClassListTable({
                   <th scope="col" className="px-6 py-3.5 font-bold">
                     Capacity
                   </th>
+                  <th scope="col" className="px-6 py-3.5 text-right font-bold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -242,6 +253,14 @@ export function ClassListTable({
                     <td className="px-6 py-4 text-xs font-medium">
                       {cls.capacity ? `${cls.capacity} max` : '1 max'}
                     </td>
+                    <td className="px-6 py-2 text-right">
+                      <DeleteActionButton
+                        id={cls.id}
+                        label="class"
+                        action={deleteClass}
+                        description="Class akan dinonaktifkan. Schedule aktif terkait ikut dinonaktifkan, enrollment dan session historis tetap tersimpan, sedangkan session mendatang akan dibatalkan."
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -264,6 +283,14 @@ export function ClassListTable({
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {cat.description || 'No description provided.'}
               </p>
+              <div className="flex justify-end pt-1">
+                <DeleteActionButton
+                  id={cat.id}
+                  label="category"
+                  action={deleteCategory}
+                  description="Category akan dihapus dan tidak dapat dihapus jika masih memiliki class aktif."
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -290,6 +317,14 @@ export function ClassListTable({
                   📍 {sched.location}
                 </p>
               )}
+              <div className="flex justify-end border-t border-gray-100 pt-1 dark:border-gray-800">
+                <DeleteActionButton
+                  id={sched.id}
+                  label="schedule"
+                  action={deleteSchedule}
+                  description="Schedule akan dinonaktifkan. Session historis tetap tersimpan, sedangkan session mendatang akan dibatalkan."
+                />
+              </div>
             </div>
           ))}
         </div>

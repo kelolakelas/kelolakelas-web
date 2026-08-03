@@ -25,7 +25,8 @@ export const roleSchema = z.object({
  * Zod schema matching User/Member structure in tenant context.
  */
 export const memberSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(),
+  user_id: z.string().optional(),
   email: z.string().email(),
   first_name: z.string(),
   last_name: z.string(),
@@ -70,14 +71,6 @@ export const inviteMemberSchema = z.object({
   permissionIds: z.array(z.string()).optional().default([]),
 });
 
-/**
- * Zod schema for updating an existing member's role.
- */
-export const updateMemberRoleSchema = z.object({
-  memberId: z.string().trim().min(1, 'Member ID is required.'),
-  roleId: z.string().trim().min(1, 'Role ID is required.'),
-});
-
 // TypeScript interfaces derived from Zod schemas & Swagger contract
 export type Permission = z.infer<typeof permissionSchema>;
 export type Role = z.infer<typeof roleSchema>;
@@ -85,4 +78,3 @@ export type Member = z.infer<typeof memberSchema>;
 export type TenantInvitation = z.infer<typeof tenantInvitationSchema>;
 export type InvitationResponse = TenantInvitation;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
-export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;

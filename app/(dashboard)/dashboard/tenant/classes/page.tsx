@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { PaginationControls } from '../_components/PaginationControls';
 import { ClassCreationWizard } from './_components/ClassCreationWizard';
 import { ClassListTable } from './_components/ClassListTable';
 import { ClassSkeleton } from './_components/ClassSkeleton';
@@ -17,12 +18,15 @@ export const metadata: Metadata = {
 /**
  * Async content component wrapped in Suspense boundary for Partial Prerendering (PPR).
  */
-async function ClassesContent() {
-  const [categories, classes, schedules] = await Promise.all([
-    getCategories(),
-    getClasses(),
-    getSchedules(),
+async function ClassesContent({ page, search }: { page: number; search?: string }) {
+  const [categoriesResult, classesResult, schedulesResult] = await Promise.all([
+    getCategories({ page, search }),
+    getClasses({ page, search }),
+    getSchedules({ page, search }),
   ]);
+  const errors = [categoriesResult, classesResult, schedulesResult]
+    .map((result) => result.error)
+    .filter(Boolean);
 
   return (
     <div className="space-y-6">
@@ -35,27 +39,44 @@ async function ClassesContent() {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Configure subject categories, class pricing, student capacities, and recurring weekly timetables.
           </p>
+          <form method="get" className="mt-3 flex gap-2">
+            <input name="search" placeholder="Cari class, kategori, atau jadwal" className="min-h-11 rounded-lg border border-gray-300 px-3 text-sm" />
+            <button type="submit" className="min-h-11 rounded-lg bg-gray-900 px-3 text-sm font-semibold text-white">Cari</button>
+          </form>
         </div>
 
         {/* Wizard Trigger Button */}
-        <ClassCreationWizard existingCategories={categories} />
+        <ClassCreationWizard />
       </div>
+
+      {errors.length > 0 && (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {errors[0]}
+        </div>
+      )}
 
       {/* Main Responsive Data Display */}
       <ClassListTable
-        categories={categories}
-        classes={classes}
-        schedules={schedules}
+        categories={categoriesResult.data}
+        classes={classesResult.data}
+        schedules={schedulesResult.data}
       />
+      <div className="space-y-3">
+        <PaginationControls pagination={classesResult.pagination} basePath="/dashboard/tenant/classes" />
+        <PaginationControls pagination={categoriesResult.pagination} basePath="/dashboard/tenant/classes" />
+        <PaginationControls pagination={schedulesResult.pagination} basePath="/dashboard/tenant/classes" />
+      </div>
     </div>
   );
 }
 
-export default function TenantClassesPage() {
+export default async function TenantClassesPage({ searchParams }: { searchParams: Promise<{ page?: string; search?: string }> }) {
+  const params = await searchParams;
+  const page = Math.max(1, Number(params.page) || 1);
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <Suspense fallback={<ClassSkeleton />}>
-        <ClassesContent />
+        <ClassesContent page={page} search={params.search} />
       </Suspense>
     </main>
   );

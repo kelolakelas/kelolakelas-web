@@ -1,0 +1,2 @@
+import { RegistrationForm } from '../_components/RegistrationForm';
+export default async function InvitationRegisterPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) { const { token } = await searchParams; return <main className="mx-auto max-w-lg space-y-6 p-6"><h1 className="text-2xl font-bold">Daftar dari invitation</h1>{token ? <RegistrationForm token={token} /> : <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">Token invitation tidak ditemukan.</p>}</main>; }

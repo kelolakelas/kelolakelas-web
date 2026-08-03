@@ -1,0 +1,4 @@
+'use client';
+import { useActionState } from 'react';
+import { updateAttendance, type AttendanceActionResponse } from '../_actions/actions';
+export function AttendanceStatusForm({ id, status }: { id: string; status: string }) { const [state, action, pending] = useActionState(updateAttendance, { success: false, message: '' } satisfies AttendanceActionResponse); return <form action={action} className="flex items-center gap-2"><input type="hidden" name="id" value={id} /><select name="status" defaultValue={status} className="min-h-10 rounded-lg border border-gray-300 px-2 text-sm"><option value="present">Present</option><option value="absent">Absent</option><option value="late">Late</option><option value="excused">Excused</option></select><button disabled={pending} className="min-h-10 rounded-lg bg-gray-900 px-3 text-xs font-semibold text-white">Simpan</button>{state.message && <span role="status" className="text-xs text-emerald-700">{state.message}</span>}</form>; }

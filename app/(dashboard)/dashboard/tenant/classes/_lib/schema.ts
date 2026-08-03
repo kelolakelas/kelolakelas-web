@@ -29,6 +29,7 @@ export const createClassSchema = z.object({
   }),
   price: z.coerce
     .number({ message: 'Price must be a number' })
+    .int('Price must be an integer')
     .min(0, 'Price cannot be negative'),
   capacity: z.coerce
     .number({ message: 'Capacity must be a number' })
@@ -96,6 +97,14 @@ export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type CreateClassInput = z.infer<typeof createClassSchema>;
 export type ScheduleItemInput = z.infer<typeof scheduleItemSchema>;
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
+export type CategoryDraft = CreateCategoryInput;
+export type ClassDraft = Omit<CreateClassInput, 'category_id'>;
+
+export interface CreateClassWithCategoryInput {
+  category: CreateCategoryInput;
+  class: ClassDraft;
+  schedules?: ScheduleItemInput[];
+}
 
 // Domain Entity Interfaces matching Swagger contract
 export interface Category {
@@ -144,6 +153,13 @@ export interface ClassSession {
   end_time: string;
   status: 'scheduled' | 'rescheduled' | 'cancelled' | 'completed';
   tutor_id?: string;
+}
+
+export interface ClassSetupResponse {
+  category: Category;
+  class: ClassEntity;
+  schedules: ClassSchedule[];
+  sessions: ClassSession[];
 }
 
 export interface CreateInitialSchedulesResponse {

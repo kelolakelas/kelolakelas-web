@@ -1,13 +1,10 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
-import { useFormStatus } from 'react-dom';
-import { createSchedule, type ActionResponse } from '../_actions/classActions';
-import type { ClassEntity, ScheduleItemInput } from '../_lib/schema';
+import type { FormEvent } from 'react';
+import { useState } from 'react';
+import type { ClassDraft, ScheduleItemInput } from '../_lib/schema';
 
-function SubmitScheduleButton() {
-  const { pending } = useFormStatus();
-
+function SubmitScheduleButton({ pending, isPrivate }: { pending: boolean; isPrivate: boolean }) {
   return (
     <button
       type="submit"
@@ -34,7 +31,7 @@ function SubmitScheduleButton() {
           Finalizing Schedules...
         </span>
       ) : (
-        'Complete Class Setup ✓'
+        isPrivate ? 'Create Without Schedule ✓' : 'Complete Class Setup ✓'
       )}
     </button>
   );
@@ -51,20 +48,21 @@ const DAYS_OF_WEEK = [
 ];
 
 interface ScheduleFormProps {
-  createdClass: ClassEntity;
-  onScheduleSuccess: () => void;
+  createdClass: ClassDraft;
+  onScheduleSuccess: (schedules: ScheduleItemInput[]) => void;
   onBack: () => void;
+  isSubmitting: boolean;
+  errorMessage?: string;
+  successMessage?: string;
 }
-
-const initialActionState: ActionResponse = {
-  success: false,
-  message: '',
-};
 
 export function ScheduleForm({
   createdClass,
   onScheduleSuccess,
   onBack,
+  isSubmitting,
+  errorMessage,
+  successMessage,
 }: ScheduleFormProps) {
   const [schedules, setSchedules] = useState<ScheduleItemInput[]>([
     {
@@ -74,14 +72,6 @@ export function ScheduleForm({
       location: 'Room 101',
     },
   ]);
-
-  const [state, formAction] = useActionState(createSchedule, initialActionState);
-
-  useEffect(() => {
-    if (state.success) {
-      onScheduleSuccess();
-    }
-  }, [state, onScheduleSuccess]);
 
   const addScheduleSlot = () => {
     setSchedules((prev) => [
@@ -112,8 +102,13 @@ export function ScheduleForm({
     });
   };
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onScheduleSuccess(createdClass.type === 'private' ? [] : schedules);
+  };
+
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {/* Created Class Details Header */}
       <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3 text-xs">
         <div>
@@ -127,18 +122,24 @@ export function ScheduleForm({
         </div>
       </div>
 
-      <input type="hidden" name="class_id" value={createdClass.id} />
-      <input type="hidden" name="schedules" value={JSON.stringify(schedules)} />
-
       {/* Global Error Notice */}
-      {!state.success && state.message && (
+      {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/50 p-3 text-xs text-red-700 dark:text-red-300">
-          {state.message}
+          {errorMessage}
+        </div>
+      )}
+      {successMessage && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+          {successMessage}
         </div>
       )}
 
-      {/* Recurring Schedule Slot Cards */}
-      <div className="space-y-4">
+      {createdClass.type === 'private' ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+          Private classes do not require a recurring schedule. A schedule can be created later from a parent enrollment and tenant member approval.
+        </div>
+      ) : (
+        <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -193,7 +194,7 @@ export function ScheduleForm({
                     onChange={(e) =>
                       updateScheduleSlot(idx, 'day_of_week', Number(e.target.value))
                     }
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   >
                     {DAYS_OF_WEEK.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -213,7 +214,7 @@ export function ScheduleForm({
                     value={slot.start_time}
                     onChange={(e) => updateScheduleSlot(idx, 'start_time', e.target.value)}
                     required
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
 
@@ -227,7 +228,7 @@ export function ScheduleForm({
                     value={slot.end_time}
                     onChange={(e) => updateScheduleSlot(idx, 'end_time', e.target.value)}
                     required
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
               </div>
@@ -239,13 +240,14 @@ export function ScheduleForm({
                   placeholder="Location / Room (e.g., Room 102 or Online Zoom Link)"
                   value={slot.location || ''}
                   onChange={(e) => updateScheduleSlot(idx, 'location', e.target.value)}
-                  className="block min-h-[44px] w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
             </div>
           ))}
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Form Action Controls */}
       <div className="pt-3 flex items-center justify-between gap-3">
@@ -256,7 +258,7 @@ export function ScheduleForm({
         >
           ← Back
         </button>
-        <SubmitScheduleButton />
+        <SubmitScheduleButton pending={isSubmitting} isPrivate={createdClass.type === 'private'} />
       </div>
     </form>
   );

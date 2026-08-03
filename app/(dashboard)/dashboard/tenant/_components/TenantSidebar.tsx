@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TENANT_NAV_ITEMS } from '../_constants/constants';
+import { LogoutButton } from './LogoutButton';
 
 /**
  * Renders SVG icons corresponding to navigation items.
@@ -138,6 +139,7 @@ export function TenantSidebar() {
             </span>
           </div>
         </div>
+        <div className="mt-2"><LogoutButton /></div>
       </div>
     </aside>
   );

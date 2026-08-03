@@ -9,17 +9,18 @@ interface MembersTableProps {
   roles: Role[];
 }
 
-const initialActionState: ActionResponse = {
-  success: false,
-  message: '',
-};
-
 export function MembersTable({ members, roles }: MembersTableProps) {
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [updateState, updateFormAction, isPending] = useActionState(
-    updateMemberRole,
-    initialActionState
-  );
+  const [roleState, roleAction, rolePending] = useActionState(updateMemberRole, { success: false, message: '' } satisfies ActionResponse);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const filteredMembers = members.filter((member) => {
+    const searchValue = `${member.first_name} ${member.last_name} ${member.email} ${member.phone || ''}`.toLowerCase();
+    const matchesSearch = searchValue.includes(search.toLowerCase().trim());
+    const matchesStatus = statusFilter === 'all' || (member.status || 'active') === statusFilter;
+    const matchesRole = roleFilter === 'all' || (member.role_id || member.role?.id) === roleFilter;
+    return matchesSearch && matchesStatus && matchesRole;
+  });
 
   if (!members || members.length === 0) {
     return (
@@ -44,9 +45,19 @@ export function MembersTable({ members, roles }: MembersTableProps) {
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-3">
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama, email, atau telepon" className="min-h-11 rounded-lg border border-gray-300 px-3 text-sm" />
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-h-11 rounded-lg border border-gray-300 px-3 text-sm" aria-label="Filter status">
+          <option value="all">Semua status</option><option value="active">Aktif</option><option value="pending">Menunggu</option><option value="inactive">Tidak aktif</option>
+        </select>
+        <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="min-h-11 rounded-lg border border-gray-300 px-3 text-sm" aria-label="Filter role">
+          <option value="all">Semua role</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+        </select>
+      </div>
+      {filteredMembers.length === 0 && <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">Tidak ada anggota yang cocok dengan filter.</div>}
       {/* Mobile Stacked Cards Layout (block on mobile, hidden on md) */}
       <div className="block md:hidden space-y-3">
-        {members.map((member) => {
+        {filteredMembers.map((member) => {
           const roleName = member.role?.name || member.role_id || 'Member';
           const permissions = member.permissions || member.role?.permissions || [];
           const status = member.status || 'active';
@@ -102,13 +113,7 @@ export function MembersTable({ members, roles }: MembersTableProps) {
               )}
 
               <div className="pt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setEditingMember(member)}
-                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Edit Role
-                </button>
+                <form action={roleAction} className="flex items-center gap-2" onSubmit={(event) => { if (!window.confirm('Ubah role member ini?')) event.preventDefault(); }}><input type="hidden" name="member_id" value={member.id} /><select name="role_id" defaultValue={member.role_id || member.role?.id || ''} className="min-h-11 max-w-32 rounded-lg border border-gray-300 px-2 text-xs">{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select><button disabled={rolePending} className="min-h-11 rounded-lg border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 disabled:opacity-50">Simpan</button></form>
               </div>
             </div>
           );
@@ -138,7 +143,7 @@ export function MembersTable({ members, roles }: MembersTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700/60">
-            {members.map((member) => {
+            {filteredMembers.map((member) => {
               const roleName = member.role?.name || member.role_id || 'Member';
               const permissions = member.permissions || member.role?.permissions || [];
               const status = member.status || 'active';
@@ -189,13 +194,7 @@ export function MembersTable({ members, roles }: MembersTableProps) {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button
-                      type="button"
-                      onClick={() => setEditingMember(member)}
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-3 py-1.5 transition-colors"
-                    >
-                      Edit Role
-                    </button>
+                    <form action={roleAction} className="flex items-center gap-2" onSubmit={(event) => { if (!window.confirm('Ubah role member ini?')) event.preventDefault(); }}><input type="hidden" name="member_id" value={member.id} /><select name="role_id" defaultValue={member.role_id || member.role?.id || ''} className="min-h-11 max-w-32 rounded-lg border border-gray-300 px-2 text-xs">{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select><button disabled={rolePending} className="min-h-11 rounded-lg px-3 py-1.5 text-sm font-medium text-blue-700 disabled:opacity-50">Simpan</button></form>
                   </td>
                 </tr>
               );
@@ -203,83 +202,8 @@ export function MembersTable({ members, roles }: MembersTableProps) {
           </tbody>
         </table>
       </div>
+      {roleState.message && <p role="status" className={roleState.success ? 'text-sm text-emerald-700' : 'text-sm text-red-700'}>{roleState.message}</p>}
 
-      {/* Edit Role Modal */}
-      {editingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-xl border border-gray-200 dark:border-gray-700 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                Update Role for {editingMember.first_name} {editingMember.last_name}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingMember(null)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            </div>
-
-            {updateState.message && (
-              <div
-                className={`rounded-lg p-3 text-xs font-medium ${
-                  updateState.success
-                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
-                    : 'bg-red-50 text-red-800 dark:bg-red-950/50 dark:text-red-200'
-                }`}
-              >
-                {updateState.message}
-              </div>
-            )}
-
-            <form action={updateFormAction} className="space-y-4">
-              <input type="hidden" name="memberId" value={editingMember.id} />
-
-              <div>
-                <label
-                  htmlFor="modal-roleId"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                >
-                  Select New Role
-                </label>
-                <select
-                  id="modal-roleId"
-                  name="roleId"
-                  defaultValue={editingMember.role?.id || editingMember.role_id || ''}
-                  required
-                  className="block w-full min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">-- Select Role --</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingMember(null)}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isPending ? 'Updating...' : 'Save Role'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
