@@ -21,6 +21,7 @@ describe('createClassSetup', () => {
     const formData = new FormData();
     formData.set('category', JSON.stringify({ name: 'Mathematics' }));
     formData.set('class', JSON.stringify({ name: 'Algebra', type: 'private', price: 250000, capacity: 1 }));
+    formData.set('teacher_ids', JSON.stringify(['11111111-1111-4111-8111-111111111111']));
 
     const result = await createClassSetup({ success: false, message: '' }, formData);
 

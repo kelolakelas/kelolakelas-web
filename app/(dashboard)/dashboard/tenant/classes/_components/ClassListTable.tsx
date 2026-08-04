@@ -1,5 +1,6 @@
 'use client';
 
+import type { Member } from '@/lib/api/types';
 import { useState } from 'react';
 import { deleteCategory, deleteClass, deleteSchedule } from '../_actions/classActions';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
@@ -10,6 +11,7 @@ interface ClassListTableProps {
   categories: Category[];
   classes: ClassEntity[];
   schedules: ClassSchedule[];
+  teachers: Member[];
 }
 
 const DAY_NAMES: Record<number, string> = {
@@ -34,6 +36,7 @@ export function ClassListTable({
   categories,
   classes,
   schedules,
+  teachers,
 }: ClassListTableProps) {
   const [activeTab, setActiveTab] = useState<'classes' | 'categories' | 'schedules'>('classes');
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +69,7 @@ export function ClassListTable({
           Get started by adding your academic categories, creating your first class, and setting up weekly schedules.
         </p>
         <div className="mt-6">
-          <ClassCreationWizard />
+          <ClassCreationWizard teachers={teachers} />
         </div>
       </div>
     );

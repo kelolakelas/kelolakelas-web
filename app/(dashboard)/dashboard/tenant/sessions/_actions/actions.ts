@@ -73,3 +73,23 @@ export async function substituteTutor(
     return { success: false, message: 'Tutor pengganti gagal ditetapkan.' };
   }
 }
+
+export async function cancelSession(
+  _previous: SessionActionResponse,
+  formData: FormData
+): Promise<SessionActionResponse> {
+  const sessionId = formData.get('sessionId')?.toString().trim();
+  if (!sessionId) return { success: false, message: 'Session tidak valid.' };
+
+  try {
+    await apiRequest(`/api/v1/sessions/${sessionId}`, { method: 'DELETE' });
+    revalidatePath('/dashboard/tenant/sessions');
+    revalidatePath(`/dashboard/tenant/sessions/${sessionId}`);
+    revalidatePath('/dashboard/tenant/classes');
+    return { success: true, message: 'Session berhasil dibatalkan.' };
+  } catch (error) {
+    if (error instanceof ApiError) return { success: false, message: error.message };
+    console.error('[cancelSession Error]:', error);
+    return { success: false, message: 'Session gagal dibatalkan.' };
+  }
+}

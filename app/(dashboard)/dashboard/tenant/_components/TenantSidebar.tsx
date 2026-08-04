@@ -5,6 +5,12 @@ import { usePathname } from 'next/navigation';
 import { TENANT_NAV_ITEMS } from '../_constants/constants';
 import { LogoutButton } from './LogoutButton';
 
+export interface SidebarProfile {
+  tenantName: string;
+  userName: string;
+  roleName: string;
+}
+
 /**
  * Renders SVG icons corresponding to navigation items.
  */
@@ -79,19 +85,25 @@ function NavIcon({ href }: { href: string }) {
   );
 }
 
-export function TenantSidebar() {
+export function TenantSidebar({ profile }: { profile: SidebarProfile }) {
   const pathname = usePathname();
+  const initials = profile.userName
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <aside className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 z-30">
       {/* Brand Header */}
       <div className="flex h-16 shrink-0 items-center gap-3 px-6 border-b border-gray-100 dark:border-gray-800">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-lg shadow-xs">
-          T
+          K
         </div>
         <div className="flex flex-col">
           <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Tutorin
+            KelolaKelas
           </span>
           <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
             Tenant Portal
@@ -128,14 +140,14 @@ export function TenantSidebar() {
       <div className="p-4 border-t border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 p-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-semibold text-xs">
-            TN
+            {initials}
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
-              Tenant Admin
+              {profile.userName}
             </span>
             <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-              Organization Owner
+              {profile.tenantName} · {profile.roleName}
             </span>
           </div>
         </div>

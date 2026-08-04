@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { CancelSessionButton } from '../_components/CancelSessionButton';
 import { SessionActions } from '../_components/SessionActions';
 import { getSession, getSessionAttendees, getTutors } from '../_queries/queries';
 
@@ -28,9 +29,11 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
         <p className="mt-1 break-all text-xs text-gray-500">ID: {id}</p>
       </header>
       {sessionResult.error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{sessionResult.error}</div>}
-      {sessionResult.data && <section className="rounded-2xl border border-gray-200 bg-white p-5"><h2 className="font-semibold">{sessionResult.data.class?.name || sessionResult.data.class_id}</h2><p className="mt-1 text-sm text-gray-600">{sessionResult.data.session_date.slice(0, 10)} · {sessionResult.data.start_time} - {sessionResult.data.end_time} · {sessionResult.data.status}</p></section>}
+      {sessionResult.data && <section className="rounded-2xl border border-gray-200 bg-white p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">{sessionResult.data.class?.name || sessionResult.data.class_id}</h2><p className="mt-1 text-sm text-gray-600">{sessionResult.data.session_date.slice(0, 10)} · {sessionResult.data.start_time} - {sessionResult.data.end_time} · {sessionResult.data.status}</p></div>{!['cancelled', 'completed'].includes(sessionResult.data.status) && <CancelSessionButton sessionId={id} />}</div></section>}
       {result.data && <section className="rounded-2xl border border-gray-200 bg-white p-5"><h2 className="font-semibold text-gray-900">Peserta ({attendees.length})</h2>{attendees.length === 0 ? <p className="mt-3 text-sm text-gray-500">Belum ada peserta pada session ini.</p> : <ul className="mt-3 divide-y divide-gray-100">{attendees.map((attendee) => <li key={attendee.id || attendee.student_id} className="py-3 text-sm text-gray-700">{attendee.student ? `${attendee.student.first_name || ''} ${attendee.student.last_name || ''}`.trim() || attendee.student.email : attendee.student_id || 'Peserta'}<span className="ml-2 text-xs text-gray-500">{attendee.status || 'unknown'}</span></li>)}</ul>}</section>}
-      <SessionActions sessionId={id} tutors={tutors.data} />
+      {sessionResult.data && !['cancelled', 'completed'].includes(sessionResult.data.status) && (
+        <SessionActions sessionId={id} tutors={tutors.data} />
+      )}
     </main>
   );
 }

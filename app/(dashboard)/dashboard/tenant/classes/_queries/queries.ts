@@ -1,6 +1,6 @@
 import { apiRequest, unwrapList } from '@/lib/api/client';
 import { ApiError } from '@/lib/api/errors';
-import type { QueryResult } from '@/lib/api/types';
+import type { Member, QueryResult } from '@/lib/api/types';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 
 interface ListOptions { page?: number; pageSize?: number; search?: string }
@@ -43,4 +43,17 @@ export async function getClasses(options?: ListOptions): Promise<QueryResult<Cla
  */
 export async function getSchedules(options?: ListOptions): Promise<QueryResult<ClassSchedule[]>> {
   return getList<ClassSchedule>('/api/v1/schedules', options);
+}
+
+export async function getTutors(): Promise<QueryResult<Member[]>> {
+  try {
+    const response = await apiRequest<Member[] | { items: Member[] }>('/api/v1/tutors?page=1&page_size=100');
+    return unwrapList(response.data);
+  } catch (error) {
+    return {
+      data: [],
+      error: error instanceof ApiError ? error.message : 'Teacher gagal dimuat.',
+      status: error instanceof ApiError ? error.status : undefined,
+    };
+  }
 }

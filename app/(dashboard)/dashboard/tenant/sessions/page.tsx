@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { CancelSessionButton } from './_components/CancelSessionButton';
 import { getSessions } from './_queries/queries';
 
 export const metadata: Metadata = {
@@ -91,12 +92,17 @@ export default async function TenantSessionsPage({
                 </p>
                 <p className="text-xs text-gray-500">Status: {session.status}</p>
               </div>
-              <Link
-                href={`/dashboard/tenant/sessions/${session.id}`}
-                className="inline-flex min-h-11 items-center rounded-lg border border-blue-200 px-3 text-sm font-semibold text-blue-700"
-              >
-                Detail & peserta
-              </Link>
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <Link
+                  href={`/dashboard/tenant/sessions/${session.id}`}
+                  className="inline-flex min-h-11 items-center rounded-lg border border-blue-200 px-3 text-sm font-semibold text-blue-700"
+                >
+                  Detail & peserta
+                </Link>
+                {!['cancelled', 'completed'].includes(session.status) && (
+                  <CancelSessionButton sessionId={session.id} />
+                )}
+              </div>
             </article>
           ))}
         </div>

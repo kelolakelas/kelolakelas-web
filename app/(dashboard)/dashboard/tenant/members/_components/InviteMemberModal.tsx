@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Permission, Role } from '../_schemas/schema';
 import { InviteMemberForm } from './InviteMemberForm';
 
@@ -11,6 +11,18 @@ interface InviteMemberModalProps {
 
 export function InviteMemberModal({ roles, permissions = [] }: InviteMemberModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeoutId = window.setTimeout(() => setToast(''), 3500);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
+
+  const handleSuccess = useCallback((message: string) => {
+    setIsOpen(false);
+    setToast(message);
+  }, []);
 
   return (
     <>
@@ -50,9 +62,14 @@ export function InviteMemberModal({ roles, permissions = [] }: InviteMemberModal
             <InviteMemberForm
               roles={roles}
               permissions={permissions}
-              onSuccess={() => setIsOpen(false)}
+              onSuccess={handleSuccess}
             />
           </div>
+        </div>
+      )}
+      {toast && (
+        <div role="status" className="fixed inset-x-4 bottom-4 z-50 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg sm:left-auto sm:w-auto">
+          {toast}
         </div>
       )}
     </>

@@ -4,7 +4,7 @@ import { PaginationControls } from '../_components/PaginationControls';
 import { ClassCreationWizard } from './_components/ClassCreationWizard';
 import { ClassListTable } from './_components/ClassListTable';
 import { ClassSkeleton } from './_components/ClassSkeleton';
-import { getCategories, getClasses, getSchedules } from './_queries/queries';
+import { getCategories, getClasses, getSchedules, getTutors } from './_queries/queries';
 
 export const metadata: Metadata = {
   title: 'Class Management - Tenant Dashboard',
@@ -19,12 +19,13 @@ export const metadata: Metadata = {
  * Async content component wrapped in Suspense boundary for Partial Prerendering (PPR).
  */
 async function ClassesContent({ page, search }: { page: number; search?: string }) {
-  const [categoriesResult, classesResult, schedulesResult] = await Promise.all([
+  const [categoriesResult, classesResult, schedulesResult, tutorsResult] = await Promise.all([
     getCategories({ page, search }),
     getClasses({ page, search }),
     getSchedules({ page, search }),
+    getTutors(),
   ]);
-  const errors = [categoriesResult, classesResult, schedulesResult]
+  const errors = [categoriesResult, classesResult, schedulesResult, tutorsResult]
     .map((result) => result.error)
     .filter(Boolean);
 
@@ -46,7 +47,7 @@ async function ClassesContent({ page, search }: { page: number; search?: string 
         </div>
 
         {/* Wizard Trigger Button */}
-        <ClassCreationWizard />
+        <ClassCreationWizard teachers={tutorsResult.data} />
       </div>
 
       {errors.length > 0 && (
@@ -60,6 +61,7 @@ async function ClassesContent({ page, search }: { page: number; search?: string 
         categories={categoriesResult.data}
         classes={classesResult.data}
         schedules={schedulesResult.data}
+        teachers={tutorsResult.data}
       />
       <div className="space-y-3">
         <PaginationControls pagination={classesResult.pagination} basePath="/dashboard/tenant/classes" />

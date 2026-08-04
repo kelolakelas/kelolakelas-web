@@ -3,11 +3,23 @@ import { ApiError } from '@/lib/api/errors';
 import type { QueryResult } from '@/lib/api/types';
 import type { Member, Permission, Role } from '../_schemas/schema';
 
-interface ListOptions { page?: number; pageSize?: number; search?: string }
+interface ListOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  role_id?: string;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
 
 function withListQuery(path: string, options: ListOptions = {}): string {
   const params = new URLSearchParams({ page: String(options.page || 1), page_size: String(options.pageSize || 20) });
   if (options.search?.trim()) params.set('search', options.search.trim());
+  if (options.status) params.set('status', options.status);
+  if (options.role_id) params.set('role_id', options.role_id);
+  if (options.sort) params.set('sort', options.sort);
+  if (options.order) params.set('order', options.order);
   return `${path}?${params.toString()}`;
 }
 
@@ -25,7 +37,11 @@ async function getList<T>(path: string, options?: ListOptions): Promise<QueryRes
  * Fetches current active members for the tenant organization from the API Gateway.
  */
 export async function getTenantMembers(options?: ListOptions): Promise<QueryResult<Member[]>> {
-  return getList<Member>('/api/v1/members', options);
+  return getList<Member>('/api/v1/members', {
+    ...options,
+    sort: options?.sort || 'joined_at',
+    order: options?.order || 'desc',
+  });
 }
 
 /**

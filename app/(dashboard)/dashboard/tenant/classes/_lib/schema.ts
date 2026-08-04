@@ -39,6 +39,8 @@ export const createClassSchema = z.object({
   description: z.string().trim().optional(),
 });
 
+export const teacherIdsSchema = z.array(z.string().uuid('Teacher ID must be a valid UUID')).min(1, 'Select at least one teacher');
+
 /**
  * Time regex format validation (HH:MM or HH:MM:SS)
  */
@@ -103,6 +105,7 @@ export type ClassDraft = Omit<CreateClassInput, 'category_id'>;
 export interface CreateClassWithCategoryInput {
   category: CreateCategoryInput;
   class: ClassDraft;
+  teacher_ids: string[];
   schedules?: ScheduleItemInput[];
 }
 

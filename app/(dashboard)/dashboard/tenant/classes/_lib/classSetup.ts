@@ -2,6 +2,7 @@ import {
     createCategorySchema,
     createClassSchema,
     createScheduleSchema,
+    teacherIdsSchema,
     type ClassSetupResponse,
     type CreateClassWithCategoryInput,
     type ScheduleItemInput,
@@ -10,6 +11,7 @@ import {
 export interface ClassSetupDraftInput {
   category: unknown;
   class: unknown;
+  teacher_ids?: unknown;
   schedules?: unknown;
 }
 
@@ -39,6 +41,15 @@ export function buildClassSetupPayload(input: ClassSetupDraftInput): ClassSetupP
     };
   }
 
+  const teacherValidation = teacherIdsSchema.safeParse(input.teacher_ids);
+  if (!teacherValidation.success) {
+    return {
+      success: false,
+      message: 'Pilih setidaknya satu teacher untuk kelas ini.',
+      errors: { teacher_ids: teacherValidation.error.issues.map((issue) => issue.message) },
+    };
+  }
+
   const classPayload = {
     name: classValidation.data.name,
     description: classValidation.data.description,
@@ -49,6 +60,7 @@ export function buildClassSetupPayload(input: ClassSetupDraftInput): ClassSetupP
   const payload: CreateClassWithCategoryInput = {
     category: categoryValidation.data,
     class: classPayload,
+    teacher_ids: teacherValidation.data,
   };
 
   if (classValidation.data.type === 'group') {

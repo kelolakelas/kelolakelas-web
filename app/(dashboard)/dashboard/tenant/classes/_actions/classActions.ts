@@ -89,6 +89,7 @@ export async function createClassSetup(
     const result = buildClassSetupPayload({
       category: parseSetupValue(formData, 'category'),
       class: parseSetupValue(formData, 'class'),
+      teacher_ids: parseSetupValue(formData, 'teacher_ids', []),
       schedules: parseSetupValue(formData, 'schedules', []),
     });
     if (!result.success) return result;

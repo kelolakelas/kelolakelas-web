@@ -80,3 +80,17 @@ export async function updateMemberRole(_previous: ActionResponse, formData: Form
   }
 }
 
+export async function deleteTenantMember(_previous: ActionResponse, formData: FormData): Promise<ActionResponse> {
+  const memberId = String(formData.get('member_id') || '').trim();
+  if (!memberId) return { success: false, message: 'Member yang akan dihapus tidak ditemukan.' };
+
+  try {
+    await apiRequest(`/api/v1/tenants/member/${memberId}`, { method: 'DELETE' });
+    revalidatePath('/dashboard/tenant/members');
+    return { success: true, message: 'Member berhasil dihapus.' };
+  } catch (error) {
+    console.error('[deleteTenantMember Error]:', error);
+    return { success: false, message: error instanceof ApiError ? error.message : 'Member gagal dihapus.' };
+  }
+}
+

@@ -8,7 +8,7 @@ import type { Permission, Role } from '../_schemas/schema';
 interface InviteMemberFormProps {
   roles: Role[];
   permissions?: Permission[];
-  onSuccess?: () => void;
+  onSuccess?: (message: string) => void;
 }
 
 const initialState: ActionResponse = {
@@ -45,10 +45,10 @@ export function InviteMemberForm({ roles, permissions = [], onSuccess }: InviteM
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
 
   useEffect(() => {
-    if (state.success && onSuccess) {
-      onSuccess();
+    if (state.success && state.message && onSuccess) {
+      onSuccess(state.message);
     }
-  }, [state.success, onSuccess]);
+  }, [state.success, state.message, onSuccess]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
   const activePermissions = selectedRole?.permissions && selectedRole.permissions.length > 0 

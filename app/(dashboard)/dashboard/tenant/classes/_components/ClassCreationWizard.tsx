@@ -1,24 +1,29 @@
 'use client';
 
+import type { Member } from '@/lib/api/types';
 import { startTransition, useActionState, useEffect, useState } from 'react';
 import { createClassSetup, type ActionResponse } from '../_actions/classActions';
 import type { Category, CategoryDraft, ClassDraft, ScheduleItemInput } from '../_lib/schema';
 import { CategoryForm } from './CategoryForm';
 import { ClassForm } from './ClassForm';
 import { ScheduleForm } from './ScheduleForm';
+import { TeacherForm } from './TeacherForm';
 
 interface ClassCreationWizardProps {
+  teachers: Member[];
   onComplete?: () => void;
 }
 
 export function ClassCreationWizard({
+  teachers,
   onComplete,
 }: ClassCreationWizardProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [selectedCategory, setSelectedCategory] = useState<(Category | CategoryDraft) | null>(null);
   const [createdClass, setCreatedClass] = useState<ClassDraft | null>(null);
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]);
   const [commitState, commitAction, isSubmitting] = useActionState<ActionResponse, FormData>(
     createClassSetup,
     { success: false, message: '' }
@@ -28,6 +33,7 @@ export function ClassCreationWizard({
     setStep(1);
     setSelectedCategory(null);
     setCreatedClass(null);
+    setSelectedTeacherIds([]);
     setIsOpen(true);
   };
 
@@ -36,6 +42,7 @@ export function ClassCreationWizard({
     setStep(1);
     setSelectedCategory(null);
     setCreatedClass(null);
+    setSelectedTeacherIds([]);
   };
 
   const handleCategorySelected = (category: Category | CategoryDraft) => {
@@ -48,11 +55,17 @@ export function ClassCreationWizard({
     setStep(3);
   };
 
+  const handleTeachersSelected = (teacherIds: string[]) => {
+    setSelectedTeacherIds(teacherIds);
+    setStep(4);
+  };
+
   const handleScheduleComplete = (schedules: ScheduleItemInput[]) => {
     if (!selectedCategory || !createdClass) return;
     const formData = new FormData();
     formData.set('category', JSON.stringify(selectedCategory));
     formData.set('class', JSON.stringify(createdClass));
+    formData.set('teacher_ids', JSON.stringify(selectedTeacherIds));
     formData.set('schedules', JSON.stringify(schedules));
     startTransition(() => {
       commitAction(formData);
@@ -89,7 +102,7 @@ export function ClassCreationWizard({
                   Class Creation Wizard
                 </h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Set up academic categories, course details, and recurring timetables in 3 easy steps.
+                  Set up academic categories, course details, teachers, and recurring timetables.
                 </p>
               </div>
               <button
@@ -104,7 +117,7 @@ export function ClassCreationWizard({
 
             {/* Stepper Progress Bar (Mobile-First responsive indicator) */}
             <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {/* Step 1 Indicator */}
                 <div
                   className={`h-2 rounded-full transition-all ${
@@ -123,6 +136,11 @@ export function ClassCreationWizard({
                     step >= 3 ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-800'
                   }`}
                 />
+                <div
+                  className={`h-2 rounded-full transition-all ${
+                    step >= 4 ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-800'
+                  }`}
+                />
               </div>
 
               <div className="flex justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-0.5">
@@ -133,7 +151,10 @@ export function ClassCreationWizard({
                   2. Class Details
                 </span>
                 <span className={step === 3 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}>
-                  3. Schedules
+                  3. Teachers
+                </span>
+                <span className={step === 4 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}>
+                  4. Schedules
                 </span>
               </div>
             </div>
@@ -155,6 +176,15 @@ export function ClassCreationWizard({
               )}
 
               {step === 3 && createdClass && (
+                <TeacherForm
+                  teachers={teachers}
+                  onTeachersSelected={handleTeachersSelected}
+                  onBack={() => setStep(2)}
+                  selectedTeacherIds={selectedTeacherIds}
+                />
+              )}
+
+              {step === 4 && createdClass && (
                 <ScheduleForm
                   createdClass={createdClass}
                   onScheduleSuccess={handleScheduleComplete}

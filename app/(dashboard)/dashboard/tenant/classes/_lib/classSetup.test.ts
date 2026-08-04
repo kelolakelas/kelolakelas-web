@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { buildClassSetupPayload } from './classSetup';
 
 const category = { name: 'Mathematics', description: 'Subject category description' };
+const teacher_ids = ['11111111-1111-4111-8111-111111111111'];
 
 it('builds a group payload with normalized schedules', () => {
   const result = buildClassSetupPayload({
@@ -13,6 +14,7 @@ it('builds a group payload with normalized schedules', () => {
       price: 150000,
       capacity: 10,
     },
+    teacher_ids,
     schedules: [{
       day_of_week: 1,
       start_time: '09:00',
@@ -38,6 +40,7 @@ it('builds a private payload without schedules', () => {
       price: 250000,
       capacity: 1,
     },
+    teacher_ids,
   });
 
   expect(result.success).toBe(true);
@@ -48,9 +51,10 @@ it('rejects a group payload without schedules', () => {
   const result = buildClassSetupPayload({
     category,
     class: { name: 'Algebra Beginner', type: 'group', price: 150000, capacity: 10 },
+    teacher_ids,
     schedules: [],
   });
 
   expect(result.success).toBe(false);
-  expect(result.message).toContain('Jadwal');
+  if (!result.success) expect(result.message).toContain('Jadwal');
 });
