@@ -128,6 +128,7 @@ export interface ClassEntity {
   price: number;
   capacity?: number;
   description?: string;
+  is_published: boolean;
   created_at: string;
   updated_at?: string;
   category?: Category;

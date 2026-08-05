@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { LoginForm } from './_components/LoginForm';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -25,7 +26,9 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <LoginForm />
+      <Suspense fallback={<div className="h-96 w-full max-w-md animate-pulse rounded-2xl bg-white shadow-xl" />}>
+        <LoginForm />
+      </Suspense>
     </main>
   );
 }

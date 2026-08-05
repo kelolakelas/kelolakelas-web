@@ -16,6 +16,31 @@ export interface PaginatedData<T> {
   pagination?: Pagination;
 }
 
+export interface CatalogClass {
+  id: string;
+  tenant_id: string;
+  tenant_name: string;
+  tenant_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  category_id: string;
+  category_name: string;
+  name: string;
+  description?: unknown;
+  type: 'private' | 'group' | string;
+  price: number;
+  capacity?: number | null;
+  available_slots?: number | null;
+  distance_km?: number | null;
+  is_enrollable: boolean;
+  created_at: string;
+}
+
+export interface CatalogListResponse {
+  items: CatalogClass[];
+  pagination: Pagination;
+}
+
 export interface QueryResult<T> {
   data: T;
   pagination?: Pagination;
@@ -40,9 +65,7 @@ export interface TenantRegistrationResponse {
   user: User;
 }
 
-export interface ParentRegistrationResponse {
-  user: User;
-}
+export type ParentRegistrationResponse = User;
 
 export interface User {
   id: string;
@@ -140,10 +163,28 @@ export interface Enrollment {
   class?: ClassEntity | null;
 }
 
+export interface PublicEnrollmentRequest {
+  student_id: string;
+  billing_cycle: 'monthly' | 'quarterly' | 'yearly';
+}
+
+export interface PublicEnrollmentResponse {
+  enrollment: Enrollment;
+  payment: {
+    transaction_id: string;
+    checkout_session_url: string;
+    gross_amount: number;
+    status: string;
+  };
+}
+
 export interface Student {
   id: string;
   parent_id: string;
-  full_name: string;
+  first_name: string;
+  last_name?: string | null;
+  nickname?: string | null;
+  gender?: 'male' | 'female' | string | null;
   date_of_birth?: string | null;
   created_at?: string;
   updated_at?: string;

@@ -2,10 +2,11 @@
 
 import type { Member } from '@/lib/api/types';
 import { useState } from 'react';
-import { deleteCategory, deleteClass, deleteSchedule } from '../_actions/classActions';
+import { deleteCategory, deleteClass, deleteSchedule, publishClass } from '../_actions/classActions';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 import { ClassCreationWizard } from './ClassCreationWizard';
 import { DeleteActionButton } from './DeleteActionButton';
+import { PublishActionButton } from './PublishActionButton';
 
 interface ClassListTableProps {
   categories: Category[];
@@ -187,6 +188,7 @@ export function ClassListTable({
                   </p>
                 )}
                 <div className="flex justify-end border-t border-gray-100 pt-2 dark:border-gray-800">
+                  {cls.is_published === false && <PublishActionButton id={cls.id} action={publishClass} />}
                   <DeleteActionButton
                     id={cls.id}
                     label="class"
@@ -257,6 +259,7 @@ export function ClassListTable({
                       {cls.capacity ? `${cls.capacity} max` : '1 max'}
                     </td>
                     <td className="px-6 py-2 text-right">
+                      {cls.is_published === false && <PublishActionButton id={cls.id} action={publishClass} />}
                       <DeleteActionButton
                         id={cls.id}
                         label="class"

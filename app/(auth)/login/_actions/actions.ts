@@ -3,6 +3,7 @@
 import { apiRequest, getAuthCookieName, getTenantCookieName } from '@/lib/api/client';
 import { ApiError } from '@/lib/api/errors';
 import type { LoginResponse } from '@/lib/api/types';
+import { getSafeRedirect } from '@/lib/auth/redirect';
 import { decodeTokenClaims } from '@/lib/auth/token';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -14,12 +15,7 @@ export interface ActionResponse {
   errors?: Record<string, string[]>;
 }
 
-const DEFAULT_COOKIE_NAME = 'auth_token';
-
-function getSafeRedirect(value: FormDataEntryValue | null, fallback: string): string {
-  const redirectTo = typeof value === 'string' ? value : '';
-  return redirectTo.startsWith('/dashboard/') && !redirectTo.startsWith('//') ? redirectTo : fallback;
-}
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
 /**
  * Server Action for user authentication against the identity service API.
@@ -47,20 +43,22 @@ export async function loginAction(
   }
 
   const { email, password } = validatedFields.data;
-  const cookieName = getAuthCookieName() || DEFAULT_COOKIE_NAME;
+  const cookieName = getAuthCookieName();
   let destination: string;
 
   try {
     // 2. Request Authentication from Backend Identity Service
     const result = await apiRequest<LoginResponse>('/api/v1/auth/login', {
       method: 'POST',
+      includeTenant: false,
       body: JSON.stringify({ email, password }),
     });
 
     if (!result.data?.token || !result.data.user) throw new ApiError('Respons login tidak lengkap.', 502);
 
-    const tenantId = result.data.tenant_id || result.data.user.tenant_id || decodeTokenClaims(result.data.token).tenant_id;
-    const isParent = result.data.user.is_parent === true || result.data.user.role === 'parent';
+    const tokenClaims = decodeTokenClaims(result.data.token);
+    const tenantId = result.data.tenant_id || result.data.user.tenant_id || tokenClaims.tenant_id;
+    const isParent = result.data.user.is_parent === true || tokenClaims.is_parent === true || tokenClaims.role === 'parent';
     if (!isParent && !tenantId) {
       return { success: false, message: 'Login berhasil, tetapi tenant context tidak tersedia. Hubungi administrator.' };
     }
@@ -72,10 +70,12 @@ export async function loginAction(
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 Days
+      maxAge: COOKIE_MAX_AGE,
     });
 
-    if (tenantId) {
+    if (isParent) {
+      cookieStore.delete(getTenantCookieName());
+    } else if (tenantId) {
       cookieStore.set(
         getTenantCookieName(),
         tenantId,
@@ -84,13 +84,18 @@ export async function loginAction(
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           path: '/',
-          maxAge: 60 * 60 * 24 * 7,
+          maxAge: COOKIE_MAX_AGE,
         }
       );
     }
 
     const fallback = isParent ? '/dashboard/parent' : '/dashboard/tenant';
-    destination = getSafeRedirect(formData.get('redirectTo'), fallback);
+    const requestedDestination = getSafeRedirect(formData.get('redirectTo'), fallback);
+    destination = isParent
+      ? requestedDestination.startsWith('/classes/') ? requestedDestination : '/dashboard/parent'
+      : requestedDestination.startsWith('/dashboard/parent') || requestedDestination.startsWith('/classes/')
+        ? '/dashboard/tenant'
+        : requestedDestination;
   } catch (error) {
     if (error instanceof ApiError) {
       return { success: false, message: error.message };

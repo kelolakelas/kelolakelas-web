@@ -1,6 +1,7 @@
 import { getAuthCookieName } from '@/lib/api/client';
-import { decodeTokenClaims } from '@/lib/auth/token';
+import { decodeTokenClaims, getDashboardRole } from '@/lib/auth/token';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { MobileNav } from './_components/MobileNav';
 import { TenantSidebar, type SidebarProfile } from './_components/TenantSidebar';
@@ -33,6 +34,13 @@ async function getSidebarProfile(): Promise<SidebarProfile> {
 }
 
 export default async function TenantLayout({ children }: TenantLayoutProps) {
+  const token = (await cookies()).get(getAuthCookieName())?.value;
+  if (!token) redirect('/login?redirectTo=/dashboard/tenant');
+  try {
+    if (getDashboardRole(decodeTokenClaims(token)) !== 'tenant') redirect('/dashboard/parent');
+  } catch {
+    redirect('/login?redirectTo=/dashboard/tenant');
+  }
   const sidebarProfile = await getSidebarProfile();
 
   return (

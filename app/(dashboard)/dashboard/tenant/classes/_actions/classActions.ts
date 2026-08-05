@@ -64,6 +64,23 @@ export async function deleteClass(_prevState: ActionResponse, formData: FormData
   return deleteResource(formData, 'class', '/api/v1/classes', 'Class berhasil dinonaktifkan.');
 }
 
+export async function publishClass(_prevState: ActionResponse, formData: FormData): Promise<ActionResponse> {
+  const id = formData.get('id')?.toString().trim();
+  if (!id) return { success: false, message: 'Class yang akan dipublish tidak ditemukan.' };
+
+  try {
+    const response = await apiRequest(`/api/v1/classes/${id}/published`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_published: true }),
+    });
+    revalidatePath('/dashboard/tenant/classes');
+    return { success: true, message: response.message || 'Class berhasil dipublish.' };
+  } catch (error) {
+    console.error('[publishClass Action Error]:', error);
+    return { success: false, message: getActionError(error, 'Class gagal dipublish. Silakan coba lagi.') };
+  }
+}
+
 export async function deleteSchedule(_prevState: ActionResponse, formData: FormData): Promise<ActionResponse> {
   return deleteResource(formData, 'schedule', '/api/v1/schedules', 'Schedule berhasil dinonaktifkan.');
 }

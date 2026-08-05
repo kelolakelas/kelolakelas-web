@@ -1,9 +1,7 @@
 import { logoutAction } from '@/app/_actions/logout';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getTransactions } from '../tenant/billing/_queries/queries';
-import { getEnrollments } from '../tenant/enrollments/_queries/queries';
-import { getStudents } from '../tenant/students/_queries/queries';
+import { getParentEnrollments, getParentStudents, getParentTransactions } from './_queries/queries';
 
 export const metadata: Metadata = {
   title: 'Dashboard Orang Tua - Tutorin',
@@ -13,9 +11,9 @@ export const metadata: Metadata = {
 
 export default async function ParentDashboardPage() {
   const [students, enrollments, transactions] = await Promise.all([
-    getStudents(),
-    getEnrollments({ page: 1 }),
-    getTransactions({ page: 1 }),
+    getParentStudents(),
+    getParentEnrollments({ page: 1 }),
+    getParentTransactions({ page: 1 }),
   ]);
   const activeEnrollments = enrollments.data.filter((item) => item.status === 'active');
   const pendingPayments = transactions.data.filter((item) => ['pending', 'failed'].includes(item.status));
@@ -63,7 +61,7 @@ export default async function ParentDashboardPage() {
               <ul className="mt-4 divide-y divide-gray-100">
                 {students.data.map((student) => (
                   <li key={student.id} className="flex justify-between py-3 text-sm">
-                    <span>{student.full_name}</span>
+                    <span>{[student.first_name, student.last_name].filter(Boolean).join(' ')}</span>
                     <Link href={`/dashboard/parent/students/${student.id}`} className="font-semibold text-blue-700">Detail</Link>
                   </li>
                 ))}
@@ -77,7 +75,7 @@ export default async function ParentDashboardPage() {
             ) : (
               <ul className="mt-4 divide-y divide-gray-100">
                 {activeEnrollments.map((item) => (
-                  <li key={item.id} className="py-3 text-sm">{item.student?.full_name || item.student_id} · {item.class?.name || item.class_id}</li>
+                    <li key={item.id} className="py-3 text-sm">{item.student ? [item.student.first_name, item.student.last_name].filter(Boolean).join(' ') : item.student_id} · {item.class?.name || item.class_id}</li>
                 ))}
               </ul>
             )}

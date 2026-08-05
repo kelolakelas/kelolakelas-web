@@ -1,0 +1,2 @@
+'use client';
+export default function Error({ reset }: { reset: () => void }) { return <main className="flex min-h-screen items-center justify-center bg-[#f8f7f3] p-5"><div role="alert" className="max-w-md rounded-2xl border border-[#e6b6a8] bg-white p-7 text-center"><h1 className="text-xl font-black">Katalog sedang bermasalah</h1><p className="mt-2 text-sm text-[#65726c]">Coba muat ulang halaman.</p><button onClick={reset} className="mt-5 min-h-11 rounded-xl bg-[#17231f] px-5 text-sm font-bold text-white">Coba lagi</button></div></main>; }

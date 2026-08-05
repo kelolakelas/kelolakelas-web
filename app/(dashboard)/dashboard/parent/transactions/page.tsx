@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { getTransactions } from '../../tenant/billing/_queries/queries';
+import { getParentTransactions } from '../_queries/queries';
 
 export default async function ParentTransactionsPage() {
-  const result = await getTransactions({ page: 1 });
+  const result = await getParentTransactions({ page: 1 });
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6">

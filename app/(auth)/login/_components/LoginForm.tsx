@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { loginAction, type ActionResponse } from '../_actions/actions';
 
@@ -52,7 +53,12 @@ function SubmitButton() {
 }
 
 export function LoginForm() {
+  const searchParams = useSearchParams();
   const [state, formAction] = useActionState(loginAction, initialState);
+  const redirectTo = searchParams.get('redirectTo') || '';
+  const registered = searchParams.get('registered') === '1';
+  const [email, setEmail] = useState(searchParams.get('email') || '');
+  const [password, setPassword] = useState('');
 
   return (
     <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-gray-100">
@@ -70,8 +76,14 @@ export function LoginForm() {
         </div>
       )}
 
+      {registered && !state.message && (
+        <div role="status" className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          Registrasi berhasil. Silakan masuk untuk melanjutkan.
+        </div>
+      )}
+
       <form action={formAction} noValidate className="space-y-5">
-        <input type="hidden" name="redirectTo" value="/dashboard/tenant" />
+        <input type="hidden" name="redirectTo" value={redirectTo} />
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
             Email Address
@@ -81,6 +93,8 @@ export function LoginForm() {
             name="email"
             type="email"
             autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             required
             aria-invalid={Boolean(state.errors?.email)}
             aria-describedby={state.errors?.email ? 'email-error' : undefined}
@@ -109,6 +123,8 @@ export function LoginForm() {
             name="password"
             type="password"
             autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
             required
             aria-invalid={Boolean(state.errors?.password)}
             aria-describedby={state.errors?.password ? 'password-error' : undefined}

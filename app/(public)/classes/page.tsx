@@ -1,0 +1,21 @@
+import { getAuthCookieName } from '@/lib/api/client';
+import { decodeTokenClaims, getDashboardRole } from '@/lib/auth/token';
+import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
+import Link from 'next/link';
+import { CatalogFilters } from './_components/CatalogFilters';
+import { CatalogPagination } from './_components/CatalogPagination';
+import { ClassCard } from './_components/ClassCard';
+import { getCatalogClasses } from './_queries/queries';
+import { catalogFiltersSchema } from './_schemas/schema';
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+export const metadata: Metadata = { title: 'Katalog Kelas - KelolaKelas', description: 'Temukan kelas dari berbagai tenant pendidikan.', alternates: { canonical: `${appUrl}/classes` }, openGraph: { title: 'Katalog Kelas - KelolaKelas', description: 'Temukan kelas dari berbagai tenant pendidikan.', url: `${appUrl}/classes`, type: 'website' }, robots: { index: true, follow: true } };
+
+export default async function ClassesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const raw = await searchParams; const stringParams = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]).filter((entry): entry is [string, string] => Boolean(entry[1])));
+  const parsed = catalogFiltersSchema.safeParse({ ...stringParams, page: stringParams.page ? Number(stringParams.page) : undefined, page_size: stringParams.page_size ? Number(stringParams.page_size) : undefined, min_price: stringParams.min_price ? Number(stringParams.min_price) : undefined, max_price: stringParams.max_price ? Number(stringParams.max_price) : undefined, latitude: stringParams.latitude ? Number(stringParams.latitude) : undefined, longitude: stringParams.longitude ? Number(stringParams.longitude) : undefined, radius_km: stringParams.radius_km ? Number(stringParams.radius_km) : undefined });
+  const result = parsed.success ? await getCatalogClasses(parsed.data) : { data: [], error: 'Filter tidak valid. Periksa kembali nilai yang dimasukkan.' };
+  const token = (await cookies()).get(getAuthCookieName())?.value; let role = 'guest'; try { if (token) role = getDashboardRole(decodeTokenClaims(token)); } catch { role = 'guest'; }
+  return <main className="min-h-screen bg-[#f8f7f3] text-[#17231f]"><header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8"><Link href="/" className="flex min-h-11 items-center gap-2" aria-label="KelolaKelas beranda"><span className="flex size-9 items-center justify-center rounded-xl bg-[#d9f25b] font-black">K</span><span className="text-lg font-bold">KelolaKelas</span></Link><nav><Link className="min-h-11 inline-flex items-center rounded-xl px-4 text-sm font-bold" href={role === 'parent' ? '/dashboard/parent' : role === 'tenant' ? '/dashboard/tenant' : '/login'}>{role === 'guest' ? 'Login' : 'Dashboard'}</Link></nav></header><section className="mx-auto max-w-7xl px-5 pb-12 pt-8 sm:px-8"><div className="mb-8 max-w-2xl"><p className="text-sm font-bold uppercase tracking-[0.14em] text-[#71863a]">Marketplace pendidikan</p><h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Temukan kelas yang pas.</h1><p className="mt-3 text-[#52615b]">Bandingkan kelas, tenant, harga, dan ketersediaan dalam satu katalog.</p></div><CatalogFilters /><div className="mt-8">{result.error ? <div role="alert" className="rounded-2xl border border-[#e6b6a8] bg-[#fff0eb] p-5 text-sm text-[#8d3d29]">{result.error}</div> : result.data.length === 0 ? <div className="rounded-2xl border border-dashed border-[#c8d0c5] bg-white p-10 text-center"><h2 className="text-xl font-black">Kelas tidak ditemukan</h2><p className="mt-2 text-sm text-[#65726c]">Coba ubah kata kunci atau filter Anda.</p></div> : <><div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">{result.data.map((item) => <ClassCard key={item.id} item={item} />)}</div><div className="mt-8"><CatalogPagination pagination={result.pagination} searchParams={stringParams} /></div></>}</div></section></main>;
+}

@@ -8,7 +8,7 @@ const revalidatePath = vi.hoisted(() => vi.fn());
 
 vi.mock('next/cache', () => ({ revalidatePath }));
 
-import { createClassSetup, deleteCategory, deleteClass, deleteSchedule } from './classActions';
+import { createClassSetup, deleteCategory, deleteClass, deleteSchedule, publishClass } from './classActions';
 
 describe('createClassSetup', () => {
   beforeEach(() => {
@@ -82,5 +82,18 @@ describe('createClassSetup', () => {
     const result = await deleteSchedule({ success: false, message: '' }, formData);
 
     expect(result).toMatchObject({ success: false, message: 'Jadwal gagal dihapus. Silakan coba lagi.' });
+  });
+
+  it('publishes an unpublished class with the contract payload', async () => {
+    apiRequest.mockResolvedValueOnce({ status: 'success', message: 'published' });
+    const formData = new FormData();
+    formData.set('id', 'class-id');
+
+    await expect(publishClass({ success: false, message: '' }, formData)).resolves.toEqual({ success: true, message: 'published' });
+    expect(apiRequest).toHaveBeenCalledWith('/api/v1/classes/class-id/published', {
+      method: 'PATCH',
+      body: JSON.stringify({ is_published: true }),
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/tenant/classes');
   });
 });

@@ -15,7 +15,7 @@ function getParentId(token: string): string | undefined {
 }
 
 export async function saveStudent(_previous: StudentActionResponse, formData: FormData): Promise<StudentActionResponse> {
-  const validation = studentSchema.safeParse({ full_name: formData.get('full_name'), date_of_birth: formData.get('date_of_birth') });
+  const validation = studentSchema.safeParse({ first_name: formData.get('first_name'), last_name: formData.get('last_name'), date_of_birth: formData.get('date_of_birth') });
   if (!validation.success) return { success: false, message: 'Periksa data student.', errors: validation.error.flatten().fieldErrors };
   const id = String(formData.get('id') || '');
   const token = (await cookies()).get(getAuthCookieName())?.value;

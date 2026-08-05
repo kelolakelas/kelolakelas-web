@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { isTokenExpired } from './lib/auth/token';
+import { decodeTokenClaims, getDashboardPath, getDashboardRole, isTokenExpired } from './lib/auth/token';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
@@ -17,6 +17,14 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   const isAuthenticated = Boolean(token && !isTokenExpired(token));
+  let dashboardPath = '/dashboard/tenant';
+  if (isAuthenticated && token) {
+    try {
+      dashboardPath = getDashboardPath(getDashboardRole(decodeTokenClaims(token)));
+    } catch {
+      dashboardPath = '/dashboard/tenant';
+    }
+  }
 
   // Check route matches using early evaluation
   const isProtectedRoute = protectedRoutes.some(
@@ -40,9 +48,17 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (isAuthenticated && pathname.startsWith('/dashboard/parent') && dashboardPath !== '/dashboard/parent') {
+    return NextResponse.redirect(new URL(dashboardPath, request.url));
+  }
+
+  if (isAuthenticated && pathname.startsWith('/dashboard/tenant') && dashboardPath === '/dashboard/parent') {
+    return NextResponse.redirect(new URL(dashboardPath, request.url));
+  }
+
   // 2. Authenticated user accessing a public route (e.g. /login) -> Redirect to /dashboard
   if (isPublicRoute && isAuthenticated) {
-    return NextResponse.redirect(new URL('/dashboard/tenant', request.url));
+    return NextResponse.redirect(new URL(dashboardPath, request.url));
   }
 
   return NextResponse.next();

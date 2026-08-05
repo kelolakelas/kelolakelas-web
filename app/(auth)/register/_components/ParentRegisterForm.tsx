@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { registerParent, type ActionResponse } from '../_actions/actions';
 
@@ -9,6 +9,14 @@ const initialState: ActionResponse = {
   success: false,
   message: '',
 };
+
+interface ParentFormValues {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  phone: string;
+}
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -55,6 +63,17 @@ function SubmitButton() {
 export function ParentRegisterForm() {
   const router = useRouter();
   const [state, formAction] = useActionState(registerParent, initialState);
+  const [formValues, setFormValues] = useState<ParentFormValues>({
+    first_name: '',
+    last_name: '',
+    email: '',
+    password: '',
+    phone: '',
+  });
+
+  const updateField = (field: keyof ParentFormValues, value: string) => {
+    setFormValues((values) => ({ ...values, [field]: value }));
+  };
 
   useEffect(() => {
     if (state.success && state.redirectTo) {
@@ -93,6 +112,8 @@ export function ParentRegisterForm() {
               name="first_name"
               type="text"
               required
+              value={formValues.first_name}
+              onChange={(event) => updateField('first_name', event.target.value)}
               aria-invalid={Boolean(state.errors?.first_name)}
               aria-describedby={state.errors?.first_name ? 'first_name-error' : undefined}
               className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -118,6 +139,8 @@ export function ParentRegisterForm() {
               name="last_name"
               type="text"
               required
+              value={formValues.last_name}
+              onChange={(event) => updateField('last_name', event.target.value)}
               aria-invalid={Boolean(state.errors?.last_name)}
               aria-describedby={state.errors?.last_name ? 'last_name-error' : undefined}
               className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -145,6 +168,8 @@ export function ParentRegisterForm() {
             type="email"
             autoComplete="email"
             required
+            value={formValues.email}
+            onChange={(event) => updateField('email', event.target.value)}
             aria-invalid={Boolean(state.errors?.email)}
             aria-describedby={state.errors?.email ? 'email-error' : undefined}
             className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -171,6 +196,8 @@ export function ParentRegisterForm() {
             type="password"
             autoComplete="new-password"
             required
+            value={formValues.password}
+            onChange={(event) => updateField('password', event.target.value)}
             aria-invalid={Boolean(state.errors?.password)}
             aria-describedby={state.errors?.password ? 'password-error' : undefined}
             className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -196,6 +223,8 @@ export function ParentRegisterForm() {
             name="phone"
             type="tel"
             autoComplete="tel"
+            value={formValues.phone}
+            onChange={(event) => updateField('phone', event.target.value)}
             aria-invalid={Boolean(state.errors?.phone)}
             aria-describedby={state.errors?.phone ? 'phone-error' : undefined}
             className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"

@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function NotFound() { return <main className="flex min-h-screen items-center justify-center bg-[#f8f7f3] p-5"><div className="rounded-2xl border border-[#dfe3d7] bg-white p-8 text-center"><h1 className="text-2xl font-black">Class tidak ditemukan</h1><p className="mt-2 text-sm text-[#65726c]">Class mungkin sudah tidak tersedia di katalog.</p><Link href="/classes" className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-[#17231f] px-4 text-sm font-bold text-white">Kembali ke katalog</Link></div></main>; }

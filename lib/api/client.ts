@@ -12,11 +12,16 @@ export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
 }
 
-async function getRequestHeaders(headers?: HeadersInit): Promise<Headers> {
+interface ApiRequestInit extends RequestInit {
+  includeTenant?: boolean;
+  next?: { revalidate?: number; tags?: string[] };
+}
+
+async function getRequestHeaders(headers?: HeadersInit, includeTenant = true): Promise<Headers> {
   const cookieStore = await cookies();
   const requestHeaders = new Headers(headers);
   const token = cookieStore.get(AUTH_COOKIE)?.value;
-  const tenantId = cookieStore.get(TENANT_COOKIE)?.value;
+  const tenantId = includeTenant ? cookieStore.get(TENANT_COOKIE)?.value : undefined;
 
   requestHeaders.set('Accept', 'application/json');
   if (!requestHeaders.has('Content-Type')) requestHeaders.set('Content-Type', 'application/json');
@@ -33,11 +38,11 @@ async function readJson<T>(response: Response): Promise<ApiEnvelope<T>> {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
+export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<ApiEnvelope<T>> {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
-    headers: await getRequestHeaders(init.headers),
-    cache: init.cache || 'no-store',
+    headers: await getRequestHeaders(init.headers, init.includeTenant),
+    cache: init.cache || (init.next ? undefined : 'no-store'),
   });
   const result = await readJson<T>(response);
 
