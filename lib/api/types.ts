@@ -188,6 +188,12 @@ export interface Student {
   date_of_birth?: string | null;
   created_at?: string;
   updated_at?: string;
+  student_notes?: StudentNote[];
+}
+
+export interface StudentNote {
+  content: string;
+  note_type: 'medical' | 'academic' | 'behavioral' | string;
 }
 
 export interface Attendance {

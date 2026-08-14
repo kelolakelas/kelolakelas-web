@@ -15,7 +15,7 @@ export interface ActionResponse {
   errors?: Record<string, string[]>;
 }
 
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+const COOKIE_MAX_AGE = 60 * 60 * 24;
 
 /**
  * Server Action for user authentication against the identity service API.

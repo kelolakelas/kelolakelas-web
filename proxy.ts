@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { decodeTokenClaims, getDashboardPath, getDashboardRole, isTokenExpired } from './lib/auth/token';
+import { decodeTokenClaims, getDashboardPath, getDashboardRole, getTokenStatus } from './lib/auth/token';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
@@ -16,7 +16,8 @@ const publicRoutes = ['/login', '/register'];
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  const isAuthenticated = Boolean(token && !isTokenExpired(token));
+  const tokenStatus = getTokenStatus(token);
+  const isAuthenticated = tokenStatus === 'valid';
   let dashboardPath = '/dashboard/tenant';
   if (isAuthenticated && token) {
     try {
@@ -39,7 +40,7 @@ export function proxy(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', pathname);
     if (token) {
-      loginUrl.searchParams.set('reason', 'expired');
+      loginUrl.searchParams.set('reason', tokenStatus === 'expired' ? 'expired' : 'invalid');
       const response = NextResponse.redirect(loginUrl);
       response.cookies.delete(AUTH_COOKIE_NAME);
       response.cookies.delete(process.env.TENANT_ID_COOKIE_NAME || 'tenant_id');

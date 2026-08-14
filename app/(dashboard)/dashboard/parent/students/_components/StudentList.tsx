@@ -14,7 +14,7 @@ function formatDate(value?: string | null): string {
 }
 
 export function StudentList({ students, parentPath }: { students: Student[]; parentPath: string }) {
-  if (students.length === 0) return <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-600"><p>Belum ada data anak.</p><Link href={`${parentPath}?create=1`} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-4 font-semibold text-white">Tambah anak pertama</Link></div>;
+  if (students.length === 0) return <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-600"><p>Belum ada data anak.</p><Link href={`${parentPath}?create=1`} className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-4 font-semibold text-white">Tambah anak</Link></div>;
 
   return <div className="space-y-3">{students.map((student) => {
     const name = getStudentName(student);

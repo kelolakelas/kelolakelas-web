@@ -1,6 +1,7 @@
 'use client';
 
 import type { Member } from '@/lib/api/types';
+import { useRouter } from 'next/navigation';
 import { startTransition, useActionState, useEffect, useState } from 'react';
 import { createClassSetup, type ActionResponse } from '../_actions/classActions';
 import type { Category, CategoryDraft, ClassDraft, ScheduleItemInput } from '../_lib/schema';
@@ -18,7 +19,10 @@ export function ClassCreationWizard({
   teachers,
   onComplete,
 }: ClassCreationWizardProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [submissionId, setSubmissionId] = useState(0);
+  const [dismissedSubmissionId, setDismissedSubmissionId] = useState(0);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [selectedCategory, setSelectedCategory] = useState<(Category | CategoryDraft) | null>(null);
@@ -67,6 +71,7 @@ export function ClassCreationWizard({
     formData.set('class', JSON.stringify(createdClass));
     formData.set('teacher_ids', JSON.stringify(selectedTeacherIds));
     formData.set('schedules', JSON.stringify(schedules));
+    setSubmissionId((current) => current + 1);
     startTransition(() => {
       commitAction(formData);
     });
@@ -76,6 +81,20 @@ export function ClassCreationWizard({
     if (!commitState.success) return;
     onComplete?.();
   }, [commitState.success, onComplete]);
+
+  const handleSuccessClose = () => {
+    setDismissedSubmissionId(submissionId);
+    handleClose();
+    router.refresh();
+  };
+
+  const handleCreateAnother = () => {
+    setDismissedSubmissionId(submissionId);
+    handleClose();
+    handleOpen();
+  };
+
+  const showSuccess = isOpen && commitState.success && !isSubmitting && submissionId > dismissedSubmissionId;
 
   return (
     <>
@@ -94,6 +113,17 @@ export function ClassCreationWizard({
       {/* Modal Overlay */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6 backdrop-blur-xs overflow-y-auto">
+          {showSuccess ? (
+            <div role="dialog" aria-modal="true" aria-labelledby="class-success-title" className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl sm:p-8">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700" aria-hidden="true">✓</div>
+              <h2 id="class-success-title" className="mt-5 text-xl font-bold text-gray-950">Class created successfully</h2>
+              <p className="mt-2 text-sm leading-6 text-gray-600">{commitState.message || 'The class, teachers, and schedule have been saved.'}</p>
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+                <button type="button" onClick={handleCreateAnother} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">Create another class</button>
+                <button type="button" onClick={handleSuccessClose} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700">Done</button>
+              </div>
+            </div>
+          ) : (
           <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-2xl border border-gray-200 dark:border-gray-800 space-y-6 my-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
@@ -196,6 +226,7 @@ export function ClassCreationWizard({
               )}
             </div>
           </div>
+          )}
         </div>
       )}
     </>

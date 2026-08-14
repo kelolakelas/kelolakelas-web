@@ -11,7 +11,7 @@ export const studentSchema = z.object({
   nickname: z.string().trim().max(100, 'Nama panggilan maksimal 100 karakter.'),
   gender: z.enum(['male', 'female']).optional(),
   date_of_birth: z.string().date('Tanggal lahir harus valid.').refine((value) => value <= new Date().toISOString().slice(0, 10), 'Tanggal lahir tidak boleh di masa depan.'),
-  student_note: studentNoteSchema.optional(),
+  student_notes: z.array(studentNoteSchema).optional(),
 });
 
 export type StudentInput = z.infer<typeof studentSchema>;

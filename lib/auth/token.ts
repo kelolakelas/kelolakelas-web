@@ -9,13 +9,22 @@ export interface TokenClaims {
 
 export type DashboardRole = 'parent' | 'tenant' | 'unknown';
 
-export function isTokenExpired(token: string): boolean {
+export type TokenStatus = 'missing' | 'valid' | 'expired' | 'invalid';
+
+export function getTokenStatus(token?: string): TokenStatus {
+  if (!token) return 'missing';
   try {
-    const decoded = decodeTokenClaims(token);
-    return typeof decoded.exp === 'number' && decoded.exp <= Math.floor(Date.now() / 1000);
+    const claims = decodeTokenClaims(token);
+    if (typeof claims.exp === 'number' && claims.exp <= Math.floor(Date.now() / 1000)) return 'expired';
+    return 'valid';
   } catch {
-    return true;
+    return 'invalid';
   }
+}
+
+export function isTokenExpired(token: string): boolean {
+  const status = getTokenStatus(token);
+  return status === 'expired' || status === 'invalid';
 }
 
 export function decodeTokenClaims(token: string): TokenClaims {

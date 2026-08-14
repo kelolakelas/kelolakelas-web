@@ -10,18 +10,22 @@ export interface EnrollmentActionResponse {
   message: string;
   payment?: PublicEnrollmentResponse['payment'];
   enrollmentId?: string;
+  studentId?: string;
+  billingCycle?: 'monthly' | 'quarterly' | 'yearly';
   status?: number;
 }
 
 export async function enrollInCatalogClass(_previous: EnrollmentActionResponse, formData: FormData): Promise<EnrollmentActionResponse> {
   const validation = enrollmentSchema.safeParse({ class_id: formData.get('class_id'), student_id: formData.get('student_id'), billing_cycle: formData.get('billing_cycle') });
   if (!validation.success) return { success: false, message: validation.error.issues[0]?.message || 'Periksa data enrollment.' };
+  const idempotencyKey = String(formData.get('idempotency_key') || '').trim();
+  if (!idempotencyKey) return { success: false, message: 'Permintaan enrollment tidak valid. Silakan coba lagi.' };
   try {
-    const response = await apiRequest<PublicEnrollmentResponse>(`/api/v1/catalog/classes/${encodeURIComponent(validation.data.class_id)}/enrollments`, { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ student_id: validation.data.student_id, billing_cycle: validation.data.billing_cycle }), includeTenant: false });
-    return { success: true, message: response.message || 'Enrollment berhasil dibuat.', payment: response.data?.payment, enrollmentId: response.data?.enrollment.id };
+    const response = await apiRequest<PublicEnrollmentResponse>(`/api/v1/catalog/classes/${encodeURIComponent(validation.data.class_id)}/enrollments`, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({ student_id: validation.data.student_id, billing_cycle: validation.data.billing_cycle }), includeTenant: false, requiresAuth: true });
+    return { success: true, message: response.message || 'Enrollment berhasil dibuat.', payment: response.data?.payment, enrollmentId: response.data?.enrollment.id, studentId: validation.data.student_id, billingCycle: validation.data.billing_cycle };
   } catch (error) {
     if (error instanceof ApiError) {
-      const messages: Record<number, string> = { 401: 'Login diperlukan untuk enroll.', 403: 'Akun ini bukan parent atau tidak memiliki izin.', 404: 'Class atau student tidak ditemukan.', 409: 'Enrollment duplikat, idempotency conflict, atau class sudah penuh.', 422: 'Class tidak dapat di-enroll oleh student ini.', 500: 'Layanan sedang bermasalah. Coba lagi nanti.' };
+      const messages: Record<number, string> = { 400: 'Data enrollment tidak valid.', 401: 'Login diperlukan untuk enroll.', 403: 'Akun ini bukan parent atau tidak memiliki izin.', 404: 'Class atau student tidak ditemukan.', 409: 'Enrollment duplikat, idempotency conflict, atau class sudah penuh.', 422: 'Class tidak dapat di-enroll oleh student ini.', 500: 'Layanan pembayaran atau akademik sedang bermasalah. Coba lagi nanti.' };
       return { success: false, message: messages[error.status || 0] || error.message, status: error.status };
     }
     return { success: false, message: 'Enrollment gagal diproses.' };

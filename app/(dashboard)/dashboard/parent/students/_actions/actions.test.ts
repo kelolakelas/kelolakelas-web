@@ -36,7 +36,7 @@ describe('parent student actions', () => {
     apiRequest.mockResolvedValueOnce({ status: 'success' });
     const result = await saveStudent(undefined, form({ first_name: 'Alya', last_name: 'Putri', nickname: 'Alya', gender: 'female', date_of_birth: '2015-04-10', note_type: 'academic', note_content: 'Suka membaca' }));
     expect(result.success).toBe(true);
-    expect(apiRequest).toHaveBeenCalledWith('/api/v1/students', expect.objectContaining({ method: 'POST', includeTenant: false, body: JSON.stringify({ first_name: 'Alya', last_name: 'Putri', nickname: 'Alya', gender: 'female', date_of_birth: '2015-04-10', student_note: { content: 'Suka membaca', note_type: 'academic' }, parent_id: 'parent-1' }) }));
+    expect(apiRequest).toHaveBeenCalledWith('/api/v1/students', expect.objectContaining({ method: 'POST', includeTenant: false, requiresAuth: true, body: JSON.stringify({ first_name: 'Alya', last_name: 'Putri', nickname: 'Alya', gender: 'female', date_of_birth: '2015-04-10', student_notes: [{ content: 'Suka membaca', note_type: 'academic' }], parent_id: 'parent-1' }) }));
   });
 
   it('updates without accepting parent id from the form', async () => {

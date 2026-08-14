@@ -10,7 +10,7 @@ function listParams(options: { page?: number; search?: string }): string {
 
 export async function getParentStudents(options: { page?: number; search?: string } = {}): Promise<QueryResult<Student[]>> {
   try {
-    const response = await apiRequest<Student[] | { items: Student[]; pagination?: QueryResult<Student[]>['pagination'] }>(`/api/v1/students?${listParams(options)}`, { includeTenant: false });
+    const response = await apiRequest<Student[] | { items: Student[]; pagination?: QueryResult<Student[]>['pagination'] }>(`/api/v1/students?${listParams(options)}`, { includeTenant: false, requiresAuth: true });
     return unwrapList(response.data);
   } catch (error) {
     return { data: [], error: error instanceof ApiError ? error.message : 'Student gagal dimuat.', status: error instanceof ApiError ? error.status : undefined };
@@ -19,7 +19,7 @@ export async function getParentStudents(options: { page?: number; search?: strin
 
 export async function getParentStudent(id: string): Promise<QueryResult<Student | null>> {
   try {
-    const response = await apiRequest<Student>(`/api/v1/students/${id}`, { includeTenant: false });
+    const response = await apiRequest<Student>(`/api/v1/students/${id}`, { includeTenant: false, requiresAuth: true });
     return { data: response.data || null };
   } catch (error) {
     return { data: null, error: error instanceof ApiError ? error.message : 'Detail student gagal dimuat.', status: error instanceof ApiError ? error.status : undefined };
@@ -28,7 +28,7 @@ export async function getParentStudent(id: string): Promise<QueryResult<Student 
 
 export async function getParentEnrollments(options: { page?: number } = {}): Promise<QueryResult<Enrollment[]>> {
   try {
-    const response = await apiRequest<Enrollment[] | { items: Enrollment[]; pagination?: QueryResult<Enrollment[]>['pagination'] }>(`/api/v1/enrollments?${listParams(options)}`, { includeTenant: false });
+    const response = await apiRequest<Enrollment[] | { items: Enrollment[]; pagination?: QueryResult<Enrollment[]>['pagination'] }>(`/api/v1/enrollments?${listParams(options)}`, { includeTenant: false, requiresAuth: true });
     return unwrapList(response.data);
   } catch (error) {
     return { data: [], error: error instanceof ApiError ? error.message : 'Enrollment gagal dimuat.', status: error instanceof ApiError ? error.status : undefined };
@@ -37,7 +37,7 @@ export async function getParentEnrollments(options: { page?: number } = {}): Pro
 
 export async function getParentTransactions(options: { page?: number } = {}): Promise<QueryResult<BillingTransaction[]>> {
   try {
-    const response = await apiRequest<BillingTransaction[] | { items: BillingTransaction[]; pagination?: QueryResult<BillingTransaction[]>['pagination'] }>(`/api/v1/billing/transactions?${listParams(options)}`, { includeTenant: false });
+    const response = await apiRequest<BillingTransaction[] | { items: BillingTransaction[]; pagination?: QueryResult<BillingTransaction[]>['pagination'] }>(`/api/v1/billing/transactions?${listParams(options)}`, { includeTenant: false, requiresAuth: true });
     return unwrapList(response.data);
   } catch (error) {
     return { data: [], error: error instanceof ApiError ? error.message : 'Riwayat transaksi gagal dimuat.', status: error instanceof ApiError ? error.status : undefined };

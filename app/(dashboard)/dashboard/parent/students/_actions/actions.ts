@@ -21,15 +21,18 @@ function getParentId(token: string): string | undefined {
 }
 
 function getStudentInput(formData: FormData) {
-  const noteContent = String(formData.get('note_content') || '').trim();
-  const noteType = String(formData.get('note_type') || '');
+  const noteContents = formData.getAll('note_content').map((value) => String(value).trim());
+  const noteTypes = formData.getAll('note_type').map((value) => String(value));
+  const studentNotes = noteContents
+    .map((content, index) => ({ content, note_type: noteTypes[index] }))
+    .filter((note) => note.content || note.note_type);
   return {
     first_name: formData.get('first_name'),
     last_name: formData.get('last_name'),
     nickname: formData.get('nickname'),
     gender: formData.get('gender') || undefined,
     date_of_birth: formData.get('date_of_birth'),
-    student_note: noteContent ? { content: noteContent, note_type: noteType } : undefined,
+    student_notes: studentNotes.length ? studentNotes : undefined,
   };
 }
 
@@ -54,6 +57,7 @@ export async function saveStudent(previous: StudentActionResponse = initialRespo
       method: id ? 'PATCH' : 'POST',
       body: JSON.stringify(payload),
       includeTenant: false,
+      requiresAuth: true,
     });
     revalidatePath('/dashboard/parent/students');
     if (id) revalidatePath(`/dashboard/parent/students/${id}`);
@@ -68,7 +72,7 @@ export async function deleteStudent(previous: StudentActionResponse = initialRes
   const id = String(formData.get('id') || '').trim();
   if (!id) return { success: false, message: 'Student tidak valid.' };
   try {
-    await apiRequest(`/api/v1/students/${id}`, { method: 'DELETE', includeTenant: false });
+    await apiRequest(`/api/v1/students/${id}`, { method: 'DELETE', includeTenant: false, requiresAuth: true });
     revalidatePath('/dashboard/parent/students');
     revalidatePath(`/dashboard/parent/students/${id}`);
     return { success: true, message: 'Data anak berhasil dihapus.' };
