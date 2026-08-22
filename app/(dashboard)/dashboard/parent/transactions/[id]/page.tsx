@@ -1,0 +1,11 @@
+import { TransactionStatusActions } from '@/app/_components/TransactionStatusActions';
+import { formatTransactionDate } from '@/lib/billing/formatters';
+import Link from 'next/link';
+import { getParentTransaction } from '../../_queries/queries';
+
+export default async function ParentTransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const result = await getParentTransaction(id);
+
+  return <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6"><Link href="/dashboard/parent/transactions" className="text-sm font-semibold text-blue-700">Kembali ke transaksi</Link><h1 className="text-2xl font-bold">Detail transaksi</h1>{result.error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{result.status === 401 ? 'Sesi Anda berakhir. Silakan login kembali.' : result.status === 404 ? 'Transaksi tidak ditemukan.' : 'Detail transaksi gagal dimuat. Coba lagi nanti.'}</div>}{result.data ? <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-6"><TransactionStatusActions initialTransaction={result.data} showAmount /><dl className="grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-gray-500">Transaction ID</dt><dd className="mt-1 break-all font-semibold">{result.data.id}</dd></div><div><dt className="text-gray-500">Payment reference</dt><dd className="mt-1 break-all font-semibold">{result.data.payment_intent_id || result.data.merchant_order_id || 'Belum tersedia'}</dd></div><div><dt className="text-gray-500">Enrollment ID</dt><dd className="mt-1 break-all font-semibold">{result.data.enrollment_id || 'Belum tersedia'}</dd></div><div><dt className="text-gray-500">Dibuat</dt><dd className="mt-1 font-semibold">{formatTransactionDate(result.data.created_at)}</dd></div><div><dt className="text-gray-500">Dibayar</dt><dd className="mt-1 font-semibold">{formatTransactionDate(result.data.paid_at)}</dd></div></dl></section> : !result.error && <div className="rounded-xl border border-gray-200 bg-white p-6">Transaksi tidak ditemukan.</div>}</main>;
+}

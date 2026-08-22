@@ -222,8 +222,9 @@ export interface Report {
 }
 
 export interface BillingTransaction {
-  id?: string;
+  id: string;
   transaction_id?: string;
+  merchant_order_id?: string;
   tenant_id?: string;
   parent_id?: string;
   student_id?: string;

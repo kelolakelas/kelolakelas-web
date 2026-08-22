@@ -1,0 +1,12 @@
+import { getParentTransaction } from '@/app/(dashboard)/dashboard/parent/_queries/queries';
+import { TransactionStatusActions } from '@/app/_components/TransactionStatusActions';
+import Link from 'next/link';
+
+export const dynamic = 'force-dynamic';
+
+export default async function PaymentReturnPage({ searchParams }: { searchParams: Promise<{ merchantOrderId?: string; reference?: string; resultCode?: string }> }) {
+  const { merchantOrderId } = await searchParams;
+  if (!merchantOrderId?.trim()) return <main className="mx-auto max-w-2xl space-y-5 px-4 py-12"><h1 className="text-2xl font-bold">Status pembayaran tidak dapat dicek</h1><div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Parameter merchantOrderId tidak ditemukan. Buka transaksi dari dashboard untuk mengecek status.</div><nav className="flex flex-wrap gap-3"><Link href="/dashboard/parent" className="font-semibold text-blue-700">Dashboard parent</Link><Link href="/dashboard/parent/transactions" className="font-semibold text-blue-700">Daftar transaksi</Link></nav></main>;
+  const result = await getParentTransaction(merchantOrderId);
+  return <main className="mx-auto max-w-2xl space-y-6 px-4 py-12"><div><p className="text-sm font-semibold text-gray-500">Kembali dari Duitku</p><h1 className="mt-2 text-2xl font-bold">Status pembayaran</h1></div>{result.error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{result.status === 401 ? 'Sesi Anda berakhir. Silakan login kembali.' : result.status === 404 ? 'Transaksi tidak ditemukan.' : 'Status transaksi gagal dimuat. Coba lagi nanti.'}</div>}{result.data && <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-6"><TransactionStatusActions initialTransaction={result.data} showAmount />{['paid', 'success'].includes(result.data.status.toLowerCase()) && <p className="text-sm text-emerald-800">Enrollment sedang atau berhasil diaktifkan oleh sistem.</p>}</section>}<nav className="flex flex-wrap gap-3"><Link href="/dashboard/parent" className="font-semibold text-blue-700">Dashboard parent</Link><Link href="/dashboard/parent/transactions" className="font-semibold text-blue-700">Daftar transaksi</Link></nav></main>;
+}

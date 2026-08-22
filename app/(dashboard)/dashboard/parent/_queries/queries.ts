@@ -43,3 +43,15 @@ export async function getParentTransactions(options: { page?: number } = {}): Pr
     return { data: [], error: error instanceof ApiError ? error.message : 'Riwayat transaksi gagal dimuat.', status: error instanceof ApiError ? error.status : undefined };
   }
 }
+
+export async function getParentTransaction(id: string): Promise<QueryResult<BillingTransaction | null>> {
+  if (!id.trim()) return { data: null, error: 'ID transaksi tidak valid.', status: 400 };
+  try {
+    const response = await apiRequest<BillingTransaction>(`/api/v1/billing/transactions/${encodeURIComponent(id)}`, { includeTenant: false, requiresAuth: true });
+    return { data: response.data || null };
+  } catch (error) {
+    const status = error instanceof ApiError ? error.status : undefined;
+    const message = status === 401 ? 'Sesi Anda berakhir. Silakan login kembali.' : status === 404 ? 'Transaksi tidak ditemukan.' : 'Detail transaksi gagal dimuat. Coba lagi nanti.';
+    return { data: null, error: message, status };
+  }
+}
