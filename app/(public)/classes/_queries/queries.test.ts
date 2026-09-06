@@ -22,8 +22,8 @@ describe('catalog queries', () => {
   });
 
   it('unwraps catalog response and maps API errors', async () => {
-    vi.mocked(apiRequest).mockResolvedValueOnce({ status: 'success', data: { items: [{ id: 'class-1' }], pagination: { page: 1, total_pages: 1 } } });
-    await expect(getCatalogClasses({ page: 1 })).resolves.toMatchObject({ data: [{ id: 'class-1' }], pagination: { total_pages: 1 } });
+    vi.mocked(apiRequest).mockResolvedValueOnce({ status: 'success', data: { items: [{ id: 'class-1', schedules: JSON.stringify([{ id: 'schedule-1', day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00', capacity: 10, available_slots: 7, is_available: true }]) }], pagination: { page: 1, total_pages: 1 } } });
+    await expect(getCatalogClasses({ page: 1 })).resolves.toMatchObject({ data: [{ id: 'class-1', schedules: [{ id: 'schedule-1', day_of_week: 1, available_slots: 7 }] }], pagination: { total_pages: 1 } });
 
     vi.mocked(apiRequest).mockRejectedValueOnce(new Error('network'));
     await expect(getCatalogClasses()).resolves.toMatchObject({ data: [], error: 'Katalog kelas gagal dimuat.' });

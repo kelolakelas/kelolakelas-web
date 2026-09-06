@@ -31,6 +31,7 @@ const classItem = {
   available_slots: 5,
   is_enrollable: true,
   created_at: '2026-08-14T00:00:00Z',
+  schedules: [{ id: 'schedule-1', day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00', capacity: 10, available_slots: 7, is_available: true }],
 };
 
 function parentToken() {

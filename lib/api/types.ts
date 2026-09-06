@@ -34,6 +34,20 @@ export interface CatalogClass {
   distance_km?: number | null;
   is_enrollable: boolean;
   created_at: string;
+  schedules?: CatalogSchedule[];
+}
+
+export interface CatalogSchedule {
+  id: string;
+  class_id?: string;
+  day_of_week: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  available_slots: number;
+  is_available: boolean;
+  location?: string | null;
+  tutor_id?: string | null;
 }
 
 export interface CatalogListResponse {
@@ -157,6 +171,7 @@ export interface Enrollment {
   student_id: string;
   billing_cycle?: 'monthly' | 'quarterly' | 'yearly';
   status: 'pending' | 'active' | 'completed' | 'dropped' | string;
+  schedule_id?: string | null;
   joined_at?: string;
   updated_at?: string;
   student?: Student | null;
@@ -166,6 +181,7 @@ export interface Enrollment {
 export interface PublicEnrollmentRequest {
   student_id: string;
   billing_cycle: 'monthly' | 'quarterly' | 'yearly';
+  schedule_id: string;
 }
 
 export interface PublicEnrollmentResponse {

@@ -33,4 +33,8 @@ export const enrollmentSchema = z.object({
   class_id: z.string().trim().min(1),
   student_id: z.string().trim().min(1, 'Pilih student terlebih dahulu.'),
   billing_cycle: z.enum(['monthly', 'quarterly', 'yearly']),
+  class_type: z.enum(catalogTypeValues).optional(),
+  schedule_id: z.string().trim().optional(),
+}).superRefine((value, context) => {
+  if (value.class_type === 'group' && !value.schedule_id) context.addIssue({ code: 'custom', path: ['schedule_id'], message: 'Pilih schedule terlebih dahulu.' });
 });

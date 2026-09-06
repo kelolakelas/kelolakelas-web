@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { registerTenant, type ActionResponse } from '../_actions/actions';
 
@@ -9,6 +9,17 @@ const initialState: ActionResponse = {
   success: false,
   message: '',
 };
+
+interface TenantFormValues {
+  tenant_name: string;
+  tenant_phone: string;
+  tenant_address: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  phone: string;
+}
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -55,6 +66,11 @@ function SubmitButton() {
 export function TenantRegisterForm() {
   const router = useRouter();
   const [state, formAction] = useActionState(registerTenant, initialState);
+  const [formValues, setFormValues] = useState<TenantFormValues>({ tenant_name: '', tenant_phone: '', tenant_address: '', first_name: '', last_name: '', email: '', password: '', phone: '' });
+
+  const updateField = (field: keyof TenantFormValues, value: string) => {
+    setFormValues((values) => ({ ...values, [field]: value }));
+  };
 
   useEffect(() => {
     if (state.success && state.redirectTo) {
@@ -95,6 +111,8 @@ export function TenantRegisterForm() {
                 name="tenant_name"
                 type="text"
                 required
+                value={formValues.tenant_name}
+                onChange={(event) => updateField('tenant_name', event.target.value)}
                 aria-invalid={Boolean(state.errors?.tenant_name)}
                 aria-describedby={state.errors?.tenant_name ? 'tenant_name-error' : undefined}
                 className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -120,6 +138,8 @@ export function TenantRegisterForm() {
                   id="tenant_phone"
                   name="tenant_phone"
                   type="tel"
+                  value={formValues.tenant_phone}
+                  onChange={(event) => updateField('tenant_phone', event.target.value)}
                   className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"
                   placeholder="+1 (555) 123-4567"
                 />
@@ -133,6 +153,8 @@ export function TenantRegisterForm() {
                   id="tenant_address"
                   name="tenant_address"
                   type="text"
+                  value={formValues.tenant_address}
+                  onChange={(event) => updateField('tenant_address', event.target.value)}
                   className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"
                   placeholder="123 Education St"
                 />
@@ -154,6 +176,8 @@ export function TenantRegisterForm() {
                   name="first_name"
                   type="text"
                   required
+                  value={formValues.first_name}
+                  onChange={(event) => updateField('first_name', event.target.value)}
                   aria-invalid={Boolean(state.errors?.first_name)}
                   aria-describedby={state.errors?.first_name ? 'first_name-error' : undefined}
                   className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -179,6 +203,8 @@ export function TenantRegisterForm() {
                   name="last_name"
                   type="text"
                   required
+                  value={formValues.last_name}
+                  onChange={(event) => updateField('last_name', event.target.value)}
                   aria-invalid={Boolean(state.errors?.last_name)}
                   aria-describedby={state.errors?.last_name ? 'last_name-error' : undefined}
                   className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -206,6 +232,8 @@ export function TenantRegisterForm() {
                 type="email"
                 autoComplete="email"
                 required
+                value={formValues.email}
+                onChange={(event) => updateField('email', event.target.value)}
                 aria-invalid={Boolean(state.errors?.email)}
                 aria-describedby={state.errors?.email ? 'email-error' : undefined}
                 className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -232,6 +260,8 @@ export function TenantRegisterForm() {
                 type="password"
                 autoComplete="new-password"
                 required
+                value={formValues.password}
+                onChange={(event) => updateField('password', event.target.value)}
                 aria-invalid={Boolean(state.errors?.password)}
                 aria-describedby={state.errors?.password ? 'password-error' : undefined}
                 className={`min-h-[44px] w-full rounded-lg border px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors ${
@@ -257,6 +287,8 @@ export function TenantRegisterForm() {
                 name="phone"
                 type="tel"
                 autoComplete="tel"
+                value={formValues.phone}
+                onChange={(event) => updateField('phone', event.target.value)}
                 className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"
                 placeholder="+1 (555) 987-6543"
               />
