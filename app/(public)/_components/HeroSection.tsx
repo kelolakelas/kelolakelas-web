@@ -1,4 +1,5 @@
 import { ArrowRight, Construction, Sparkles } from "lucide-react";
+import Link from "next/link";
 
 export function HeroSection() {
   return (
@@ -18,9 +19,9 @@ export function HeroSection() {
             KelolaKelas menyatukan tenant, anggota, peran, kelas, dan jadwal agar tim pendidikan bisa fokus pada hal yang paling penting: proses belajar.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <a className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#17231f] px-6 font-bold text-[#f8f7f3] shadow-[0_8px_0_#b8c746] transition-transform hover:-translate-y-0.5" href="/kelas">
+            <Link className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#17231f] px-6 font-bold text-[#f8f7f3] shadow-[0_8px_0_#b8c746] transition-transform hover:-translate-y-0.5" href="/kelas">
               Jelajahi kelas <ArrowRight size={18} aria-hidden="true" />
-            </a>
+            </Link>
             <a className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#17231f] px-6 font-bold text-[#f8f7f3] shadow-[0_8px_0_#b8c746] transition-transform hover:-translate-y-0.5" href="/register">
               Daftar untuk akses awal <ArrowRight size={18} aria-hidden="true" />
             </a>
