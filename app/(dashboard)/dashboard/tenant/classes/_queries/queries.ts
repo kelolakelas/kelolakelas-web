@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl } from '@/lib/gateway';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
@@ -29,7 +29,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
  * Fetches all academic categories configured for the current tenant.
  */
 export async function getCategories(): Promise<Category[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();
@@ -60,7 +60,7 @@ export async function getCategories(): Promise<Category[]> {
  * Fetches all academic classes created for the current tenant.
  */
 export async function getClasses(): Promise<ClassEntity[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();
@@ -91,7 +91,7 @@ export async function getClasses(): Promise<ClassEntity[]> {
  * Fetches initial recurring schedules for the tenant.
  */
 export async function getSchedules(): Promise<ClassSchedule[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();

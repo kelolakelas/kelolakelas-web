@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl } from '@/lib/gateway';
 import type { Permission, Role } from '../_lib/schema';
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
@@ -33,7 +33,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
  * Target Endpoint: GET /api/v1/permissions
  */
 export async function getAvailablePermissions(): Promise<Permission[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();
@@ -65,7 +65,7 @@ export async function getAvailablePermissions(): Promise<Permission[]> {
  * Target Endpoint: GET /api/v1/roles
  */
 export async function getTenantRoles(): Promise<Role[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();

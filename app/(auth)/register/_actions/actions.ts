@@ -1,6 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { parentRegisterSchema, tenantRegisterSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
@@ -10,7 +11,6 @@ export interface ActionResponse {
   redirectTo?: string;
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const DEFAULT_COOKIE_NAME = 'auth_token';
 
 /**
@@ -40,9 +40,8 @@ export async function registerParent(
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
+    const baseUrl = getGatewayBaseUrl();
     const response = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: 'POST',
       headers: {
@@ -82,7 +81,9 @@ export async function registerParent(
     console.error('[registerParent Error]:', error);
     return {
       success: false,
-      message: 'An unexpected connection error occurred. Please try again later.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected connection error occurred. Please try again later.',
     };
   }
 }
@@ -116,9 +117,8 @@ export async function registerTenant(
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
+    const baseUrl = getGatewayBaseUrl();
     const response = await fetch(`${baseUrl}/api/v1/tenants/register`, {
       method: 'POST',
       headers: {
@@ -158,7 +158,9 @@ export async function registerTenant(
     console.error('[registerTenant Error]:', error);
     return {
       success: false,
-      message: 'An unexpected connection error occurred. Please try again later.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected connection error occurred. Please try again later.',
     };
   }
 }
