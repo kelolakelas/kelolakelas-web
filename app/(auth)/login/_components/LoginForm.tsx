@@ -51,7 +51,7 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ registered = false, redirectTo }: { registered?: boolean; redirectTo?: string }) {
   const [state, formAction] = useActionState(loginAction, initialState);
 
   return (
@@ -60,6 +60,15 @@ export function LoginForm() {
         <h2 className="text-2xl font-bold tracking-tight text-gray-900">Welcome Back</h2>
         <p className="mt-1 text-sm text-gray-500">Sign in to your Tutorin account</p>
       </div>
+
+      {registered && (
+        <div
+          role="status"
+          className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
+        >
+          <p className="font-medium">Account created successfully. Sign in to continue.</p>
+        </div>
+      )}
 
       {state.message && !state.success && (
         <div
@@ -71,6 +80,7 @@ export function LoginForm() {
       )}
 
       <form action={formAction} noValidate className="space-y-5">
+        {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
             Email Address

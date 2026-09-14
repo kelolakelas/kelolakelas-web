@@ -61,21 +61,10 @@ export async function registerParent(
       };
     }
 
-    if (result.data?.token) {
-      const cookieStore = await cookies();
-      cookieStore.set(process.env.AUTH_COOKIE_NAME || DEFAULT_COOKIE_NAME, result.data.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 7,
-      });
-    }
-
     return {
       success: true,
-      message: 'Parent account registered successfully.',
-      redirectTo: '/dashboard/parent',
+      message: 'Parent account registered successfully. Please sign in to continue.',
+      redirectTo: '/login?registered=1',
     };
   } catch (error) {
     console.error('[registerParent Error]:', error);
@@ -147,6 +136,16 @@ export async function registerTenant(
         path: '/',
         maxAge: 60 * 60 * 24 * 7,
       });
+
+      if (result.data.tenant_id) {
+        cookieStore.set(process.env.TENANT_ID_COOKIE_NAME || 'tenant_id', result.data.tenant_id, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 7,
+        });
+      }
     }
 
     return {
