@@ -56,4 +56,17 @@ describe('authentication proxy', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/kelas');
   });
+
+  it('keeps tenant sessions out of parent student management', () => {
+    const tenantId = '123e4567-e89b-12d3-a456-426614174000';
+    const response = proxy(
+      makeRequest('/dashboard/parent/students', makeToken({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        tenant_id: tenantId,
+      }))
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/dashboard/tenant');
+  });
 });

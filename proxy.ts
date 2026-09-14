@@ -58,6 +58,7 @@ export function proxy(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
+  const isParentRoute = pathname === '/dashboard/parent' || pathname.startsWith('/dashboard/parent/');
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
@@ -67,6 +68,14 @@ export function proxy(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', `${pathname}${request.nextUrl.search}`);
     return clearInvalidCookie(NextResponse.redirect(loginUrl));
+  }
+
+  // Parent student management must not be reachable with a tenant session.
+  if (isParentRoute && isAuthenticated && !tokenPayload?.is_parent) {
+    const destination = tokenPayload?.tenant_id && hasTenantContext(tokenPayload.tenant_id)
+      ? '/dashboard/tenant'
+      : '/';
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   // 2. Authenticated user accessing a public route (e.g. /login) -> Redirect to /dashboard
