@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { loginSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
@@ -10,7 +11,6 @@ export interface ActionResponse {
   errors?: Record<string, string[]>;
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const DEFAULT_COOKIE_NAME = 'auth_token';
 
 /**
@@ -39,12 +39,12 @@ export async function loginAction(
   }
 
   const { email, password } = validatedFields.data;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
   const cookieName = process.env.AUTH_COOKIE_NAME || DEFAULT_COOKIE_NAME;
 
   let isLoginSuccessful = false;
 
   try {
+    const baseUrl = getGatewayBaseUrl();
     // 2. Request Authentication from Backend Identity Service
     const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
@@ -80,7 +80,9 @@ export async function loginAction(
     console.error('[loginAction Error]:', error);
     return {
       success: false,
-      message: 'An unexpected connection error occurred. Please try again later.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected connection error occurred. Please try again later.',
     };
   }
 

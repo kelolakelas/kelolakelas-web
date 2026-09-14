@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { inviteMemberSchema, updateMemberRoleSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
@@ -11,7 +12,6 @@ export interface ActionResponse {
   data?: unknown;
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
@@ -66,9 +66,8 @@ export async function inviteTenantMember(
   }
 
   const { email, roleId } = validation.data;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
+    const baseUrl = getGatewayBaseUrl();
     // 2. Dispatch request to backend identity service
     const headers = await getAuthHeaders();
     const response = await fetch(`${baseUrl}/api/v1/invitations`, {
@@ -102,7 +101,9 @@ export async function inviteTenantMember(
     console.error('[inviteTenantMember Error]:', error);
     return {
       success: false,
-      message: 'An unexpected connection error occurred while sending the invitation.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected connection error occurred while sending the invitation.',
     };
   }
 }
@@ -132,9 +133,8 @@ export async function updateMemberRole(
   }
 
   const { memberId, roleId } = validation.data;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
+    const baseUrl = getGatewayBaseUrl();
     // 2. Dispatch update request to backend identity service
     const headers = await getAuthHeaders();
     const response = await fetch(`${baseUrl}/api/v1/members/${memberId}/role`, {
@@ -165,7 +165,9 @@ export async function updateMemberRole(
     console.error('[updateMemberRole Error]:', error);
     return {
       success: false,
-      message: 'An unexpected connection error occurred while updating member role.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected connection error occurred while updating member role.',
     };
   }
 }

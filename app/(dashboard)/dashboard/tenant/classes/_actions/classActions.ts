@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import {
   createCategorySchema,
   createClassSchema,
@@ -16,7 +17,6 @@ export interface ActionResponse<T = unknown> {
   data?: T;
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
@@ -44,13 +44,6 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 /**
- * Helper to ensure standard API URL endpoint.
- */
-function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-}
-
-/**
  * Server Action: Create a new academic subject/course category.
  * Endpoint: POST /api/v1/categories
  */
@@ -74,8 +67,9 @@ export async function createCategory(
   }
 
   try {
+    const baseUrl = getGatewayBaseUrl();
     const headers = await getAuthHeaders();
-    const response = await fetch(`${getApiBaseUrl()}/api/v1/categories`, {
+    const response = await fetch(`${baseUrl}/api/v1/categories`, {
       method: 'POST',
       headers,
       body: JSON.stringify(validation.data),
@@ -104,7 +98,9 @@ export async function createCategory(
     console.error('[createCategory Action Error]:', error);
     return {
       success: false,
-      message: 'An unexpected network or server error occurred. Please try again.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected network or server error occurred. Please try again.',
     };
   }
 }
@@ -137,8 +133,9 @@ export async function createClass(
   }
 
   try {
+    const baseUrl = getGatewayBaseUrl();
     const headers = await getAuthHeaders();
-    const response = await fetch(`${getApiBaseUrl()}/api/v1/classes`, {
+    const response = await fetch(`${baseUrl}/api/v1/classes`, {
       method: 'POST',
       headers,
       body: JSON.stringify(validation.data),
@@ -167,7 +164,9 @@ export async function createClass(
     console.error('[createClass Action Error]:', error);
     return {
       success: false,
-      message: 'An unexpected network or server error occurred. Please try again.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected network or server error occurred. Please try again.',
     };
   }
 }
@@ -225,8 +224,9 @@ export async function createSchedule(
   };
 
   try {
+    const baseUrl = getGatewayBaseUrl();
     const headers = await getAuthHeaders();
-    const response = await fetch(`${getApiBaseUrl()}/api/v1/schedules`, {
+    const response = await fetch(`${baseUrl}/api/v1/schedules`, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -255,7 +255,9 @@ export async function createSchedule(
     console.error('[createSchedule Action Error]:', error);
     return {
       success: false,
-      message: 'An unexpected network error occurred while saving schedules.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected network error occurred while saving schedules.',
     };
   }
 }
