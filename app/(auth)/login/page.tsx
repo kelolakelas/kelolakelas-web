@@ -22,10 +22,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{
+    registered?: string;
+    redirectTo?: string;
+  }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const params = await searchParams;
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <LoginForm />
+      <LoginForm registered={params.registered === '1'} redirectTo={params.redirectTo} />
     </main>
   );
 }
