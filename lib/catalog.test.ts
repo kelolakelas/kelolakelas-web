@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogQuery, descriptionText, scheduleLabels } from './catalog';
+import { catalogQuery, descriptionText, scheduleLabels, scheduleOptions } from './catalog';
 
 describe('catalog query helpers', () => {
   it('accepts core filters and uses a safe page size', () => {
@@ -16,6 +16,12 @@ describe('catalog query helpers', () => {
 
   it('formats only complete schedule objects', () => {
     expect(scheduleLabels([{ day_of_week: 1, start_time: '09:00:00', end_time: '10:30:00' }, {}])).toEqual(['Senin, 09:00–10:30']);
+  });
+
+  it('keeps schedule ids and marks full schedules unavailable', () => {
+    expect(scheduleOptions([{ id: 'schedule-1', day_of_week: 1, start_time: '09:00:00', end_time: '10:30:00', is_available: false, available_slots: 0 }])).toEqual([
+      { id: 'schedule-1', label: 'Senin, 09:00–10:30', available: false, availableSlots: 0 },
+    ]);
   });
 
   it('renders only a safe textual description', () => {
