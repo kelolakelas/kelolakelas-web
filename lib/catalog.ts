@@ -14,6 +14,13 @@ export type CatalogItem = {
   is_enrollable: boolean;
 };
 
+export type CatalogScheduleOption = {
+  id: string;
+  label: string;
+  available: boolean;
+  availableSlots?: number;
+};
+
 export type CatalogList = { items: CatalogItem[]; pagination: { page: number; total_pages: number; total_items: number } };
 export type CatalogResult<T> = { data: T; error?: never } | { data?: never; error: 'invalid_filter' | 'not_found' | 'api' };
 
@@ -77,6 +84,26 @@ export function scheduleLabels(schedules: unknown): string[] {
     const start = typeof item.start_time === 'string' ? item.start_time.slice(0, 5) : undefined;
     const end = typeof item.end_time === 'string' ? item.end_time.slice(0, 5) : undefined;
     return day && start && end ? [`${day}, ${start}–${end}`] : [];
+  });
+}
+
+export function scheduleOptions(schedules: unknown): CatalogScheduleOption[] {
+  if (!Array.isArray(schedules)) return [];
+  const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+  return schedules.flatMap((schedule) => {
+    if (!schedule || typeof schedule !== 'object') return [];
+    const item = schedule as Record<string, unknown>;
+    const id = typeof item.id === 'string' ? item.id : '';
+    const day = typeof item.day_of_week === 'number' ? days[item.day_of_week - 1] : undefined;
+    const start = typeof item.start_time === 'string' ? item.start_time.slice(0, 5) : undefined;
+    const end = typeof item.end_time === 'string' ? item.end_time.slice(0, 5) : undefined;
+    if (!id || !day || !start || !end) return [];
+    return [{
+      id,
+      label: `${day}, ${start}–${end}`,
+      available: item.is_available !== false,
+      availableSlots: typeof item.available_slots === 'number' ? item.available_slots : undefined,
+    }];
   });
 }
 

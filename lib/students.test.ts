@@ -6,7 +6,7 @@ import {
   studentLastName,
   studentPayload,
 } from './students';
-import { getUserIdFromToken } from './auth-session';
+import { getSessionIdentityFromToken, getUserIdFromToken } from './auth-session';
 
 const parentId = '123e4567-e89b-12d3-a456-426614174000';
 
@@ -42,5 +42,10 @@ describe('session user id helper', () => {
     const payload = Buffer.from(JSON.stringify({ user_id: parentId })).toString('base64url');
     expect(getUserIdFromToken(`header.${payload}.signature`)).toBe(parentId);
     expect(getUserIdFromToken('not-a-token')).toBeNull();
+  });
+
+  it('identifies a parent session without trusting client-provided form data', () => {
+    const payload = Buffer.from(JSON.stringify({ user_id: parentId, is_parent: true })).toString('base64url');
+    expect(getSessionIdentityFromToken(`header.${payload}.signature`)).toEqual({ userId: parentId, isParent: true });
   });
 });
