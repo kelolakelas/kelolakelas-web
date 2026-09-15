@@ -2,10 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { createRoleSchema, type ActionResponse } from '../_lib/schema';
 import { getAvailablePermissions as fetchAvailablePermissions, getTenantRoles as fetchTenantRoles } from '../_queries/queries';
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
@@ -74,9 +74,8 @@ export async function createTenantRole(
   }
 
   const { name, description, permissionIds } = validation.data;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-
   try {
+    const baseUrl = getGatewayBaseUrl();
     // 2. Dispatch creation payload to backend identity service
     const headers = await getAuthHeaders();
     const response = await fetch(`${baseUrl}/api/v1/roles`, {
@@ -112,7 +111,9 @@ export async function createTenantRole(
     console.error('[createTenantRole Error]:', error);
     return {
       success: false,
-      message: 'An unexpected network error occurred while creating the role.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected network error occurred while creating the role.',
     };
   }
 }

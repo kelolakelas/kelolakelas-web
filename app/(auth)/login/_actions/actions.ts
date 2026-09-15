@@ -2,6 +2,8 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getLoginDestination, hasTenantContext } from '@/lib/auth-routing';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { loginSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
@@ -10,8 +12,8 @@ export interface ActionResponse {
   errors?: Record<string, string[]>;
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const DEFAULT_COOKIE_NAME = 'auth_token';
+const DEFAULT_TENANT_COOKIE_NAME = 'tenant_id';
 
 /**
  * Server Action for user authentication against the identity service API.
@@ -39,12 +41,13 @@ export async function loginAction(
   }
 
   const { email, password } = validatedFields.data;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const requestedRedirect = formData.get('redirectTo');
   const cookieName = process.env.AUTH_COOKIE_NAME || DEFAULT_COOKIE_NAME;
 
-  let isLoginSuccessful = false;
+  let loginDestination = '/';
 
   try {
+    const baseUrl = getGatewayBaseUrl();
     // 2. Request Authentication from Backend Identity Service
     const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
@@ -75,22 +78,28 @@ export async function loginAction(
       maxAge: 60 * 60 * 24 * 7, // 7 Days
     });
 
-    isLoginSuccessful = true;
+    const tenantId = result.data.user?.tenant_id || result.data.tenant_id;
+    if (hasTenantContext(tenantId)) {
+      cookieStore.set(process.env.TENANT_ID_COOKIE_NAME || DEFAULT_TENANT_COOKIE_NAME, tenantId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
+
+    loginDestination = getLoginDestination(result.data.user || {}, requestedRedirect);
   } catch (error) {
     console.error('[loginAction Error]:', error);
     return {
       success: false,
-      message: 'An unexpected connection error occurred. Please try again later.',
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected connection error occurred. Please try again later.',
     };
   }
 
-  // 4. Redirect Authenticated User to Dashboard
-  if (isLoginSuccessful) {
-    redirect('/dashboard');
-  }
-
-  return {
-    success: false,
-    message: 'Authentication failed.',
-  };
+  // Navigation errors must remain outside the catch block so Next.js can handle them.
+  redirect(loginDestination);
 }

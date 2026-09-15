@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { TENANT_NAV_ITEMS } from '../_constants/constants';
 
 function NavIcon({ href }: { href: string }) {
@@ -51,13 +51,15 @@ function NavIcon({ href }: { href: string }) {
 }
 
 export function MobileNav() {
-  const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close drawer automatically when route changes
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+  // Remount the stateful drawer when the route changes so navigation always
+  // closes it without synchronously updating state from an effect.
+  return <MobileNavContent key={pathname} pathname={pathname} />;
+}
+
+function MobileNavContent({ pathname }: { pathname: string }) {
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 md:hidden">

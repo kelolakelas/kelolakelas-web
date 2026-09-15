@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useState } from 'react';
 import { createTenantRole } from '../_actions/roleActions';
 import type { ActionResponse, Permission } from '../_lib/schema';
 import { PermissionSelector } from './PermissionSelector';
@@ -19,23 +19,27 @@ export function RoleCreationForm({
   availablePermissions,
   onSuccess,
 }: RoleCreationFormProps) {
-  const [state, formAction, isPending] = useActionState(createTenantRole, initialState);
-
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>([]);
 
-  // Reset form when action completes successfully
-  useEffect(() => {
-    if (state.success) {
-      setName('');
-      setDescription('');
-      setSelectedPermissionIds([]);
-      if (onSuccess) {
-        onSuccess();
+  const [state, formAction, isPending] = useActionState(
+    async (previousState: ActionResponse, formData: FormData) => {
+      const nextState = await createTenantRole(previousState, formData);
+
+      if (nextState.success) {
+        // Reset controlled fields as part of the submit action, avoiding a
+        // synchronous state update from an effect after the action completes.
+        setName('');
+        setDescription('');
+        setSelectedPermissionIds([]);
+        onSuccess?.();
       }
-    }
-  }, [state.success, onSuccess]);
+
+      return nextState;
+    },
+    initialState
+  );
 
   const handleReset = () => {
     setName('');

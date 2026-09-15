@@ -1,0 +1,1 @@
+export default function Loading() { return <main className="mx-auto min-h-screen max-w-5xl px-5 py-16"><p className="animate-pulse text-lg font-semibold text-[#52615b]">Memuat detail kelas…</p></main>; }

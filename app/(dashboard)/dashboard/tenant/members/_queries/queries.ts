@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
+import { getGatewayBaseUrl } from '@/lib/gateway';
 import type { Member, Permission, Role } from '../_schemas/schema';
 
-const DEFAULT_API_URL = 'http://localhost:3000';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
@@ -32,7 +32,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
  * Fetches current active members for the tenant organization from the API Gateway.
  */
 export async function getTenantMembers(): Promise<Member[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();
@@ -64,7 +64,7 @@ export async function getTenantMembers(): Promise<Member[]> {
  * Target Endpoint: GET /api/v1/roles
  */
 export async function getTenantRoles(): Promise<Role[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();
@@ -96,7 +96,7 @@ export async function getTenantRoles(): Promise<Role[]> {
  * Target Endpoint: GET /api/v1/permissions
  */
 export async function getSystemPermissions(): Promise<Permission[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+  const baseUrl = getGatewayBaseUrl();
 
   try {
     const headers = await getAuthHeaders();
