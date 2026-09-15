@@ -20,8 +20,9 @@ function FieldError({ errors, name }: { errors?: Record<string, string[]>; name:
   return message ? <p className="mt-1 text-sm text-[#b42318]">{message}</p> : null;
 }
 
-export function EnrollmentPanel({ classId, isParent, students, schedules, idempotencyKey, studentError }: {
+export function EnrollmentPanel({ classId, classType, isParent, students, schedules, idempotencyKey, studentError }: {
   classId: string;
+  classType: 'private' | 'group';
   isParent: boolean;
   students: Student[];
   schedules: CatalogScheduleOption[];
@@ -35,6 +36,7 @@ export function EnrollmentPanel({ classId, isParent, students, schedules, idempo
 
   if (studentError) return <section className="mt-10 rounded-3xl border border-[#f2c6c3] bg-white p-6" role="alert"><h2 className="text-xl font-black">Student belum dapat dimuat.</h2><p className="mt-2 text-[#52615b]">{studentError}</p><Link className="mt-4 inline-block font-bold text-[#617c35] underline" href="/dashboard/parent/students">Kelola student</Link></section>;
   if (!students.length) return <section className="mt-10 rounded-3xl border border-dashed border-[#c8d0c5] bg-white p-6"><h2 className="text-xl font-black">Tambahkan student terlebih dahulu.</h2><p className="mt-2 text-[#52615b]">Enrollment membutuhkan profil student milik parent.</p><Link className="mt-4 inline-block rounded-xl bg-[#617c35] px-5 py-3 font-bold text-white" href={`/dashboard/parent/students?returnTo=${encodeURIComponent(`/kelas/${classId}`)}`}>Buat profil student</Link></section>;
+  if (classType === 'group' && !schedules.length) return <section className="mt-10 rounded-3xl border border-[#f2c6c3] bg-white p-6" role="alert"><h2 className="text-xl font-black">Jadwal belum tersedia.</h2><p className="mt-2 text-[#52615b]">Kelas grup belum memiliki jadwal yang dapat dipilih. Coba lagi nanti atau hubungi penyelenggara.</p></section>;
 
   const availableSchedules = schedules.filter((schedule) => schedule.available);
   return <section className="mt-10 rounded-3xl border border-[#dfe3d7] bg-[#eef3dd] p-6 sm:p-8"><p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Enrollment parent</p><h2 className="mt-2 text-2xl font-black">Pilih student dan jadwal</h2><p className="mt-2 text-[#52615b]">Harga dan status pembayaran ditentukan oleh backend setelah enrollment tervalidasi.</p><form action={formAction} className="mt-6 space-y-5">
