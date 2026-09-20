@@ -3,11 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
+import { classUpdateErrorMessage } from '@/lib/class-edit';
 import {
   createCategorySchema,
   createClassSchema,
   createScheduleSchema,
   updateClassPublicationSchema,
+  updateClassSchema,
+  type ClassEntity,
   type CreateScheduleInput,
 } from '../_lib/schema';
 
@@ -377,6 +380,88 @@ export async function updateClassPublication(
       message:
         getGatewayConfigurationErrorMessage(error) ||
         'An unexpected network error occurred while updating the publication status.',
+    };
+  }
+}
+
+/**
+ * Server Action: Update the sellable attributes of an existing class.
+ * Endpoint: PATCH /api/v1/classes/:id
+ *
+ * Only the four editable attributes are submitted. Class type is never sent
+ * because the academic service rejects a type change, and the update endpoint
+ * treats an omitted field as "leave unchanged", so the form always submits the
+ * complete editable set it just validated. The tenant comes from the session
+ * server-side; the class identifier is the only value taken from the browser.
+ */
+export async function updateClass(
+  _prevState: ActionResponse<ClassEntity>,
+  formData: FormData
+): Promise<ActionResponse<ClassEntity>> {
+  const validation = updateClassSchema.safeParse({
+    class_id: formData.get('class_id')?.toString() || '',
+    category_id: formData.get('category_id')?.toString() || '',
+    name: formData.get('name')?.toString() || '',
+    // The price field keeps the tenant's raw typing so `Rp 150.000` is
+    // normalised by the schema instead of being coerced here and lost.
+    price: formData.get('price')?.toString() ?? '',
+    // A blank description is sent as an empty string rather than dropped. The
+    // update endpoint skips a field that is absent, so dropping it would make
+    // clearing a description a silent no-op. Verified against the endpoint: an
+    // empty string is stored, and the public catalog renders it as no
+    // description (`descriptionText` maps a blank value to null).
+    description: formData.get('description')?.toString() ?? '',
+  });
+
+  if (!validation.success) {
+    return {
+      success: false,
+      message: 'Validation failed. Please correct the highlighted errors.',
+      errors: validation.error.flatten().fieldErrors,
+    };
+  }
+
+  const { class_id: classId, ...payload } = validation.data;
+
+  try {
+    const baseUrl = getGatewayBaseUrl();
+    const headers = await getAuthHeaders();
+    const response = await fetch(
+      `${baseUrl}/api/v1/classes/${encodeURIComponent(classId)}`,
+      {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.status !== 'success') {
+      return {
+        success: false,
+        message: classUpdateErrorMessage(
+          response.status,
+          typeof result.message === 'string' ? result.message : undefined
+        ),
+      };
+    }
+
+    revalidatePath('/dashboard/tenant/classes');
+
+    return {
+      success: true,
+      message: `Class "${payload.name}" updated successfully.`,
+      data: result.data as ClassEntity,
+    };
+  } catch (error) {
+    console.error('[updateClass Action Error]:', error);
+    return {
+      success: false,
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected network or server error occurred. Please try again.',
     };
   }
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 import { isClassPublished } from '@/lib/class-publication';
 import { ClassCreationWizard } from './ClassCreationWizard';
+import { ClassEditModal } from './ClassEditModal';
 import {
   ClassPublicationButton,
   ClassStatusBadges,
@@ -193,6 +194,9 @@ export function ClassListTable({
 
                 <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
                   <ClassPublicationButton classId={cls.id} record={cls} />
+                  <div className="mt-2">
+                    <ClassEditModal classRecord={cls} categories={categories} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -265,7 +269,10 @@ export function ClassListTable({
                       {cls.capacity ? `${cls.capacity} max` : '1 max'}
                     </td>
                     <td className="px-6 py-4">
-                      <ClassPublicationButton classId={cls.id} record={cls} />
+                      <div className="flex items-center gap-2">
+                        <ClassPublicationButton classId={cls.id} record={cls} />
+                        <ClassEditModal classRecord={cls} categories={categories} />
+                      </div>
                     </td>
                   </tr>
                 ))}
