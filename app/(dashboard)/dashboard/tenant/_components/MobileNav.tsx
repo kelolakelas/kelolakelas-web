@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
 import { TENANT_NAV_ITEMS } from '../_constants/constants';
 
 function NavIcon({ href }: { href: string }) {
@@ -156,6 +157,9 @@ function MobileNavContent({ pathname }: { pathname: string }) {
                     Organization Owner
                   </span>
                 </div>
+              </div>
+              <div className="mt-2">
+                <LogoutButton />
               </div>
             </div>
           </div>

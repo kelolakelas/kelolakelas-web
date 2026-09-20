@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
 import { DeleteStudentButton } from './DeleteStudentButton';
 import { StudentForm } from './StudentForm';
 import { studentLastName, type Student, type StudentListData } from '@/lib/students';
@@ -42,7 +43,10 @@ export function StudentsManager({ data }: { data: StudentListData }) {
           <h1 className="mt-2 text-4xl font-black tracking-[-.055em]">Student saya</h1>
           <p className="mt-3 max-w-2xl text-[#52615b]">Simpan profil student yang akan digunakan saat mendaftar kelas. Data ini hanya menampilkan student milik akun parent Anda.</p>
         </div>
-        <button type="button" onClick={() => setForm('create')} className="min-h-11 rounded-xl bg-[#17231f] px-5 font-bold text-white hover:bg-[#31463d]">+ Tambah student</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => setForm('create')} className="min-h-11 rounded-xl bg-[#17231f] px-5 font-bold text-white hover:bg-[#31463d]">+ Tambah student</button>
+          <LogoutButton className="min-h-11 rounded-xl border border-[#dfe3d7] bg-white px-5 text-sm font-bold text-[#617c35] hover:bg-[#eef4e8]" />
+        </div>
       </header>
 
       {form && <section className="mt-7" aria-label={form === 'create' ? 'Form tambah student' : 'Form edit student'}><StudentForm student={form === 'create' ? undefined : form} onCancel={() => setForm(null)} /></section>}
