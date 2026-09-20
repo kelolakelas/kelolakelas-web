@@ -69,4 +69,33 @@ describe('authentication proxy', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost/dashboard/tenant');
   });
+
+  it('serves the invitation link to a visitor without a session', () => {
+    const response = proxy(makeRequest('/invitations/verify?token=abc'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('serves the invitation link to a visitor who is already signed in', () => {
+    const response = proxy(
+      makeRequest('/invitations/verify?token=abc', makeToken({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        is_parent: true,
+      }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('serves the invitation link while clearing an expired session cookie', () => {
+    const response = proxy(
+      makeRequest('/invitations/verify?token=abc', makeToken({ exp: Math.floor(Date.now() / 1000) - 1 }))
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('set-cookie')).toContain('auth_token=;');
+  });
 });
