@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
 import { TENANT_NAV_ITEMS } from '../_constants/constants';
 
 /**
@@ -137,6 +138,9 @@ export function TenantSidebar() {
               Organization Owner
             </span>
           </div>
+        </div>
+        <div className="mt-2">
+          <LogoutButton />
         </div>
       </div>
     </aside>
