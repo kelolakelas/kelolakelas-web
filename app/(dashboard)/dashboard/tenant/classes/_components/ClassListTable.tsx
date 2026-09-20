@@ -2,7 +2,12 @@
 
 import { useState } from 'react';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
+import { isClassPublished } from '@/lib/class-publication';
 import { ClassCreationWizard } from './ClassCreationWizard';
+import {
+  ClassPublicationButton,
+  ClassStatusBadges,
+} from './ClassPublicationControl';
 
 interface ClassListTableProps {
   categories: Category[];
@@ -43,6 +48,8 @@ export function ClassListTable({
     const matchCat = cls.category?.name?.toLowerCase().includes(q) || false;
     return matchName || matchCat;
   });
+
+  const publishedCount = classes.filter((cls) => isClassPublished(cls)).length;
 
   if (!classes || classes.length === 0) {
     return (
@@ -85,7 +92,7 @@ export function ClassListTable({
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
             }`}
           >
-            Classes ({classes.length})
+            Classes ({publishedCount}/{classes.length} published)
           </button>
           <button
             type="button"
@@ -157,6 +164,8 @@ export function ClassListTable({
                   </span>
                 </div>
 
+                <ClassStatusBadges record={cls} />
+
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 dark:border-gray-800 text-xs">
                   <div>
                     <span className="text-gray-500 dark:text-gray-400 block text-[11px]">
@@ -181,6 +190,10 @@ export function ClassListTable({
                     {cls.description}
                   </p>
                 )}
+
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <ClassPublicationButton classId={cls.id} record={cls} />
+                </div>
               </div>
             ))}
           </div>
@@ -200,10 +213,16 @@ export function ClassListTable({
                     Type
                   </th>
                   <th scope="col" className="px-6 py-3.5 font-bold">
+                    Publication
+                  </th>
+                  <th scope="col" className="px-6 py-3.5 font-bold">
                     Price
                   </th>
                   <th scope="col" className="px-6 py-3.5 font-bold">
                     Capacity
+                  </th>
+                  <th scope="col" className="px-6 py-3.5 font-bold">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -236,11 +255,17 @@ export function ClassListTable({
                         {cls.type}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      <ClassStatusBadges record={cls} />
+                    </td>
                     <td className="px-6 py-4 font-semibold text-gray-900 dark:text-gray-100">
                       {formatCurrency(cls.price)}
                     </td>
                     <td className="px-6 py-4 text-xs font-medium">
                       {cls.capacity ? `${cls.capacity} max` : '1 max'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <ClassPublicationButton classId={cls.id} record={cls} />
                     </td>
                   </tr>
                 ))}

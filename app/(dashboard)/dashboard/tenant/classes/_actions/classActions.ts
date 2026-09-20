@@ -7,6 +7,7 @@ import {
   createCategorySchema,
   createClassSchema,
   createScheduleSchema,
+  updateClassPublicationSchema,
   type CreateScheduleInput,
 } from '../_lib/schema';
 
@@ -22,6 +23,9 @@ const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 
 /**
  * Extracts authorization and tenant headers from server cookies.
+ *
+ * The tenant is resolved from the session server-side; a tenant identifier
+ * supplied by the browser is never used as an authorization source.
  */
 async function getAuthHeaders(): Promise<HeadersInit> {
   const cookieStore = await cookies();
@@ -258,6 +262,121 @@ export async function createSchedule(
       message:
         getGatewayConfigurationErrorMessage(error) ||
         'An unexpected network error occurred while saving schedules.',
+    };
+  }
+}
+
+/**
+ * Maps a failed publication response onto a message the tenant can act on.
+ *
+ * The academic service guards this endpoint with the `class:update` permission,
+ * so a member without it always receives `403 Permission denied`.
+ */
+function publicationErrorMessage(
+  status: number,
+  backendMessage: string | undefined,
+  isPublishing: boolean
+): string {
+  if (status === 401) {
+    return 'Your session has expired. Please sign in again to change the publication status.';
+  }
+
+  if (status === 403) {
+    return 'You do not have permission to publish or unpublish classes. Ask a tenant administrator for the class:update permission.';
+  }
+
+  if (status === 404) {
+    return 'This class no longer exists. Refresh the page to see the current list.';
+  }
+
+  if (status === 503) {
+    return 'The authorization service is unavailable, so the publication status could not be verified. Please try again shortly.';
+  }
+
+  if (backendMessage) {
+    return backendMessage;
+  }
+
+  return isPublishing
+    ? 'Failed to publish the class. Please try again.'
+    : 'Failed to unpublish the class. Please try again.';
+}
+
+/**
+ * Server Action: Publish or unpublish a class.
+ * Endpoint: PATCH /api/v1/classes/:id/published
+ *
+ * The `class:update` permission is required. The gateway and the academic
+ * service both derive the tenant from the session, so the class identifier is
+ * the only value taken from the caller.
+ */
+export async function updateClassPublication(
+  _prevState: ActionResponse,
+  formData: FormData
+): Promise<ActionResponse> {
+  // Only the exact strings "true" and "false" are accepted. Anything else fails
+  // validation so a malformed submission can never silently unpublish a class.
+  const rawPublished = formData.get('is_published')?.toString();
+  const requestedState =
+    rawPublished === 'true' ? true : rawPublished === 'false' ? false : undefined;
+
+  const validation = updateClassPublicationSchema.safeParse({
+    class_id: formData.get('class_id')?.toString() || '',
+    is_published: requestedState,
+  });
+
+  if (!validation.success) {
+    return {
+      success: false,
+      message: 'Validation failed for the publication request.',
+      errors: validation.error.flatten().fieldErrors,
+    };
+  }
+
+  const { class_id: classId, is_published: isPublished } = validation.data;
+
+  try {
+    const baseUrl = getGatewayBaseUrl();
+    const headers = await getAuthHeaders();
+    const response = await fetch(
+      `${baseUrl}/api/v1/classes/${encodeURIComponent(classId)}/published`,
+      {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ is_published: isPublished }),
+        cache: 'no-store',
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.status !== 'success') {
+      return {
+        success: false,
+        message: publicationErrorMessage(
+          response.status,
+          typeof result.message === 'string' ? result.message : undefined,
+          isPublished
+        ),
+      };
+    }
+
+    revalidatePath('/dashboard/tenant/classes');
+
+    return {
+      success: true,
+      message: isPublished
+        ? 'Class published. It is now visible in /kelas.'
+        : 'Class unpublished. It is no longer visible in /kelas.',
+      data: result.data,
+    };
+  } catch (error) {
+    console.error('[updateClassPublication Action Error]:', error);
+    return {
+      success: false,
+      message:
+        getGatewayConfigurationErrorMessage(error) ||
+        'An unexpected network error occurred while updating the publication status.',
     };
   }
 }

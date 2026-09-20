@@ -39,6 +39,23 @@ export const createClassSchema = z.object({
 });
 
 /**
+ * Enrollment status values accepted by the academic service.
+ * See POST/PATCH /api/v1/classes.
+ */
+export const enrollmentStatusSchema = z.enum(['open', 'closed', 'full', 'archived']);
+
+/**
+ * Publication toggle payload for a class.
+ * API Reference: PATCH /api/v1/classes/:id/published
+ */
+export const updateClassPublicationSchema = z.object({
+  class_id: z.string().trim().min(1, 'Please select a valid class'),
+  is_published: z.boolean({
+    message: 'Publication state must be either published or unpublished',
+  }),
+});
+
+/**
  * Time regex format validation (HH:MM or HH:MM:SS)
  */
 const timeFormatRegex = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
@@ -96,6 +113,12 @@ export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type CreateClassInput = z.infer<typeof createClassSchema>;
 export type ScheduleItemInput = z.infer<typeof scheduleItemSchema>;
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
+export type UpdateClassPublicationInput = z.infer<
+  typeof updateClassPublicationSchema
+>;
+
+/** Enrollment status of a class, as accepted by the academic service. */
+export type EnrollmentStatus = z.infer<typeof enrollmentStatusSchema>;
 
 // Domain Entity Interfaces matching Swagger contract
 export interface Category {
@@ -119,6 +142,16 @@ export interface ClassEntity {
   created_at: string;
   updated_at?: string;
   category?: Category;
+  /**
+   * Whether the class is listed publicly in `/kelas`. Always serialised by the
+   * academic service, so it is optional only for older cached payloads.
+   */
+  is_published?: boolean;
+  /**
+   * Enrollment state of the class. A class appears in `/kelas` only when it is
+   * published *and* has the `open` enrollment status.
+   */
+  enrollment_status?: EnrollmentStatus;
 }
 
 export interface ClassSchedule {
