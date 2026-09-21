@@ -3,11 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
+import { inviteDeliveryMessage } from '@/lib/invitation';
 import { inviteMemberSchema, updateMemberRoleSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
   success: boolean;
   message: string;
+  /**
+   * Whether the invitation email was actually delivered, mirrored from the
+   * identity response field `data.email_sent` (KEL-36). Undefined for actions
+   * that do not send email and for responses that predate the field.
+   */
+  emailSent?: boolean;
   errors?: Record<string, string[]>;
   data?: unknown;
 }
@@ -92,9 +99,19 @@ export async function inviteTenantMember(
     // 3. Revalidate path to refresh UI cache
     revalidatePath('/dashboard/tenant/members');
 
+    // 4. Surface the real delivery outcome. The identity service stores the
+    // invitation even when Resend rejects the send and reports it through
+    // `data.email_sent`; the tenant must see the difference (KEL-36). The
+    // backend message describes the delivery and wins over the local fallback.
+    const data = (result.data ?? {}) as { email_sent?: unknown };
+    const emailSent = data.email_sent === true;
+    const backendMessage =
+      typeof result.message === 'string' ? result.message.trim() : '';
+
     return {
       success: true,
-      message: `Invitation successfully sent to ${email}.`,
+      emailSent,
+      message: backendMessage || inviteDeliveryMessage(emailSent, email),
       data: result.data,
     };
   } catch (error) {

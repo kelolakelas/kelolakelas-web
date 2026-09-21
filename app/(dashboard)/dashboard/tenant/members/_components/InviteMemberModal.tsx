@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ActionResponse } from '../_actions/actions';
 import type { Permission, Role } from '../_schemas/schema';
 import { InviteMemberForm } from './InviteMemberForm';
 
@@ -11,6 +12,15 @@ interface InviteMemberModalProps {
 
 export function InviteMemberModal({ roles, permissions = [] }: InviteMemberModalProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // The modal closes on a fully delivered invitation only. When the backend
+  // stored the invitation but the email failed (emailSent === false, KEL-36),
+  // the form stays open so the tenant reads the warning and can retry later.
+  const handleInviteSuccess = (state: ActionResponse) => {
+    if (state.emailSent !== false) {
+      setIsOpen(false);
+    }
+  };
 
   return (
     <>
@@ -50,7 +60,7 @@ export function InviteMemberModal({ roles, permissions = [] }: InviteMemberModal
             <InviteMemberForm
               roles={roles}
               permissions={permissions}
-              onSuccess={() => setIsOpen(false)}
+              onSuccess={handleInviteSuccess}
             />
           </div>
         </div>

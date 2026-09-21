@@ -8,7 +8,12 @@ import type { Permission, Role } from '../_schemas/schema';
 interface InviteMemberFormProps {
   roles: Role[];
   permissions?: Permission[];
-  onSuccess?: () => void;
+  /**
+   * Called once with the settled action state after a successful submission.
+   * Receives the state so the caller can react to the delivery outcome
+   * (`state.emailSent`) instead of only the submission success (KEL-36).
+   */
+  onSuccess?: (state: ActionResponse) => void;
 }
 
 const initialState: ActionResponse = {
@@ -46,9 +51,9 @@ export function InviteMemberForm({ roles, permissions = [], onSuccess }: InviteM
 
   useEffect(() => {
     if (state.success && onSuccess) {
-      onSuccess();
+      onSuccess(state);
     }
-  }, [state.success, onSuccess]);
+  }, [state, onSuccess]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
   const activePermissions = selectedRole?.permissions && selectedRole.permissions.length > 0 
