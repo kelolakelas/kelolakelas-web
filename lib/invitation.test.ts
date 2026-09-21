@@ -5,6 +5,7 @@ import {
   invitationRegisterErrorMessage,
   invitationStatusMessage,
   invitedUserRegistrationSchema,
+  inviteDeliveryMessage,
   lookupInvitationTenantName,
   normalizeInvitationDetails,
   verifyInvitation,
@@ -248,6 +249,21 @@ describe('formatInvitationExpiry', () => {
     expect(formatInvitationExpiry(null)).toBeNull();
     expect(formatInvitationExpiry('')).toBeNull();
     expect(formatInvitationExpiry('not-a-date')).toBeNull();
+  });
+});
+
+describe('inviteDeliveryMessage', () => {
+  it('keeps the familiar sent message for a delivered invitation', () => {
+    expect(inviteDeliveryMessage(true, 'staff@example.com')).toBe(
+      'Invitation successfully sent to staff@example.com.'
+    );
+  });
+
+  it('states the failed delivery instead of claiming success', () => {
+    const message = inviteDeliveryMessage(false, 'staff@example.com');
+    expect(message).toContain('could not be sent');
+    expect(message).toContain('staff@example.com');
+    expect(message).not.toContain('successfully sent');
   });
 });
 

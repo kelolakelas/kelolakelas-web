@@ -146,6 +146,23 @@ export function classifyInvitationFailure(
 }
 
 /**
+ * Formats the invitation delivery outcome for the members screen (KEL-36).
+ *
+ * The identity service stores the invitation regardless of the email outcome,
+ * so a "failed email" response is still a success overall and must not be
+ * rendered as an error. These fallbacks only apply when the backend answer
+ * carries no usable message (for example an older backend without the
+ * delivery-status field); the backend message is preferred because it is the
+ * authority on what happened to the email.
+ */
+export function inviteDeliveryMessage(emailSent: boolean, email: string): string {
+  if (emailSent) {
+    return `Invitation successfully sent to ${email}.`;
+  }
+  return `Invitation created for ${email}, but the email could not be sent. The member has not received anything yet — please resend it later.`;
+}
+
+/**
  * Verifies an invitation token through the public gateway route.
  *
  * The request is never cached, so a token that was consumed in another tab is
