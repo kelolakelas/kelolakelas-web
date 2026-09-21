@@ -16,6 +16,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     description: 'Manage subject categories, classes & schedules',
   },
   {
+    label: 'Enrollments',
+    href: '/dashboard/tenant/enrollments',
+    description: 'Monitor student enrollments and payment status',
+  },
+  {
     label: 'Members',
     href: '/dashboard/tenant/members',
     description: 'Manage organization team members',
