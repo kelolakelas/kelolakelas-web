@@ -80,11 +80,11 @@ function MobileNavContent({ pathname }: { pathname: string }) {
       {/* Brand Logo & Name */}
       <Link href="/dashboard/tenant" className="flex items-center gap-2.5 min-h-[44px] min-w-[44px]">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-base shadow-xs">
-          T
+          K
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Tutorin
+            KelolaKelas
           </span>
           <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
             Tenant Portal

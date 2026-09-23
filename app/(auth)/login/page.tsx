@@ -4,16 +4,16 @@ import { LoginForm } from './_components/LoginForm';
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export const metadata: Metadata = {
-  title: 'Login - Tutorin',
-  description: 'Sign in to access your Tutorin account and manage your courses.',
+  title: 'Login - KelolaKelas',
+  description: 'Sign in to access your KelolaKelas account and manage your courses.',
   alternates: {
     canonical: `${appUrl}/login`,
   },
   openGraph: {
-    title: 'Login - Tutorin',
-    description: 'Sign in to access your Tutorin account and manage your courses.',
+    title: 'Login - KelolaKelas',
+    description: 'Sign in to access your KelolaKelas account and manage your courses.',
     url: `${appUrl}/login`,
-    siteName: 'Tutorin',
+    siteName: 'KelolaKelas',
     type: 'website',
   },
   robots: {
