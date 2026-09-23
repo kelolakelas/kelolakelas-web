@@ -4,6 +4,9 @@ import { CatalogCard } from './_components/CatalogCard';
 import { getCatalog } from '@/lib/catalog';
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
+import { catalogListMetadata } from '@/lib/site-metadata';
+
+export const metadata = catalogListMetadata();
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 

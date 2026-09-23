@@ -100,11 +100,11 @@ export function TenantSidebar() {
       {/* Brand Header */}
       <div className="flex h-16 shrink-0 items-center gap-3 px-6 border-b border-gray-100 dark:border-gray-800">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-lg shadow-xs">
-          T
+          K
         </div>
         <div className="flex flex-col">
           <span className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100">
-            Tutorin
+            KelolaKelas
           </span>
           <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
             Tenant Portal

@@ -15,16 +15,16 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
 export const metadata: Metadata = {
-  title: 'Accept invitation - Tutorin',
-  description: 'Accept a tenant invitation and create your member account on Tutorin.',
+  title: 'Accept invitation - KelolaKelas',
+  description: 'Accept a tenant invitation and create your member account on KelolaKelas.',
   alternates: {
     canonical: `${appUrl}/invitations/verify`,
   },
   openGraph: {
-    title: 'Accept invitation - Tutorin',
-    description: 'Accept a tenant invitation and create your member account on Tutorin.',
+    title: 'Accept invitation - KelolaKelas',
+    description: 'Accept a tenant invitation and create your member account on KelolaKelas.',
     url: `${appUrl}/invitations/verify`,
-    siteName: 'Tutorin',
+    siteName: 'KelolaKelas',
     type: 'website',
   },
   robots: {
@@ -57,7 +57,7 @@ function InvitationNotice({ title, message }: { title: string; message: string }
           href="/"
           className="flex min-h-[44px] items-center justify-center rounded-lg border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition-all duration-150 hover:border-gray-400"
         >
-          Back to Tutorin
+          Back to KelolaKelas
         </Link>
       </div>
     </div>

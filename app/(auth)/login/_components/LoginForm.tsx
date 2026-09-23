@@ -58,7 +58,7 @@ export function LoginForm({ registered = false, redirectTo }: { registered?: boo
     <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-gray-100">
       <div className="mb-6 text-center">
         <h2 className="text-2xl font-bold tracking-tight text-gray-900">Welcome Back</h2>
-        <p className="mt-1 text-sm text-gray-500">Sign in to your Tutorin account</p>
+        <p className="mt-1 text-sm text-gray-500">Sign in to your KelolaKelas account</p>
       </div>
 
       {registered && (

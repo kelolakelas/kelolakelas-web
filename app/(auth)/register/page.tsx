@@ -5,16 +5,16 @@ import { RegisterFormSwitch } from './_components/RegisterFormSwitch';
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export const metadata: Metadata = {
-  title: 'Register - Tutorin',
-  description: 'Create a Parent or Organization account on Tutorin.',
+  title: 'Register - KelolaKelas',
+  description: 'Create a Parent or Organization account on KelolaKelas.',
   alternates: {
     canonical: `${appUrl}/register`,
   },
   openGraph: {
-    title: 'Register - Tutorin',
-    description: 'Create a Parent or Organization account on Tutorin.',
+    title: 'Register - KelolaKelas',
+    description: 'Create a Parent or Organization account on KelolaKelas.',
     url: `${appUrl}/register`,
-    siteName: 'Tutorin',
+    siteName: 'KelolaKelas',
     type: 'website',
   },
   robots: {

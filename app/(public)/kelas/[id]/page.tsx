@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { randomUUID } from 'node:crypto';
 import { cookies } from 'next/headers';
@@ -7,6 +8,15 @@ import { getSessionIdentityFromToken } from '@/lib/auth-session';
 import { getStudents } from '@/app/(dashboard)/dashboard/parent/students/_queries/queries';
 import type { Student } from '@/lib/students';
 import { EnrollmentPanel } from './_components/EnrollmentPanel';
+import { classDetailMetadata } from '@/lib/site-metadata';
+
+type Props = { params: Promise<{ id: string }> };
+
+// getCatalogClass uses fetch, so this lookup is memoized with the page's own request for the same class.
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  return classDetailMetadata(id, await getCatalogClass(id));
+}
 
 export default async function ClassDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const result = await getCatalogClass(id);
