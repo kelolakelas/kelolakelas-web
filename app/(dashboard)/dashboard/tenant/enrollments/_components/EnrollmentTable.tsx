@@ -1,4 +1,4 @@
-import { paymentPresentation } from '@/lib/payment-status';
+import { paymentPresentation, type PaymentPresentation } from '@/lib/payment-status';
 import {
   enrollmentClassName,
   enrollmentStatusLabel,
@@ -7,6 +7,33 @@ import {
   transactionAmountLabel,
 } from '../_lib/schema';
 import type { TenantEnrollmentRow } from '../_queries/queries';
+
+/**
+ * Payment state shown when billing refused the lookup with `403` (KEL-57).
+ *
+ * The member lacks `billing:read`, so the payment is unknown to them, not
+ * missing: reading it as "Menunggu transaksi" would tell a teacher that a paid
+ * enrollment has no invoice.
+ */
+const PAYMENT_FORBIDDEN: PaymentPresentation = {
+  label: 'Tidak tersedia untuk role Anda',
+  detail: 'Status pembayaran hanya dapat dilihat oleh role dengan izin billing:read.',
+  tone: 'neutral',
+};
+
+/** Amount placeholder for a payment the member may not read. */
+const AMOUNT_FORBIDDEN = 'Nominal tidak tersedia';
+
+function rowPayment({ enrollment, transaction, paymentForbidden }: TenantEnrollmentRow) {
+  if (paymentForbidden) {
+    return { presentation: PAYMENT_FORBIDDEN, amount: AMOUNT_FORBIDDEN };
+  }
+
+  return {
+    presentation: paymentPresentation(enrollment, transaction),
+    amount: transactionAmountLabel(transaction),
+  };
+}
 
 /**
  * Badge colours keyed by the tone vocabulary shared with `lib/payment-status`.
@@ -132,8 +159,9 @@ export function EnrollmentTable({
     <>
       {/* Mobile stacked cards */}
       <div className="block space-y-3 md:hidden">
-        {rows.map(({ enrollment, transaction, schedule }) => {
-          const payment = paymentPresentation(enrollment, transaction);
+        {rows.map((row) => {
+          const { enrollment, schedule } = row;
+          const { presentation: payment, amount } = rowPayment(row);
 
           return (
             <article
@@ -173,7 +201,7 @@ export function EnrollmentTable({
                 <StatusBadge label={payment.label} tone={payment.tone} />
                 <p className="text-xs text-gray-500 dark:text-gray-400">{payment.detail}</p>
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {transactionAmountLabel(transaction)}
+                  {amount}
                 </p>
               </div>
             </article>
@@ -210,8 +238,9 @@ export function EnrollmentTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {rows.map(({ enrollment, transaction, schedule }) => {
-              const payment = paymentPresentation(enrollment, transaction);
+            {rows.map((row) => {
+              const { enrollment, transaction, schedule } = row;
+              const { presentation: payment, amount } = rowPayment(row);
 
               return (
                 <tr
@@ -247,7 +276,7 @@ export function EnrollmentTable({
                     </span>
                   </td>
                   <td className="px-6 py-4 font-semibold text-gray-900 dark:text-gray-100">
-                    {transactionAmountLabel(transaction)}
+                    {amount}
                     {transaction && (
                       <span className="mt-0.5 block text-xs font-normal text-gray-500 dark:text-gray-400">
                         Transaksi {transaction.status}

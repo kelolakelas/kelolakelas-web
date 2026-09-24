@@ -135,6 +135,21 @@ describe('EnrollmentTable', () => {
     expect(settled).toContain('Pembayaran diterima dan enrollment telah aktif.');
   });
 
+  it('shows a permission marker instead of "no transaction" for a refused payment', () => {
+    // KEL-57: billing answered 403 because the member lacks `billing:read`.
+    const html = render([
+      { enrollment: { id: ENROLLMENT_ID, status: 'active' }, paymentForbidden: true },
+    ]);
+
+    expect(html).toContain('Tidak tersedia untuk role Anda');
+    expect(html).toContain('billing:read');
+    expect(html).toContain('Nominal tidak tersedia');
+    expect(html).not.toContain('Menunggu transaksi');
+    expect(html).not.toContain('Nominal belum tersedia');
+    // Both the card and the table layout carry the marker.
+    expect(html.split('Tidak tersedia untuk role Anda')).toHaveLength(3);
+  });
+
   it('shows an enrollment without a schedule and without a class name', () => {
     // A private enrollment has no schedule id, and a class may have been
     // removed from the payload; neither case may crash the row.

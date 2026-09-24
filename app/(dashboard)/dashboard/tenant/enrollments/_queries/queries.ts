@@ -31,6 +31,12 @@ export interface TenantEnrollmentRow {
   enrollment: TenantEnrollment;
   transaction?: TransactionRecord;
   schedule?: TenantSchedule;
+  /**
+   * True when billing refused the payment lookup with `403` (KEL-57): the member
+   * lacks `billing:read`, so the payment state is unknown to them rather than
+   * absent. It must not be rendered as "no transaction".
+   */
+  paymentForbidden?: boolean;
 }
 
 export interface TenantEnrollmentOverview {
@@ -174,7 +180,7 @@ export async function getTenantEnrollments(
       return { data: null, error: 'api', message: API_ERROR_MESSAGE };
     }
 
-    const transactions = await loadTransactions(
+    const payments = await loadTransactions(
       headers,
       enrollmentRead.items.map((enrollment) => enrollment.id)
     );
@@ -186,7 +192,7 @@ export async function getTenantEnrollments(
     return {
       data: {
         rows: enrollmentRead.items.map((enrollment) => {
-          const transaction = transactions.get(enrollment.id);
+          const transaction = payments.transactions.get(enrollment.id);
           const scheduleId = enrollment.schedule_id;
           const schedule =
             typeof scheduleId === 'string' && scheduleId !== ''
@@ -197,6 +203,7 @@ export async function getTenantEnrollments(
             enrollment,
             ...(transaction ? { transaction } : {}),
             ...(schedule ? { schedule } : {}),
+            ...(payments.forbidden.has(enrollment.id) ? { paymentForbidden: true } : {}),
           } satisfies TenantEnrollmentRow;
         }),
         pagination: enrollmentRead.pagination,
@@ -214,24 +221,46 @@ export async function getTenantEnrollments(
 }
 
 /**
- * Loads the current payment of each visible enrollment, keyed by enrollment id.
+ * Payment facts of the visible enrollments, keyed by enrollment id.
+ *
+ * `forbidden` holds the enrollments whose lookup billing refused with `403`:
+ * since KEL-57 a tenant member without `billing:read` gets that answer, and the
+ * screen has to say so instead of implying the enrollment has no transaction.
+ */
+interface EnrollmentPayments {
+  transactions: Map<string, TransactionRecord>;
+  forbidden: Set<string>;
+}
+
+type PaymentLookup =
+  | { enrollmentId: string; kind: 'transaction'; transaction: TransactionRecord }
+  | { enrollmentId: string; kind: 'forbidden' }
+  | null;
+
+/**
+ * Loads the current payment of each visible enrollment.
  *
  * Enrollments without a UUID id are skipped because the billing service rejects
  * a malformed `enrollment_id` with `400`, which would otherwise fail the whole
- * batch over one unusable identifier.
+ * batch over one unusable identifier. A `403` is recorded as a permission state;
+ * every other failure still degrades to "no payment to show".
  */
 async function loadTransactions(
   headers: HeadersInit,
   enrollmentIds: readonly unknown[]
-): Promise<Map<string, TransactionRecord>> {
+): Promise<EnrollmentPayments> {
   const lookups = enrollmentIds
     .filter(isEnrollmentId)
-    .map(async (enrollmentId) => {
+    .map(async (enrollmentId): Promise<PaymentLookup> => {
       try {
         const read = await readList<TransactionRecord>(
           `/api/v1/billing/transactions?${transactionQueryString(enrollmentId)}`,
           headers
         );
+
+        if (read.status === 403) {
+          return { enrollmentId, kind: 'forbidden' };
+        }
 
         if (!read.ok) {
           return null;
@@ -239,20 +268,22 @@ async function loadTransactions(
 
         const transaction = pickEnrollmentTransaction(read.items);
 
-        return transaction ? ([enrollmentId, transaction] as const) : null;
+        return transaction ? { enrollmentId, kind: 'transaction', transaction } : null;
       } catch {
         return null;
       }
     });
 
   const settled = await Promise.all(lookups);
-  const byEnrollment = new Map<string, TransactionRecord>();
+  const payments: EnrollmentPayments = { transactions: new Map(), forbidden: new Set() };
 
   for (const entry of settled) {
-    if (entry && entry[1]) {
-      byEnrollment.set(entry[0], entry[1]);
+    if (entry?.kind === 'transaction') {
+      payments.transactions.set(entry.enrollmentId, entry.transaction);
+    } else if (entry?.kind === 'forbidden') {
+      payments.forbidden.add(entry.enrollmentId);
     }
   }
 
-  return byEnrollment;
+  return payments;
 }
