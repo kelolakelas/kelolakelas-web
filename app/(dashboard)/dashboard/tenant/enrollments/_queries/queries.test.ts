@@ -344,6 +344,46 @@ describe('getTenantEnrollments', () => {
     }
   });
 
+  it('marks a payment refused with 403 as unavailable to the role, not as missing', async () => {
+    // KEL-57: a member without `billing:read` is refused by billing. Other
+    // failures keep degrading to "no payment to show".
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments`)) {
+        return success({
+          items: [
+            { id: EMAIL_ENROLLMENT_ID, status: 'active' },
+            { id: SECOND_ENROLLMENT_ID, status: 'pending' },
+          ],
+          pagination: pagination({ total_items: 2 }),
+        });
+      }
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/schedules`)) {
+        return success({ items: [], pagination: pagination() });
+      }
+      if (url.includes('billing/transactions')) {
+        const query = new URLSearchParams(url.split('?')[1]);
+
+        return query.get('enrollment_id') === EMAIL_ENROLLMENT_ID
+          ? failure(403, 'insufficient permission')
+          : failure(503, 'Authorization service unavailable');
+      }
+      return undefined;
+    });
+
+    const result = await getTenantEnrollments({});
+
+    // The enrollment list itself stays readable.
+    expect(result.error).toBeNull();
+    if (result.error === null) {
+      const [refused, unavailable] = result.data.rows;
+
+      expect(refused.paymentForbidden).toBe(true);
+      expect(refused.transaction).toBeUndefined();
+      expect(unavailable.paymentForbidden).toBeUndefined();
+      expect(unavailable.transaction).toBeUndefined();
+    }
+  });
+
   it('attaches the schedule referenced by the enrollment', async () => {
     const scheduleId = 'c0ffee00-1111-4222-8333-444455556666';
 
