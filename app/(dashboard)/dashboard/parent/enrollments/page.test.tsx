@@ -120,3 +120,93 @@ describe('parent enrollment screen cancellation control', () => {
     expect(html).not.toContain('Batalkan pendaftaran');
   });
 });
+
+/**
+ * KEL-53: a parent may resume a payment that is still waiting. The link comes
+ * from the billing transaction (`checkout_session_url` + `invoice_expires_at`)
+ * and must only appear while the invoice is still valid, so the rows below pin
+ * the acceptance criteria at the rendered-markup level.
+ */
+describe('parent enrollment screen resume-payment link (KEL-53)', () => {
+  const future = new Date(Date.now() + 3_600_000).toISOString();
+  const past = new Date(Date.now() - 3_600_000).toISOString();
+  const CHECKOUT_URL = 'https://checkout.example.com/pay/session-1';
+
+  function pendingTx(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return { id: 'tx-1', enrollment_id: PENDING_ID, status: 'pending', checkout_session_url: CHECKOUT_URL, invoice_expires_at: future, gross_amount: 150000, currency: 'IDR', ...overrides };
+  }
+
+  it.each(['paid', 'failed', 'expired', 'cancelled'] as const)('shows no resume link for a %s transaction', async (status) => {
+    setRows([{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } }], [pendingTx({ status })]);
+
+    const html = await render();
+
+    expect(html).not.toContain('Lanjutkan pembayaran');
+    expect(html).not.toContain(CHECKOUT_URL);
+  });
+
+  it('renders the checkout link with its deadline for a pending, still-valid invoice', async () => {
+    setRows([{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } }], [pendingTx()]);
+
+    const html = await render();
+
+    expect(html).toContain('Lanjutkan pembayaran');
+    expect(html).toContain(`href="${CHECKOUT_URL}"`);
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('Selesaikan pembayaran sebelum');
+  });
+
+  it('shows no resume link once the invoice has expired', async () => {
+    setRows([{ id: PENDING_ID, status: 'pending' }], [pendingTx({ invoice_expires_at: past })]);
+
+    const html = await render();
+
+    expect(html).not.toContain('Lanjutkan pembayaran');
+    expect(html).not.toContain(CHECKOUT_URL);
+  });
+
+  it('shows no resume link for an old transaction without invoice_expires_at', async () => {
+    setRows([{ id: PENDING_ID, status: 'pending' }], [pendingTx({ invoice_expires_at: undefined })]);
+
+    const html = await render();
+
+    expect(html).not.toContain('Lanjutkan pembayaran');
+    expect(html).not.toContain(CHECKOUT_URL);
+  });
+
+  it.each(['javascript:alert(1)', 'data:text/html,<b>x</b>'])('never renders a %s checkout URL', async (url) => {
+    setRows([{ id: PENDING_ID, status: 'pending' }], [pendingTx({ checkout_session_url: url })]);
+
+    const html = await render();
+
+    expect(html).not.toContain('Lanjutkan pembayaran');
+    expect(html).not.toContain(url);
+  });
+
+  it('keeps the status badge, the nominal, and the cancel action alongside the link', async () => {
+    setRows([{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } }], [pendingTx()]);
+
+    const html = await render();
+
+    expect(html).toContain('Menunggu pembayaran');
+    expect(html).toContain('Status transaksi');
+    expect(html).toContain('pending');
+    expect(html).toContain('Nominal');
+    expect(html).toContain('150.000');
+    expect(html).toContain('Batalkan pendaftaran');
+  });
+
+  it('does not change the error, empty, or paid states that must not offer the link', async () => {
+    setRows(
+      [{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } }],
+      [{ id: 'tx-1', enrollment_id: PENDING_ID, status: 'paid' }]
+    );
+
+    const html = await render();
+
+    expect(html).toContain('Pembayaran diterima');
+    expect(html).not.toContain('Lanjutkan pembayaran');
+    expect(html).not.toContain(CHECKOUT_URL);
+  });
+});
