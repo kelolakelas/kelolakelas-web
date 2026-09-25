@@ -1,5 +1,7 @@
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl } from '@/lib/gateway';
+import { normalizeListEnvelope, type ListPagination } from '@/lib/list-envelope';
+import { membersQueryString } from '../_lib/schema';
 import type { Member, Permission, Role } from '../_schemas/schema';
 
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
@@ -29,14 +31,31 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 /**
- * Fetches current active members for the tenant organization from the API Gateway.
+ * Result of reading one page of current active tenant members.
  */
-export async function getTenantMembers(): Promise<Member[]> {
-  const baseUrl = getGatewayBaseUrl();
+export interface TenantMembersRead {
+  members: Member[];
+  pagination: ListPagination;
+}
+
+/**
+ * Fetches one page of current active members for the tenant organization from
+ * the API Gateway.
+ *
+ * Identity returns `data` as `{ items, pagination }`; the normalizer also keeps
+ * the older bare-array response readable. Failed and malformed reads degrade to
+ * an empty list, matching the existing members screen's non-crashing state.
+ */
+export async function getTenantMembers(page = 1): Promise<TenantMembersRead> {
+  const emptyResult: TenantMembersRead = {
+    members: [],
+    pagination: { page, page_size: 0, total_items: 0, total_pages: 0 },
+  };
 
   try {
+    const baseUrl = getGatewayBaseUrl();
     const headers = await getAuthHeaders();
-    const response = await fetch(`${baseUrl}/api/v1/members`, {
+    const response = await fetch(`${baseUrl}/api/v1/members?${membersQueryString(page)}`, {
       method: 'GET',
       headers,
       cache: 'no-store',
@@ -44,18 +63,29 @@ export async function getTenantMembers(): Promise<Member[]> {
 
     if (!response.ok) {
       console.warn('[getTenantMembers] Non-OK response:', response.status);
-      return [];
+      return emptyResult;
     }
 
-    const result = await response.json();
-    if (result.status === 'success' && Array.isArray(result.data)) {
-      return result.data;
+    const result: unknown = await response.json();
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('status' in result) ||
+      result.status !== 'success' ||
+      !('data' in result)
+    ) {
+      return emptyResult;
     }
 
-    return [];
+    const normalized = normalizeListEnvelope<Member>(result.data);
+
+    return {
+      members: normalized.items,
+      pagination: normalized.pagination,
+    };
   } catch (error) {
     console.error('[getTenantMembers Error]:', error);
-    return [];
+    return emptyResult;
   }
 }
 
