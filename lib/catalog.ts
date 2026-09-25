@@ -19,6 +19,7 @@ export type CatalogScheduleOption = {
   label: string;
   available: boolean;
   availableSlots?: number;
+  location?: string;
 };
 
 export type CatalogList = { items: CatalogItem[]; pagination: { page: number; total_pages: number; total_items: number } };
@@ -101,10 +102,19 @@ export function scheduleOptions(schedules: unknown): CatalogScheduleOption[] {
     return [{
       id,
       label: `${day}, ${start}–${end}`,
-      available: item.is_available !== false,
-      availableSlots: typeof item.available_slots === 'number' ? item.available_slots : undefined,
+      available: item.is_available !== false && item.available_slots !== 0,
+      availableSlots: typeof item.available_slots === 'number' && Number.isFinite(item.available_slots) && item.available_slots >= 0 ? item.available_slots : undefined,
+      location: typeof item.location === 'string' && item.location.trim() ? item.location.trim() : undefined,
     }];
   });
+}
+
+export function scheduleDetailLabel(schedule: CatalogScheduleOption): string {
+  const location = schedule.location ? ` · ${schedule.location}` : '';
+  const availability = schedule.available
+    ? (schedule.availableSlots !== undefined ? `${schedule.availableSlots} slot tersisa` : 'Slot belum diketahui')
+    : 'Penuh';
+  return `${schedule.label}${location} · ${availability}`;
 }
 
 export function descriptionText(description: unknown): string | null {
