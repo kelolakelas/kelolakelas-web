@@ -9,6 +9,25 @@ describe('catalog query helpers', () => {
     expect(query.params.get('search')).toBe('matematika');
   });
 
+  it('combines tenant filtering with other catalog filters', () => {
+    const query = catalogQuery({
+      tenant_id: 'tenant-1',
+      search: 'matematika',
+      category_id: 'category-1',
+      type: 'group',
+      min_price: '10000',
+      max_price: '50000',
+      sort: 'price_asc',
+      page: '2',
+    });
+    expect(query.error).toBe(false);
+    expect(query.params.get('tenant_id')).toBe('tenant-1');
+    expect(query.params.get('search')).toBe('matematika');
+    expect(query.params.get('category_id')).toBe('category-1');
+    expect(query.params.get('type')).toBe('group');
+    expect(query.params.get('page')).toBe('2');
+  });
+
   it('rejects invalid filters', () => {
     expect(catalogQuery({ min_price: '200', max_price: '100' }).error).toBe(true);
     expect(catalogQuery({ type: 'hybrid' }).error).toBe(true);
