@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { InviteMemberModal } from './_components/InviteMemberModal';
 import { MembersSkeleton } from './_components/MembersSkeleton';
 import { MembersTable } from './_components/MembersTable';
 import { getSystemPermissions, getTenantMembers, getTenantRoles } from './_queries/queries';
+import { memberPageHref, parseMemberPage } from './_lib/schema';
 
 export const metadata: Metadata = {
   title: 'Member Management - Tenant Dashboard',
@@ -17,12 +19,26 @@ export const metadata: Metadata = {
 /**
  * Async content component wrapped in Suspense boundary for Partial Prerendering (PPR).
  */
-async function MembersContent() {
-  const [members, roles, permissions] = await Promise.all([
-    getTenantMembers(),
+type Props = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+async function MembersContent({ searchParams }: Props) {
+  const params = await searchParams;
+  const requestedPage = parseMemberPage(params);
+  const [initialMembersRead, roles, permissions] = await Promise.all([
+    getTenantMembers(requestedPage),
     getTenantRoles(),
     getSystemPermissions(),
   ]);
+  const page =
+    initialMembersRead.pagination.total_pages > 0 &&
+    requestedPage > initialMembersRead.pagination.total_pages
+      ? 1
+      : requestedPage;
+  const membersRead = page === requestedPage
+    ? initialMembersRead
+    : await getTenantMembers(page);
 
   return (
     <div className="space-y-6">
@@ -41,16 +57,49 @@ async function MembersContent() {
       </div>
 
       {/* Members Table & Mobile Card View */}
-      <MembersTable members={members} roles={roles} />
+      <MembersTable members={membersRead.members} roles={roles} />
+
+      {membersRead.pagination.total_pages > 1 && (
+        <nav
+          className="flex items-center justify-between pt-2"
+          aria-label="Halaman anggota"
+        >
+          {page > 1 ? (
+            <Link
+              href={memberPageHref(page - 1)}
+              className="inline-flex min-h-[44px] items-center text-sm font-bold text-blue-600 hover:underline dark:text-blue-400"
+            >
+              ← Sebelumnya
+            </Link>
+          ) : (
+            <span />
+          )}
+
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Halaman {page} dari {membersRead.pagination.total_pages}
+          </span>
+
+          {page < membersRead.pagination.total_pages ? (
+            <Link
+              href={memberPageHref(page + 1)}
+              className="inline-flex min-h-[44px] items-center text-sm font-bold text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Berikutnya →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )}
     </div>
   );
 }
 
-export default function TenantMembersPage() {
+export default function TenantMembersPage({ searchParams }: Props) {
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <Suspense fallback={<MembersSkeleton />}>
-        <MembersContent />
+        <MembersContent searchParams={searchParams} />
       </Suspense>
     </main>
   );

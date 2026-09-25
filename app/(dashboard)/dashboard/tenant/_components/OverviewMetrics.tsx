@@ -48,13 +48,13 @@ function MetricCard({ title, value, description, href, iconBg, iconColor, icon }
 
 export async function OverviewMetrics() {
   // Gracefully fetch metrics from server queries
-  const [members, roles] = await Promise.all([
+  const [membersRead, roles] = await Promise.all([
     getTenantMembers(),
     getTenantRoles(),
   ]);
 
-  const totalMembers = members.length;
-  const pendingInvitations = members.filter((m: Member) => m.status === 'pending').length;
+  const totalMembers = membersRead.pagination.total_items;
+  const pendingInvitations = membersRead.members.filter((m: Member) => m.status === 'pending').length;
   const activeRoles = roles.length;
 
   return (
