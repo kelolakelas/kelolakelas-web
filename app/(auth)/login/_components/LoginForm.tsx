@@ -136,6 +136,7 @@ export function LoginForm({ registered = false, redirectTo }: { registered?: boo
         </div>
 
         <SubmitButton />
+        <a href="/platform/login" className="block text-center text-sm text-indigo-700 underline">Platform admin sign in</a>
       </form>
     </div>
   );
