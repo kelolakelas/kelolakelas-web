@@ -20,6 +20,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Fails on high/critical advisories in production dependencies only;
+      # dev-only advisories are excluded by --omit=dev.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run test
       - run: npx tsc --noEmit
       - name: Lint changed TypeScript files
