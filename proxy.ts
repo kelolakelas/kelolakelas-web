@@ -8,7 +8,7 @@ const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const protectedRoutes = ['/dashboard', '/profile'];
 
 // Routes accessible only to unauthenticated users
-const publicRoutes = ['/login', '/register'];
+const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
 
 type TokenPayload = {
   exp?: number;
