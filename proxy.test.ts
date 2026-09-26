@@ -57,6 +57,19 @@ describe('authentication proxy', () => {
     expect(response.headers.get('location')).toBe('http://localhost/kelas');
   });
 
+  it.each(['/forgot-password', '/reset-password?token=abc'])('serves %s without a session', (path) => {
+    expect(proxy(makeRequest(path)).status).toBe(200);
+  });
+
+  it.each(['/forgot-password', '/reset-password?token=abc'])('redirects an authenticated user from %s', (path) => {
+    const response = proxy(makeRequest(path, makeToken({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      is_parent: true,
+    })));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('http://localhost/kelas');
+  });
+
   it('keeps tenant sessions out of parent student management', () => {
     const tenantId = '123e4567-e89b-12d3-a456-426614174000';
     const response = proxy(

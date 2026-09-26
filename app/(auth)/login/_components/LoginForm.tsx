@@ -51,7 +51,7 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm({ registered = false, redirectTo }: { registered?: boolean; redirectTo?: string }) {
+export function LoginForm({ registered = false, reset = false, redirectTo }: { registered?: boolean; reset?: boolean; redirectTo?: string }) {
   const [state, formAction] = useActionState(loginAction, initialState);
 
   return (
@@ -69,6 +69,8 @@ export function LoginForm({ registered = false, redirectTo }: { registered?: boo
           <p className="font-medium">Account created successfully. Sign in to continue.</p>
         </div>
       )}
+
+      {reset && <p role="status" className="mb-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700">Password berhasil diubah. Silakan masuk kembali.</p>}
 
       {state.message && !state.success && (
         <div
@@ -135,6 +137,7 @@ export function LoginForm({ registered = false, redirectTo }: { registered?: boo
           )}
         </div>
 
+        <a href="/forgot-password" className="block text-sm text-indigo-700 underline focus-visible:outline-2">Lupa password?</a>
         <SubmitButton />
         <a href="/platform/login" className="block text-center text-sm text-indigo-700 underline">Platform admin sign in</a>
       </form>
