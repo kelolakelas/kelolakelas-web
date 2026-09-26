@@ -1,6 +1,10 @@
 import Link from 'next/link';
-import { getTenantMembers, getTenantRoles } from '../members/_queries/queries';
-import type { Member } from '../members/_schemas/schema';
+import {
+  countActiveInvitations,
+  getTenantInvitations,
+  getTenantMembers,
+  getTenantRoles,
+} from '../members/_queries/queries';
 
 interface MetricCardProps {
   title: string;
@@ -48,13 +52,18 @@ function MetricCard({ title, value, description, href, iconBg, iconColor, icon }
 
 export async function OverviewMetrics() {
   // Gracefully fetch metrics from server queries
-  const [membersRead, roles] = await Promise.all([
+  const [membersRead, roles, invitationsRead] = await Promise.all([
     getTenantMembers(),
     getTenantRoles(),
+    getTenantInvitations(),
   ]);
 
   const totalMembers = membersRead.pagination.total_items;
-  const pendingInvitations = membersRead.members.filter((m: Member) => m.status === 'pending').length;
+  // KEL-84: pending invitations come from the invitation list, counting only
+  // unexpired ones. A forbidden or failed read shows "—" rather than a
+  // misleading 0.
+  const pendingInvitations =
+    invitationsRead.state === 'ok' ? countActiveInvitations(invitationsRead.invitations) : '—';
   const activeRoles = roles.length;
 
   return (

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getTenantMembers } from './queries';
+import { countActiveInvitations, getTenantInvitations, getTenantMembers } from './queries';
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({
@@ -125,5 +125,101 @@ describe('getTenantMembers', () => {
     expect(result.pagination.total_items).toBe(45);
     expect(requestedUrl.searchParams.get('page')).toBe('2');
     expect(requestedUrl.searchParams.get('page_size')).toBe('20');
+  });
+});
+
+describe('getTenantInvitations', () => {
+  const activeInvitation = {
+    id: '11111111-1111-4111-8111-111111111111',
+    email: 'pending@example.com',
+    role_id: 'role-1',
+    expires_at: '2026-09-28T10:00:00Z',
+    status: 'active',
+    email_sent: true,
+  };
+  const expiredInvitation = {
+    id: '22222222-2222-4222-8222-222222222222',
+    email: 'late@example.com',
+    role_id: 'role-2',
+    expires_at: '2026-09-20T10:00:00Z',
+    status: 'expired',
+    email_sent: false,
+  };
+
+  it('reads the bare-array list with active and expired invitations', async () => {
+    installFetch(success([activeInvitation, expiredInvitation]));
+
+    const result = await getTenantInvitations();
+
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${GATEWAY_URL}/api/v1/invitations`);
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer session-token');
+    expect(result).toEqual({ state: 'ok', invitations: [activeInvitation, expiredInvitation] });
+    if (result.state === 'ok') {
+      expect(countActiveInvitations(result.invitations)).toBe(1);
+    }
+  });
+
+  it('returns an empty ok list when there are no invitations', async () => {
+    installFetch(success([]));
+
+    expect(await getTenantInvitations()).toEqual({ state: 'ok', invitations: [] });
+  });
+
+  it('never exposes a token and drops rows without id or email', async () => {
+    installFetch(
+      success([
+        { ...activeInvitation, token: 'secret-token' },
+        { email: 'no-id@example.com' },
+        'garbage',
+      ])
+    );
+
+    const result = await getTenantInvitations();
+
+    expect(result.state).toBe('ok');
+    if (result.state === 'ok') {
+      expect(result.invitations).toHaveLength(1);
+      expect(result.invitations[0]).not.toHaveProperty('token');
+    }
+  });
+
+  it('treats an unknown status as expired so it is never counted', async () => {
+    installFetch(success([{ ...activeInvitation, status: 'weird' }]));
+
+    const result = await getTenantInvitations();
+
+    expect(result.state === 'ok' && result.invitations[0].status).toBe('expired');
+  });
+
+  it('reports forbidden on 403', async () => {
+    installFetch(
+      new Response(JSON.stringify({ status: 'error', message: 'Permission denied', data: null }), {
+        status: 403,
+      })
+    );
+
+    expect(await getTenantInvitations()).toEqual({ state: 'forbidden' });
+  });
+
+  it('reports an error on a non-OK response', async () => {
+    installFetch(new Response('{}', { status: 500 }));
+
+    expect(await getTenantInvitations()).toEqual({ state: 'error' });
+  });
+
+  it('reports an error on a malformed successful payload', async () => {
+    installFetch(success({ items: [] }));
+
+    expect(await getTenantInvitations()).toEqual({ state: 'error' });
+  });
+
+  it('reports an error when the network fails', async () => {
+    fetchMock = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await getTenantInvitations()).toEqual({ state: 'error' });
   });
 });

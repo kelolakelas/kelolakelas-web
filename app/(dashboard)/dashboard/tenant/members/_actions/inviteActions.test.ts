@@ -106,6 +106,8 @@ describe('inviteTenantMember', () => {
     expect(state.emailSent).toBe(true);
     expect(state.message).toBe('Invitation created and email sent successfully');
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/tenant/members');
+    // KEL-84: a new invitation changes the overview Pending Invites count.
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/tenant');
   });
 
   it('stays a success when the email failed but states the delivery outcome', async () => {
