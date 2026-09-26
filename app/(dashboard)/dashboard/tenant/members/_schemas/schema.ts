@@ -78,6 +78,42 @@ export const updateMemberRoleSchema = z.object({
   roleId: z.string().trim().min(1, 'Role ID is required.'),
 });
 
+/**
+ * One unredeemed invitation as listed by `GET /api/v1/invitations` (KEL-84).
+ *
+ * Identity computes `status` from `expires_at` at read time and never
+ * serializes the invitation token, so this shape has no `token` field.
+ */
+export interface InvitationListItem {
+  id: string;
+  email: string;
+  role_id: string;
+  expires_at: string | null;
+  status: 'active' | 'expired';
+  email_sent: boolean;
+}
+
+/**
+ * Zod schema for the revoke-invitation form payload. Identity answers 400 for
+ * an id that is not a UUID, so an invalid id is rejected before any request.
+ */
+export const revokeInvitationSchema = z.object({
+  invitationId: z.guid('Invitation ID is invalid.'),
+});
+
+/**
+ * Zod schema for the resend-invitation form payload. Resending re-posts the
+ * same `{ email, role_id }` pair; identity replaces the unredeemed invitation.
+ */
+export const resendInvitationSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Email address is required.')
+    .email('Please enter a valid email address.'),
+  roleId: z.string().trim().min(1, 'Role ID is required.'),
+});
+
 // TypeScript interfaces derived from Zod schemas & Swagger contract
 export type Permission = z.infer<typeof permissionSchema>;
 export type Role = z.infer<typeof roleSchema>;

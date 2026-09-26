@@ -4,7 +4,15 @@ import Link from 'next/link';
 import { InviteMemberModal } from './_components/InviteMemberModal';
 import { MembersSkeleton } from './_components/MembersSkeleton';
 import { MembersTable } from './_components/MembersTable';
-import { getSystemPermissions, getTenantMembers, getTenantRoles } from './_queries/queries';
+import { PendingInvitations, PendingInvitationsSkeleton } from './_components/PendingInvitations';
+import {
+  getSystemPermissions,
+  getTenantInvitations,
+  getTenantMembers,
+  getTenantRoles,
+  type TenantInvitationsRead,
+} from './_queries/queries';
+import type { Role } from './_schemas/schema';
 import { memberPageHref, parseMemberPage } from './_lib/schema';
 
 export const metadata: Metadata = {
@@ -26,6 +34,10 @@ type Props = {
 async function MembersContent({ searchParams }: Props) {
   const params = await searchParams;
   const requestedPage = parseMemberPage(params);
+  // Started before the members read and awaited inside its own Suspense
+  // boundary, so a slow, forbidden or failed invitation read never delays or
+  // breaks the members table (KEL-84).
+  const invitationsRead = getTenantInvitations();
   const [initialMembersRead, roles, permissions] = await Promise.all([
     getTenantMembers(requestedPage),
     getTenantRoles(),
@@ -91,8 +103,22 @@ async function MembersContent({ searchParams }: Props) {
           )}
         </nav>
       )}
+
+      <Suspense fallback={<PendingInvitationsSkeleton />}>
+        <PendingInvitationsContent read={invitationsRead} roles={roles} />
+      </Suspense>
     </div>
   );
+}
+
+async function PendingInvitationsContent({
+  read,
+  roles,
+}: {
+  read: Promise<TenantInvitationsRead>;
+  roles: Role[];
+}) {
+  return <PendingInvitations read={await read} roles={roles} />;
 }
 
 export default function TenantMembersPage({ searchParams }: Props) {
