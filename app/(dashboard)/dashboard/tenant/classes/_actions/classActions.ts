@@ -179,6 +179,44 @@ export async function createClass(
 }
 
 /**
+ * Maps a failed schedule creation onto a message the member can act on.
+ *
+ * `POST /api/v1/schedules` is guarded by the `schedule:create` permission, so
+ * a member without it always receives `403 Permission denied`. A `404` covers
+ * both a class that was deleted by another member while the form was open and
+ * a private-class enrollment that no longer exists, because the usecase maps
+ * both onto `ErrClassNotFound`/`ErrEnrollmentNotFound`. A `400` is only ever
+ * reached with schema-invalid data (the dashboard validates first), so the
+ * backend message names the exact rejected field and is shown verbatim.
+ */
+function createScheduleErrorMessage(
+  status: number,
+  backendMessage: string | undefined
+): string {
+  if (status === 401) {
+    return 'Your session has expired. Please sign in again to save the schedules.';
+  }
+
+  if (status === 403) {
+    return 'You do not have permission to create schedules. Ask a tenant administrator for the schedule:create permission.';
+  }
+
+  if (status === 404) {
+    return 'This class or its enrollment no longer exists. Close this form and refresh the list.';
+  }
+
+  if (status === 503) {
+    return 'The authorization service is unavailable, so your permission could not be verified. Please try again shortly.';
+  }
+
+  if (backendMessage) {
+    return backendMessage;
+  }
+
+  return 'Failed to create class schedules. Please check your timetable inputs.';
+}
+
+/**
  * Server Action: Create initial recurring schedule slots for a class.
  * Endpoint: POST /api/v1/schedules
  */
@@ -245,9 +283,10 @@ export async function createSchedule(
     if (!response.ok || result.status !== 'success') {
       return {
         success: false,
-        message:
-          result.message ||
-          'Failed to create class schedules. Please check your timetable inputs.',
+        message: createScheduleErrorMessage(
+          response.status,
+          typeof result.message === 'string' ? result.message : undefined
+        ),
       };
     }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { updateClassSchema } from './schema';
+import {
+  createScheduleSchema,
+  scheduleItemSchema,
+  updateClassSchema,
+} from './schema';
 
 /**
  * These cases pin the update contract to the academic service endpoint
@@ -142,6 +146,141 @@ describe('updateClassSchema', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.code).toBe('unrecognized_keys');
+    }
+  });
+});
+
+/**
+ * These cases pin the schedule-item contract to the academic service endpoint
+ * (`POST /api/v1/schedules`, KEL-50). The service binds `capacity` as
+ * `required,min=1` on every schedule item and stores it on the schedule row,
+ * so the payload the action forwards must carry a positive integer — anything
+ * weaker is rejected by the backend after a round trip, and anything looser
+ * would send data the schema refuses.
+ */
+
+const validScheduleItem = {
+  day_of_week: 3,
+  start_time: '14:00',
+  end_time: '15:30',
+  capacity: 10,
+};
+
+describe('scheduleItemSchema capacity', () => {
+  it('carries a valid integer capacity into the parsed payload', () => {
+    const result = scheduleItemSchema.safeParse(validScheduleItem);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.capacity).toBe(10);
+    }
+  });
+
+  it('coerces the string a number input submits into an integer', () => {
+    const result = scheduleItemSchema.safeParse({ ...validScheduleItem, capacity: '10' });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.capacity).toBe(10);
+    }
+  });
+
+  it('rejects an empty capacity before the request is sent', () => {
+    const result = scheduleItemSchema.safeParse({ ...validScheduleItem, capacity: '' });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.capacity?.[0]).toBe(
+        'Capacity must be at least 1'
+      );
+    }
+  });
+
+  it('rejects a missing capacity', () => {
+    const withoutCapacity = {
+      day_of_week: validScheduleItem.day_of_week,
+      start_time: validScheduleItem.start_time,
+      end_time: validScheduleItem.end_time,
+    };
+
+    const result = scheduleItemSchema.safeParse(withoutCapacity);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.capacity?.[0]).toBe(
+        'Capacity is required'
+      );
+    }
+  });
+
+  it('rejects zero and negative capacities', () => {
+    for (const capacity of [0, -1, '0', '-5']) {
+      const result = scheduleItemSchema.safeParse({ ...validScheduleItem, capacity });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.capacity?.[0]).toBe(
+          'Capacity must be at least 1'
+        );
+      }
+    }
+  });
+
+  it('rejects a fractional capacity', () => {
+    const result = scheduleItemSchema.safeParse({ ...validScheduleItem, capacity: 2.5 });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.capacity?.[0]).toBe(
+        'Capacity must be a whole number'
+      );
+    }
+  });
+
+  it('keeps a very large capacity valid because the backend has no upper bound', () => {
+    const result = scheduleItemSchema.safeParse({
+      ...validScheduleItem,
+      capacity: 1000000,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.capacity).toBe(1000000);
+    }
+  });
+});
+
+describe('createScheduleSchema capacity payload', () => {
+  it('forwards the per-slot capacity of multiple slots unchanged', () => {
+    const result = createScheduleSchema.safeParse({
+      class_id: '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11',
+      schedules: [
+        validScheduleItem,
+        { ...validScheduleItem, day_of_week: 5, capacity: '4' },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schedules.map((slot) => slot.capacity)).toEqual([10, 4]);
+    }
+  });
+
+  it('rejects the whole submission when one slot carries an invalid capacity', () => {
+    const result = createScheduleSchema.safeParse({
+      class_id: '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11',
+      schedules: [validScheduleItem, { ...validScheduleItem, capacity: 0 }],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // Zod v4 keeps nested array issues under the parent key with the item
+      // index preserved in the issue path, which is what the form reads.
+      const capacityIssue = result.error.issues.find(
+        (issue) => issue.path.join('.') === 'schedules.1.capacity'
+      );
+
+      expect(capacityIssue?.message).toBe('Capacity must be at least 1');
     }
   });
 });

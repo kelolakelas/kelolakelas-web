@@ -11,6 +11,61 @@ interface ClassCreationWizardProps {
   onComplete?: () => void;
 }
 
+/**
+ * Final wizard step for a private class.
+ *
+ * The academic service binds `enrollment_id` as required on every schedule of
+ * a private class, so a private class cannot have its schedules created from
+ * this wizard — the schedules are created per enrollment once a student is
+ * enrolled. Rendering a slot form here would only end in the endpoint's 400,
+ * so this step explains that and finishes the wizard without a request.
+ *
+ * Exported for direct render testing: the wizard keeps the step behind its
+ * open-modal click handler, which static markup rendering cannot reach.
+ */
+export function PrivateClassScheduleNotice({
+  className: name,
+  onFinish,
+}: {
+  className: string;
+  onFinish: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3 text-xs">
+        <div>
+          <span className="text-gray-500 dark:text-gray-400 block">Class Configured:</span>
+          <span className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">
+            {name}
+          </span>
+          <span className="ml-2 inline-flex items-center rounded-md bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-200">
+            private
+          </span>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-4 text-xs text-blue-800 dark:text-blue-300 space-y-2">
+        <p className="font-semibold">No timetable needed yet.</p>
+        <p>
+          A private class gets its schedule per student. Once a student is enrolled,
+          create the lessons for that enrollment from the enrollment — including the
+          capacity of one. Nothing was sent to the schedules endpoint in this step.
+        </p>
+      </div>
+
+      <div className="pt-3 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={onFinish}
+          className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        >
+          Finish Class Setup ✓
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ClassCreationWizard({
   existingCategories,
   onComplete,
@@ -144,11 +199,18 @@ export function ClassCreationWizard({
               )}
 
               {step === 3 && createdClass && (
-                <ScheduleForm
-                  createdClass={createdClass}
-                  onScheduleSuccess={handleScheduleComplete}
-                  onBack={() => setStep(2)}
-                />
+                createdClass.type === 'private' ? (
+                  <PrivateClassScheduleNotice
+                    className={createdClass.name}
+                    onFinish={handleScheduleComplete}
+                  />
+                ) : (
+                  <ScheduleForm
+                    createdClass={createdClass}
+                    onScheduleSuccess={handleScheduleComplete}
+                    onBack={() => setStep(2)}
+                  />
+                )
               )}
             </div>
           </div>
