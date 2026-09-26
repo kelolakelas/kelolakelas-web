@@ -82,7 +82,7 @@ export async function OverviewMetrics() {
         title="Active Roles"
         value={activeRoles}
         description="Configured tenant roles"
-        href="/dashboard/tenant/members"
+        href="/dashboard/tenant/roles"
         iconBg="bg-purple-50 dark:bg-purple-950/60"
         iconColor="text-purple-600 dark:text-purple-400"
         icon={

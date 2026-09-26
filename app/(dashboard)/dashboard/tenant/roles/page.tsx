@@ -36,7 +36,7 @@ async function RolesContent() {
 
       {/* Existing Roles List Section */}
       <section className="pt-4 border-t border-gray-200 dark:border-gray-800">
-        <RoleListTable roles={roles} />
+        <RoleListTable roles={roles} availablePermissions={availablePermissions} />
       </section>
     </div>
   );

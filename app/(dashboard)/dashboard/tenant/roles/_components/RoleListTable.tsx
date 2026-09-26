@@ -1,13 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Role } from '../_lib/schema';
+import type { Permission, Role } from '../_lib/schema';
+import { DeleteRoleButton } from './DeleteRoleButton';
+import { RoleEditModal } from './RoleEditModal';
 
 interface RoleListTableProps {
   roles: Role[];
+  /** Permissions offered when editing a custom role. */
+  availablePermissions?: Permission[];
 }
 
-export function RoleListTable({ roles }: RoleListTableProps) {
+export function RoleListTable({ roles, availablePermissions = [] }: RoleListTableProps) {
   const [filterTab, setFilterTab] = useState<'all' | 'system' | 'custom'>('all');
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
 
@@ -164,6 +168,14 @@ export function RoleListTable({ roles }: RoleListTableProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Edit/Delete are offered for custom roles only; system roles are read-only. */}
+                {!role.is_system_role && (
+                  <div className="mt-4 flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
+                    <RoleEditModal role={role} availablePermissions={availablePermissions} />
+                    <DeleteRoleButton role={role} />
+                  </div>
+                )}
               </div>
             );
           })}
