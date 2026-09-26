@@ -1,4 +1,28 @@
+import { isIP } from 'node:net';
+import { headers } from 'next/headers';
+
 const GATEWAY_API_URL_ENV = 'GATEWAY_API_URL';
+const CLIENT_IP_SOURCE_ENV = 'CLIENT_IP_SOURCE_HEADER';
+
+/** The edge must overwrite this header, not append a client-supplied value. */
+export async function withGatewayClientIp<T extends Record<string, string>>(outgoing: T): Promise<T & Record<string, string>> {
+  const source = process.env[CLIENT_IP_SOURCE_ENV]?.trim();
+  // Do not access request context at all unless forwarding is explicitly enabled.
+  if (!source || !/^[a-z0-9!#$%&'*+.^_`|~-]+$/i.test(source)) return outgoing;
+
+  let value: string | null;
+  try {
+    value = (await headers()).get(source);
+  } catch {
+    // Build-time and requestless callers do not have an incoming request.
+    return outgoing;
+  }
+  const ip = value?.trim();
+  // Reject lists, port suffixes, and any other non-literal IP rather than
+  // selecting an untrusted element from a proxy chain.
+  if (!ip || !isIP(ip)) return outgoing;
+  return { ...outgoing, 'X-Forwarded-For': ip };
+}
 
 /**
  * Returns the server-side API gateway origin used by all backend requests.

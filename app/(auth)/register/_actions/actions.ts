@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { parentRegisterSchema, tenantRegisterSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
@@ -44,10 +44,10 @@ export async function registerParent(
     const baseUrl = getGatewayBaseUrl();
     const response = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: 'POST',
-      headers: {
+      headers: await withGatewayClientIp({
         'Content-Type': 'application/json',
         Accept: 'application/json',
-      },
+      }),
       body: JSON.stringify(validatedFields.data),
       cache: 'no-store',
     });
@@ -110,10 +110,10 @@ export async function registerTenant(
     const baseUrl = getGatewayBaseUrl();
     const response = await fetch(`${baseUrl}/api/v1/tenants/register`, {
       method: 'POST',
-      headers: {
+      headers: await withGatewayClientIp({
         'Content-Type': 'application/json',
         Accept: 'application/json',
-      },
+      }),
       body: JSON.stringify(validatedFields.data),
       cache: 'no-store',
     });

@@ -5,7 +5,7 @@ import {
   invitationRegisterErrorMessage,
   invitedUserRegistrationSchema,
 } from '@/lib/invitation';
-import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 
 export interface InvitationActionState {
   success: boolean;
@@ -49,10 +49,10 @@ export async function registerInvitedUser(
     const baseUrl = getGatewayBaseUrl();
     const response = await fetch(`${baseUrl}/api/v1/invitations/register`, {
       method: 'POST',
-      headers: {
+      headers: await withGatewayClientIp({
         'Content-Type': 'application/json',
         Accept: 'application/json',
-      },
+      }),
       body: JSON.stringify(validation.data),
       cache: 'no-store',
     });
