@@ -5,6 +5,18 @@ import { useFormStatus } from 'react-dom';
 import { createSchedule, type ActionResponse } from '../_actions/classActions';
 import type { ClassEntity, ScheduleItemInput } from '../_lib/schema';
 
+/**
+ * A slot as the form holds it while the tenant is typing.
+ *
+ * Capacity stays the raw string the number input carries so a half-typed or
+ * cleared value is never rewritten into a fake number (`Number('')` is 0, and
+ * a 0 capacity would silently travel in the hidden payload). The zod schema
+ * coerces and validates the string inside the Server Action, and the input's
+ * `required`/`min`/`step` attributes stop an invalid form from being submitted
+ * in the first place.
+ */
+type ScheduleSlotDraft = Omit<ScheduleItemInput, 'capacity'> & { capacity: string };
+
 function SubmitScheduleButton() {
   const { pending } = useFormStatus();
 
@@ -66,11 +78,12 @@ export function ScheduleForm({
   onScheduleSuccess,
   onBack,
 }: ScheduleFormProps) {
-  const [schedules, setSchedules] = useState<ScheduleItemInput[]>([
+  const [schedules, setSchedules] = useState<ScheduleSlotDraft[]>([
     {
       day_of_week: 1,
       start_time: '09:00',
       end_time: '10:30',
+      capacity: '10',
       location: 'Room 101',
     },
   ]);
@@ -90,6 +103,7 @@ export function ScheduleForm({
         day_of_week: 3, // default Wednesday
         start_time: '14:00',
         end_time: '15:30',
+        capacity: '10',
         location: '',
       },
     ]);
@@ -100,10 +114,10 @@ export function ScheduleForm({
     setSchedules((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateScheduleSlot = <K extends keyof ScheduleItemInput>(
+  const updateScheduleSlot = <K extends keyof ScheduleSlotDraft>(
     index: number,
     field: K,
-    value: ScheduleItemInput[K]
+    value: ScheduleSlotDraft[K]
   ) => {
     setSchedules((prev) => {
       const updated = [...prev];
@@ -128,7 +142,13 @@ export function ScheduleForm({
       </div>
 
       <input type="hidden" name="class_id" value={createdClass.id} />
-      <input type="hidden" name="schedules" value={JSON.stringify(schedules)} />
+      <input
+        type="hidden"
+        name="schedules"
+        value={JSON.stringify(
+          schedules.map((slot) => ({ ...slot, capacity: Number(slot.capacity) }))
+        )}
+      />
 
       {/* Global Error Notice */}
       {!state.success && state.message && (
@@ -232,15 +252,52 @@ export function ScheduleForm({
                 </div>
               </div>
 
-              {/* Location optional input */}
-              <div className="pt-1">
-                <input
-                  type="text"
-                  placeholder="Location / Room (e.g., Room 102 or Online Zoom Link)"
-                  value={slot.location || ''}
-                  onChange={(e) => updateScheduleSlot(idx, 'location', e.target.value)}
-                  className="block min-h-[44px] w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Capacity (required positive integer, validated by the schema) */}
+                <div className="space-y-1">
+                  <label
+                    htmlFor={`slot-capacity-${idx}`}
+                    className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase"
+                  >
+                    Capacity
+                  </label>
+                  <input
+                    id={`slot-capacity-${idx}`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={slot.capacity}
+                    onChange={(e) => updateScheduleSlot(idx, 'capacity', e.target.value)}
+                    required
+                    aria-label={`Capacity for slot ${idx + 1}`}
+                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                  />
+                  {state.errors?.[`schedules.${idx}.capacity`]?.[0] && (
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {state.errors[`schedules.${idx}.capacity`][0]}
+                    </p>
+                  )}
+                  {!state.errors?.[`schedules.${idx}.capacity`]?.[0] &&
+                    state.errors?.schedules?.[0] && (
+                      <p className="text-xs text-red-600 dark:text-red-400">
+                        {state.errors.schedules[0]}
+                      </p>
+                    )}
+                </div>
+
+                {/* Location optional input */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Room 102 or Online Zoom Link (optional)"
+                    value={slot.location || ''}
+                    onChange={(e) => updateScheduleSlot(idx, 'location', e.target.value)}
+                    className="block min-h-[44px] w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
           ))}

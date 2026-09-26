@@ -164,6 +164,23 @@ export const updateClassPublicationSchema = z.object({
 const timeFormatRegex = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 /**
+ * Per-slot class capacity as a positive integer.
+ *
+ * The academic service requires `capacity` with `min=1` on every schedule item
+ * (`ScheduleItemRequest`, binding `required,min=1`) and stores it on the
+ * schedule row, so a payload without it is rejected before the usecase runs.
+ * There is deliberately no upper bound: the backend has none, and very large
+ * capacities stay valid as long as they are positive integers. The field is
+ * typed to accept the string an `<input type="number">` submits and coerce it,
+ * so the four invalid shapes the tenant can produce (empty, 0, negative,
+ * fractional) each fail with a message that names the fix.
+ */
+const scheduleCapacityField = z.coerce
+  .number({ message: 'Capacity is required' })
+  .int('Capacity must be a whole number')
+  .min(1, 'Capacity must be at least 1');
+
+/**
  * Individual schedule item validation schema.
  */
 export const scheduleItemSchema = z
@@ -181,6 +198,7 @@ export const scheduleItemSchema = z
       .string()
       .trim()
       .regex(timeFormatRegex, 'End time must be in HH:MM or HH:MM:SS format'),
+    capacity: scheduleCapacityField,
     tutor_id: z.string().trim().optional(),
     location: z.string().trim().optional(),
     valid_from: z.string().trim().optional(),
@@ -264,6 +282,12 @@ export interface ClassSchedule {
   day_of_week: number; // 1 = Monday, ..., 7 = Sunday
   start_time: string;
   end_time: string;
+  /**
+   * Seats this schedule slot offers. Always serialised by the academic service
+   * (`capacity` is a non-pointer integer on the schedule row), so it is
+   * optional only for payloads captured before the field existed.
+   */
+  capacity?: number;
   tutor_id?: string;
   location?: string;
   valid_from?: string;

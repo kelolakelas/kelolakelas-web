@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 import { isClassPublished } from '@/lib/class-publication';
+import { AddScheduleModal } from './AddScheduleModal';
 import { ClassCreationWizard } from './ClassCreationWizard';
 import { ClassEditModal } from './ClassEditModal';
 import {
@@ -32,6 +33,46 @@ function formatCurrency(amount: number): string {
     currency: 'IDR',
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+/**
+ * The schedule cards of the schedules tab.
+ *
+ * Extracted from `ClassListTable` so the tab's rendered output is directly
+ * assertable: the table keeps the tab behind a click handler, which static
+ * markup rendering cannot reach, while this component is a pure function of
+ * its props.
+ */
+export function SchedulesGrid({ schedules }: { schedules: ClassSchedule[] }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+      {schedules.map((sched) => (
+        <div
+          key={sched.id}
+          className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-xs space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
+              {DAY_NAMES[sched.day_of_week] || `Day ${sched.day_of_week}`}
+            </span>
+            <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
+              {sched.start_time.substring(0, 5)} - {sched.end_time.substring(0, 5)}
+            </span>
+          </div>
+          {typeof sched.capacity === 'number' && (
+            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+              👥 {sched.capacity} {sched.capacity === 1 ? 'seat' : 'seats'}
+            </p>
+          )}
+          {sched.location && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              📍 {sched.location}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function ClassListTable({
@@ -181,7 +222,7 @@ export function ClassListTable({
                       Capacity
                     </span>
                     <span className="font-bold text-gray-900 dark:text-gray-100">
-                      {cls.capacity ? `${cls.capacity} Students` : '1 Student'}
+                      Per schedule
                     </span>
                   </div>
                 </div>
@@ -194,8 +235,9 @@ export function ClassListTable({
 
                 <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
                   <ClassPublicationButton classId={cls.id} record={cls} />
-                  <div className="mt-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <ClassEditModal classRecord={cls} categories={categories} />
+                    {cls.type === 'group' && <AddScheduleModal classRecord={cls} />}
                   </div>
                 </div>
               </div>
@@ -266,12 +308,13 @@ export function ClassListTable({
                       {formatCurrency(cls.price)}
                     </td>
                     <td className="px-6 py-4 text-xs font-medium">
-                      {cls.capacity ? `${cls.capacity} max` : '1 max'}
+                      Per schedule
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <ClassPublicationButton classId={cls.id} record={cls} />
                         <ClassEditModal classRecord={cls} categories={categories} />
+                        {cls.type === 'group' && <AddScheduleModal classRecord={cls} />}
                       </div>
                     </td>
                   </tr>
@@ -302,30 +345,7 @@ export function ClassListTable({
       )}
 
       {/* Tab Content 3: Schedules List */}
-      {activeTab === 'schedules' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {schedules.map((sched) => (
-            <div
-              key={sched.id}
-              className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-xs space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
-                  {DAY_NAMES[sched.day_of_week] || `Day ${sched.day_of_week}`}
-                </span>
-                <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
-                  {sched.start_time.substring(0, 5)} - {sched.end_time.substring(0, 5)}
-                </span>
-              </div>
-              {sched.location && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  📍 {sched.location}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {activeTab === 'schedules' && <SchedulesGrid schedules={schedules} />}
     </div>
   );
 }
