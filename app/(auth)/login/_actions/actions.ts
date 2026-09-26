@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getLoginDestination, hasTenantContext } from '@/lib/auth-routing';
-import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { loginSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
@@ -51,10 +51,10 @@ export async function loginAction(
     // 2. Request Authentication from Backend Identity Service
     const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
       method: 'POST',
-      headers: {
+      headers: await withGatewayClientIp({
         'Content-Type': 'application/json',
         Accept: 'application/json',
-      },
+      }),
       body: JSON.stringify({ email, password }),
       cache: 'no-store',
     });

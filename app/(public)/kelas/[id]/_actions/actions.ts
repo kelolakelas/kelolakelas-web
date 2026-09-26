@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
+import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
 import { enrollmentFormSchema, enrollmentPayload, type EnrollmentActionState } from '@/lib/enrollment';
 
@@ -57,12 +57,12 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
 
     const response = await fetch(`${getGatewayBaseUrl()}/api/v1/catalog/classes/${encodeURIComponent(classId)}/enrollments`, {
       method: 'POST',
-      headers: {
+      headers: await withGatewayClientIp({
         Accept: 'application/json',
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
         'Idempotency-Key': validation.data.idempotency_key,
-      },
+      }),
       body: JSON.stringify(enrollmentPayload(validation.data)),
       cache: 'no-store',
     });

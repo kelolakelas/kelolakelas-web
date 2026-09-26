@@ -1,4 +1,4 @@
-import { getGatewayBaseUrl } from './gateway';
+import { getGatewayBaseUrl, withGatewayClientIp } from './gateway';
 
 export type CatalogItem = {
   id: string;
@@ -51,7 +51,7 @@ export function catalogQuery(input: Record<string, string | string[] | undefined
 
 async function request<T>(path: string): Promise<CatalogResult<T>> {
   try {
-    const response = await fetch(`${getGatewayBaseUrl()}${path}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const response = await fetch(`${getGatewayBaseUrl()}${path}`, { headers: await withGatewayClientIp({ Accept: 'application/json' }), cache: 'no-store' });
     if (response.status === 404) return { error: 'not_found' };
     if (response.status === 400 || response.status === 422) return { error: 'invalid_filter' };
     const body = await response.json().catch(() => null);
