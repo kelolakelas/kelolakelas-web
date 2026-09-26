@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
-import { enrollmentFormSchema, enrollmentPayload, type EnrollmentActionState } from '@/lib/enrollment';
+import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, isDuplicateEnrollmentResponse, type EnrollmentActionState } from '@/lib/enrollment';
 
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
@@ -67,6 +67,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
       cache: 'no-store',
     });
     const result = await response.json().catch(() => ({}));
+    if (isDuplicateEnrollmentResponse(response.status, result)) return duplicateEnrollmentState;
     if (!response.ok || result.status !== 'success') return { success: false, message: responseMessage(response, result) };
 
     destination = checkoutUrl(result.data?.payment?.checkout_session_url);
