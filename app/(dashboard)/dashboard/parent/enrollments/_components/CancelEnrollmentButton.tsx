@@ -12,9 +12,9 @@ import {
  * Cancel control for one pending enrollment (KEL-45).
  *
  * Confirmation uses the platform `<dialog>` element opened with `showModal()`
- * rather than `window.confirm`. The native modal dialog supplies focus
- * trapping, Escape-to-cancel and an inert background for free, and unlike
- * `window.confirm` it can be labelled for assistive technology and does not
+ * rather than a blocking browser confirmation. The native modal dialog supplies focus
+ * trapping, Escape-to-cancel and an inert background for free, and unlike a
+ * blocking browser prompt it can be labelled for assistive technology and does not
  * block the event loop.
  *
  * Two outcomes are presented differently on purpose. A refusal keeps the dialog
