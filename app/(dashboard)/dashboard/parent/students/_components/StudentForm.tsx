@@ -5,6 +5,7 @@ import { useFormStatus } from 'react-dom';
 import { createStudent, updateStudent } from '../_actions/actions';
 import {
   dateInputValue,
+  studentLastName,
   type Student,
   type StudentActionState,
 } from '@/lib/students';
@@ -61,7 +62,7 @@ export function StudentForm({ student, onCancel }: { student?: Student; onCancel
         </div>
         <div>
           <label htmlFor="last_name" className="text-sm font-bold">Nama belakang</label>
-          <input id="last_name" name="last_name" maxLength={255} defaultValue={student?.last_name || student?.['lastå_name'] || ''} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3" />
+          <input id="last_name" name="last_name" maxLength={255} defaultValue={studentLastName(student)} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3" />
           <FieldError errors={state.errors} name="last_name" />
         </div>
         <div>

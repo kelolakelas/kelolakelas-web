@@ -143,7 +143,11 @@ describe('pickEnrollmentTransaction', () => {
 });
 
 describe('studentDisplayName', () => {
-  it('reads the last name from the key the academic service actually serialises', () => {
+  it('reads the last name from the corrected last_name key', () => {
+    expect(studentDisplayName({ first_name: 'Ayu', last_name: 'Lestari' })).toBe('Ayu Lestari');
+  });
+
+  it('still reads the legacy key an older academic build serialises', () => {
     expect(studentDisplayName({ first_name: 'Ayu', ['lastå_name']: 'Lestari' })).toBe('Ayu Lestari');
   });
 

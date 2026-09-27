@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ListPagination } from '@/lib/list-envelope';
 import { formatCurrency, type TransactionRecord } from '@/lib/payment-status';
+import { studentLastName, type StudentSurnameFields } from '@/lib/students';
 
 /**
  * Types, vocabulary, and pure helpers for the tenant enrollment and payment
@@ -73,12 +74,9 @@ export const ENROLLMENT_PAGE_SIZE = 20;
 /** Largest `page_size` each service accepts. */
 const MAX_PAGE_SIZE = 100;
 
-/** Student fields the enrollment list serialises. */
-export interface EnrollmentStudent {
+/** Student fields the enrollment list serialises (surname: `lib/students.ts`). */
+export interface EnrollmentStudent extends StudentSurnameFields {
   first_name?: string | null;
-  last_name?: string | null;
-  /** Kept for compatibility with the current academic service response typo. */
-  lastå_name?: string | null;
 }
 
 /** Class fields the enrollment list serialises. */
@@ -301,9 +299,9 @@ export function pickEnrollmentTransaction(
 /**
  * Full name of the student on an enrollment.
  *
- * The academic service serialises `Student.LastName` under the key
- * `lastå_name` (the documented typo), so both spellings are read the same way
- * `lib/students.ts::studentLastName` does on the parent surface.
+ * The surname comes from `studentLastName`, the one reader shared with the
+ * parent surface: `last_name` first, the pre-KEL-43 `lastå_name` key only as a
+ * rollout fallback.
  */
 export function studentDisplayName(student: EnrollmentStudent | null | undefined): string {
   if (!student) {
@@ -311,9 +309,7 @@ export function studentDisplayName(student: EnrollmentStudent | null | undefined
   }
 
   const first = typeof student.first_name === 'string' ? student.first_name.trim() : '';
-  const storedLast = typeof student.last_name === 'string' ? student.last_name.trim() : '';
-  const typoLast = typeof student.lastå_name === 'string' ? student.lastå_name.trim() : '';
-  const name = [first, storedLast || typoLast].filter(Boolean).join(' ');
+  const name = [first, studentLastName(student)].filter(Boolean).join(' ');
 
   return name || 'Student';
 }
