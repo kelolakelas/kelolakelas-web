@@ -111,4 +111,39 @@ describe('authentication proxy', () => {
     expect(response.headers.get('location')).toBeNull();
     expect(response.headers.get('set-cookie')).toContain('auth_token=;');
   });
+
+  describe('payment return landing (KEL-44)', () => {
+    const RETURN_PATH = '/dashboard/parent/enrollments/return?merchantOrderId=2d8f7a0c-7a0a-4aa8-8e54-000000000001&resultCode=00&reference=REF1';
+
+    it('sends a returning parent without a session to login with the full return URL', () => {
+      const response = proxy(makeRequest(RETURN_PATH));
+
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get('location') || '');
+      expect(location.pathname).toBe('/login');
+      expect(location.searchParams.get('redirectTo')).toBe(RETURN_PATH);
+    });
+
+    it('treats an expired session on return the same way and clears the cookie', () => {
+      const response = proxy(makeRequest(RETURN_PATH, makeToken({ exp: Math.floor(Date.now() / 1000) - 1, is_parent: true })));
+
+      expect(response.status).toBe(307);
+      expect(new URL(response.headers.get('location') || '').searchParams.get('redirectTo')).toBe(RETURN_PATH);
+      expect(response.headers.get('set-cookie')).toContain('auth_token=;');
+    });
+
+    it('keeps tenant sessions out of the return landing', () => {
+      const response = proxy(makeRequest(RETURN_PATH, makeToken({ exp: Math.floor(Date.now() / 1000) + 3600, tenant_id: '123e4567-e89b-12d3-a456-426614174000' })));
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toBe('http://localhost/dashboard/tenant');
+    });
+
+    it('serves the return landing to a parent session', () => {
+      const response = proxy(makeRequest(RETURN_PATH, makeToken({ exp: Math.floor(Date.now() / 1000) + 3600, is_parent: true })));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+    });
+  });
 });

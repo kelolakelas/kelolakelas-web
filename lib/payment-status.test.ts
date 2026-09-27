@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paymentPresentation, resumePayment } from './payment-status';
+import { paymentIsSettling, paymentPresentation, resumePayment } from './payment-status';
 
 const enrollment = { id: 'enrollment-1', status: 'pending' };
 
@@ -20,6 +20,38 @@ describe('paymentPresentation', () => {
   it('explains terminal and failed payment states', () => {
     expect(paymentPresentation(enrollment, { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'paid', reconciliation_status: 'terminal_failed' }).tone).toBe('danger');
     expect(paymentPresentation(enrollment, { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'expired' }).label).toBe('Kedaluwarsa');
+  });
+
+  it('does not claim an active enrollment is inactive when one of its payments failed (KEL-44 renewal return)', () => {
+    const failedRenewal = paymentPresentation({ ...enrollment, status: 'active' }, { id: 'transaction-2', enrollment_id: 'enrollment-1', status: 'expired' });
+    expect(failedRenewal.label).toBe('Kedaluwarsa');
+    expect(failedRenewal.detail).not.toContain('belum aktif');
+    expect(paymentPresentation(enrollment, { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'failed' }).detail).toContain('belum aktif');
+  });
+});
+
+describe('paymentIsSettling (KEL-44)', () => {
+  const tx = (overrides: Record<string, unknown> = {}) => ({ id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'pending', ...overrides });
+
+  it.each([
+    ['a payment the provider has not confirmed', enrollment, tx()],
+    ['a transaction still creating its invoice', enrollment, tx({ status: 'creating' })],
+    ['a paid payment whose enrollment is not active yet', enrollment, tx({ status: 'paid' })],
+    ['a paid payment whose activation is being retried', enrollment, tx({ status: 'paid', reconciliation_status: 'reconciling' })],
+  ])('keeps refreshing for %s', (_label, e, t) => {
+    expect(paymentIsSettling(e, t)).toBe(true);
+  });
+
+  it.each([
+    ['an active enrollment with a paid payment', { ...enrollment, status: 'active' }, tx({ status: 'paid', reconciliation_status: 'active' })],
+    ['a failed payment', enrollment, tx({ status: 'failed' })],
+    ['an expired payment', enrollment, tx({ status: 'expired' })],
+    ['a cancelled payment', { ...enrollment, status: 'dropped' }, tx({ status: 'cancelled' })],
+    ['a refunded payment', enrollment, tx({ status: 'refunded' })],
+    ['a terminal activation failure', enrollment, tx({ status: 'paid', reconciliation_status: 'terminal_failed' })],
+    ['a missing transaction', enrollment, undefined],
+  ])('stops for %s', (_label, e, t) => {
+    expect(paymentIsSettling(e, t)).toBe(false);
   });
 });
 
