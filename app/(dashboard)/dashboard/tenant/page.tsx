@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { OverviewMetrics } from './_components/OverviewMetrics';
 import { OverviewMetricsSkeleton } from './_components/OverviewSkeleton';
+import { SalesSummaryCard, SalesSummarySkeleton } from './_components/SalesSummaryCard';
 
 export const metadata: Metadata = {
   title: 'Overview - Tenant Dashboard',
@@ -43,6 +44,11 @@ export default function TenantOverviewPage() {
       {/* Metric Cards wrapped in Suspense for PPR */}
       <Suspense fallback={<OverviewMetricsSkeleton />}>
         <OverviewMetrics />
+      </Suspense>
+
+      {/* KEL-58: own boundary, so a slow or failed billing read never holds back the metrics above */}
+      <Suspense fallback={<SalesSummarySkeleton />}>
+        <SalesSummaryCard />
       </Suspense>
 
       {/* Quick Action & System Shortcuts Section */}
