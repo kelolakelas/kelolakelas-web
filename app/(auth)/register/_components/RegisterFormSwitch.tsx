@@ -24,10 +24,11 @@ export function RegisterFormSwitch() {
 
   return (
     <div className="w-full max-w-xl space-y-6">
-      <div className="flex w-full rounded-xl bg-gray-200/80 p-1 border border-gray-200">
+      <div role="group" aria-label="Registration type" className="flex w-full rounded-xl bg-gray-200/80 p-1 border border-gray-200">
         <button
           type="button"
           onClick={() => handleToggle('parent')}
+          aria-pressed={!isTenant}
           className={`flex min-h-[44px] flex-1 items-center justify-center rounded-lg py-2.5 text-xs font-semibold transition-all duration-200 sm:text-sm ${
             !isTenant
               ? 'bg-white text-indigo-600 shadow-xs'
@@ -39,6 +40,7 @@ export function RegisterFormSwitch() {
         <button
           type="button"
           onClick={() => handleToggle('tenant')}
+          aria-pressed={isTenant}
           className={`flex min-h-[44px] flex-1 items-center justify-center rounded-lg py-2.5 text-xs font-semibold transition-all duration-200 sm:text-sm ${
             isTenant
               ? 'bg-white text-indigo-600 shadow-xs'
