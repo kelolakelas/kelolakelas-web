@@ -3,10 +3,18 @@
 import { useActionState, useState } from 'react';
 import { updateMemberRole, type ActionResponse } from '../_actions/actions';
 import type { Member, Role } from '../_schemas/schema';
+import { RemoveMemberButton } from './RemoveMemberButton';
 
 interface MembersTableProps {
   members: Member[];
   roles: Role[];
+  /**
+   * Account id of the signed-in user, from the session token. Their own row
+   * gets no remove control (KEL-81); identity also refuses it with 409. Null
+   * when the session carries no usable id, in which case every row keeps the
+   * control and identity remains the guard.
+   */
+  currentUserId?: string | null;
 }
 
 const initialActionState: ActionResponse = {
@@ -14,36 +22,51 @@ const initialActionState: ActionResponse = {
   message: '',
 };
 
-export function MembersTable({ members, roles }: MembersTableProps) {
+export function MembersTable({ members, roles, currentUserId = null }: MembersTableProps) {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [removalMessage, setRemovalMessage] = useState('');
   const [updateState, updateFormAction, isPending] = useActionState(
     updateMemberRole,
     initialActionState
   );
+  const isOwnRow = (member: Member) =>
+    Boolean(currentUserId) && member.user_id?.toLowerCase() === currentUserId?.toLowerCase();
+
+  // Stays mounted across the empty state too, so removing the last listed
+  // member is still announced.
+  const removalStatus = (
+    <p role="status" className={removalMessage ? 'text-sm text-emerald-700 dark:text-emerald-300' : 'sr-only'}>
+      {removalMessage}
+    </p>
+  );
 
   if (!members || members.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-8 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 mb-3">
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-            />
-          </svg>
+      <div className="space-y-4">
+        {removalStatus}
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50 p-8 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 mb-3">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">No Members Found</h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 max-w-sm">
+            There are no registered tenant members yet. Use the invitation tool to invite team members.
+          </p>
         </div>
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">No Members Found</h3>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 max-w-sm">
-          There are no registered tenant members yet. Use the invitation tool to invite team members.
-        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {removalStatus}
       {/* Mobile Stacked Cards Layout (block on mobile, hidden on md) */}
       <div className="block md:hidden space-y-3">
         {members.map((member) => {
@@ -101,7 +124,7 @@ export function MembersTable({ members, roles }: MembersTableProps) {
                 </div>
               )}
 
-              <div className="pt-2 flex justify-end">
+              <div className="pt-2 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setEditingMember(member)}
@@ -109,6 +132,9 @@ export function MembersTable({ members, roles }: MembersTableProps) {
                 >
                   Edit Role
                 </button>
+                {!isOwnRow(member) && (
+                  <RemoveMemberButton member={member} idPrefix="mobile" onRemoved={setRemovalMessage} />
+                )}
               </div>
             </div>
           );
@@ -189,13 +215,18 @@ export function MembersTable({ members, roles }: MembersTableProps) {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button
-                      type="button"
-                      onClick={() => setEditingMember(member)}
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-3 py-1.5 transition-colors"
-                    >
-                      Edit Role
-                    </button>
+                    <div className="inline-flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingMember(member)}
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-3 py-1.5 transition-colors"
+                      >
+                        Edit Role
+                      </button>
+                      {!isOwnRow(member) && (
+                        <RemoveMemberButton member={member} idPrefix="desktop" onRemoved={setRemovalMessage} />
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
