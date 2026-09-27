@@ -2,6 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ current: { message: '' } as Record<string, unknown> }));
+const navigation = vi.hoisted(() => ({ searchParams: new URLSearchParams() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => navigation.searchParams,
+}));
+vi.mock('../register/_actions/actions', () => ({ registerParent: vi.fn(), registerTenant: vi.fn() }));
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   useActionState: () => [state.current, vi.fn()],
@@ -26,6 +32,21 @@ describe('password reset screens', () => {
     const html = renderToStaticMarkup(await ForgotPasswordPage({ searchParams: Promise.resolve({ sent: '1' }) }));
     expect(html).toContain('Jika alamat email terdaftar');
     expect(html).not.toContain('name="email"');
+  });
+
+  it('renders a single level-one heading on the login form', () => {
+    const html = renderToStaticMarkup(<LoginForm />);
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).not.toContain('<h2');
+  });
+
+  it('labels registration role state and renders one level-one heading', async () => {
+    const { RegisterFormSwitch } = await import('../register/_components/RegisterFormSwitch');
+    const html = renderToStaticMarkup(<RegisterFormSwitch />);
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Registration type"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('aria-pressed="false"');
   });
 
   it('labels email and exposes validation errors as alerts', () => {

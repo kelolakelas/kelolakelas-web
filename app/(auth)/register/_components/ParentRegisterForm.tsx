@@ -65,9 +65,9 @@ export function ParentRegisterForm() {
   return (
     <div className="w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-xl sm:p-8">
       <div className="mb-6 text-center sm:text-left">
-        <h2 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+        <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
           Register as Parent
-        </h2>
+        </h1>
         <p className="mt-1 text-xs text-gray-500 sm:text-sm">
           Create an account to manage your students and courses
         </p>
