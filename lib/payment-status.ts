@@ -25,6 +25,8 @@ export type EnrollmentRecord = {
 export type TransactionRecord = {
   id: string;
   enrollment_id: string;
+  /** Duitku `merchantOrderId`: the transaction UUID, or `renewal-<uuid>` for a renewal invoice. */
+  merchant_order_id?: string;
   status: string;
   gross_amount?: number;
   currency?: string;
@@ -44,8 +46,24 @@ export function paymentPresentation(enrollment: EnrollmentRecord, transaction?: 
   if (transaction.reconciliation_status === 'terminal_failed') return { label: 'Aktivasi perlu tindak lanjut', detail: 'Pembayaran diterima, tetapi aktivasi enrollment belum berhasil. Hubungi penyelenggara.', tone: 'danger' };
   if (transaction.status === 'paid' && enrollment.status === 'active') return { label: 'Aktif', detail: 'Pembayaran diterima dan enrollment telah aktif.', tone: 'success' };
   if (transaction.status === 'paid') return { label: 'Pembayaran diterima', detail: 'Pembayaran diterima; status enrollment akan diperbarui oleh backend.', tone: 'warning' };
-  if (transaction.status === 'failed' || transaction.status === 'expired' || transaction.status === 'cancelled') return { label: transaction.status === 'expired' ? 'Kedaluwarsa' : 'Pembayaran gagal', detail: 'Enrollment belum aktif. Buat pembayaran baru hanya bila Anda ingin melanjutkan pendaftaran.', tone: 'danger' };
+  if (transaction.status === 'failed' || transaction.status === 'expired' || transaction.status === 'cancelled') return { label: transaction.status === 'expired' ? 'Kedaluwarsa' : 'Pembayaran gagal', detail: enrollment.status === 'active' ? 'Pembayaran ini tidak berhasil. Enrollment tetap tercatat aktif oleh backend.' : 'Enrollment belum aktif. Buat pembayaran baru hanya bila Anda ingin melanjutkan pendaftaran.', tone: 'danger' };
   return { label: 'Menunggu pembayaran', detail: 'Belum ada konfirmasi pembayaran dari provider. Status ini berasal dari backend.', tone: 'neutral' };
+}
+
+/**
+ * Whether the backend state can still change on its own, without the parent
+ * doing anything: the provider has not confirmed the payment yet, activation is
+ * being retried, or billing accepted the payment and academic has not activated
+ * the enrollment yet. Final states (active, failed, expired, cancelled,
+ * refunded, terminal reconciliation failure) return false, which is what ends
+ * the automatic refresh on the payment return page (KEL-44).
+ */
+export function paymentIsSettling(enrollment: EnrollmentRecord, transaction?: TransactionRecord): boolean {
+  if (!transaction) return false;
+  if (transaction.reconciliation_status === 'terminal_failed') return false;
+  if (transaction.reconciliation_status === 'reconciling') return true;
+  if (transaction.status === 'pending' || transaction.status === 'creating') return true;
+  return transaction.status === 'paid' && enrollment.status === 'pending';
 }
 
 export function formatCurrency(amount?: number, currency = 'IDR') {

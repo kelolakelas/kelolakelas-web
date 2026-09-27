@@ -2,6 +2,13 @@ export const PARENT_DESTINATION = '/kelas';
 export const TENANT_DESTINATION = '/dashboard/tenant';
 export const UNKNOWN_DESTINATION = '/';
 
+/**
+ * Parent-only dashboard pages (student management, enrollment status and the
+ * payment return landing). `proxy.ts` already keeps every other session out of
+ * them, so a parent may be sent back here after login.
+ */
+export const PARENT_DASHBOARD_ROOT = '/dashboard/parent';
+
 export interface LoginIdentity {
   is_parent?: boolean;
   tenant_id?: string | null;
@@ -39,7 +46,7 @@ export function getLoginDestination(identity: LoginIdentity, requestedPath?: unk
     return fallback;
   }
 
-  if (identity.is_parent && isPathWithin(requestedPath, PARENT_DESTINATION)) {
+  if (identity.is_parent && (isPathWithin(requestedPath, PARENT_DESTINATION) || isPathWithin(requestedPath, PARENT_DASHBOARD_ROOT))) {
     return requestedPath;
   }
 
