@@ -26,10 +26,21 @@ export type CatalogList = { items: CatalogItem[]; pagination: { page: number; to
 export type CatalogResult<T> = { data: T; error?: never } | { data?: never; error: 'invalid_filter' | 'not_found' | 'api' };
 
 const SORTS = new Set(['newest', 'name_asc', 'price_asc', 'price_desc']);
+const MAX_PAGE_SIZE = 100;
 
-export function catalogQuery(input: Record<string, string | string[] | undefined>) {
+export type CatalogOptions = {
+  pageSize?: number;
+  revalidateSeconds?: number;
+  forwardClientIp?: boolean;
+};
+
+type CatalogFetchOptions = RequestInit & { next?: { revalidate: number } };
+
+export function catalogQuery(input: Record<string, string | string[] | undefined>, options: Pick<CatalogOptions, 'pageSize'> = {}) {
   const value = (key: string) => typeof input[key] === 'string' ? input[key].trim() : '';
-  const params = new URLSearchParams({ page_size: '12' });
+  const pageSize = options.pageSize === undefined ? value('page_size') || '12' : String(options.pageSize);
+  const params = new URLSearchParams({ page_size: pageSize });
+  if (!/^\d+$/.test(pageSize) || Number(pageSize) < 1 || Number(pageSize) > MAX_PAGE_SIZE) return { error: true as const, params };
   const page = value('page') || '1';
   if (!/^\d+$/.test(page) || Number(page) < 1) return { error: true as const, params };
   params.set('page', page);
@@ -49,9 +60,16 @@ export function catalogQuery(input: Record<string, string | string[] | undefined
   return { error: false as const, params };
 }
 
-async function request<T>(path: string): Promise<CatalogResult<T>> {
+async function request<T>(path: string, options: CatalogOptions = {}): Promise<CatalogResult<T>> {
   try {
-    const response = await fetch(`${getGatewayBaseUrl()}${path}`, { headers: await withGatewayClientIp({ Accept: 'application/json' }), cache: 'no-store' });
+    const fetchOptions: CatalogFetchOptions = {
+      headers: options.forwardClientIp === false
+        ? { Accept: 'application/json' }
+        : await withGatewayClientIp({ Accept: 'application/json' }),
+    };
+    if (options.revalidateSeconds === undefined) fetchOptions.cache = 'no-store';
+    else fetchOptions.next = { revalidate: options.revalidateSeconds };
+    const response = await fetch(`${getGatewayBaseUrl()}${path}`, fetchOptions);
     if (response.status === 404) return { error: 'not_found' };
     if (response.status === 400 || response.status === 422) return { error: 'invalid_filter' };
     const body = await response.json().catch(() => null);
@@ -62,9 +80,9 @@ async function request<T>(path: string): Promise<CatalogResult<T>> {
   }
 }
 
-export async function getCatalog(input: Record<string, string | string[] | undefined>): Promise<CatalogResult<CatalogList>> {
-  const query = catalogQuery(input);
-  return query.error ? { error: 'invalid_filter' } : request<CatalogList>(`/api/v1/catalog/classes?${query.params}`);
+export async function getCatalog(input: Record<string, string | string[] | undefined>, options: CatalogOptions = {}): Promise<CatalogResult<CatalogList>> {
+  const query = catalogQuery(input, options);
+  return query.error ? { error: 'invalid_filter' } : request<CatalogList>(`/api/v1/catalog/classes?${query.params}`, options);
 }
 
 export async function getCatalogClass(id: string): Promise<CatalogResult<CatalogItem>> {

@@ -12,7 +12,7 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 
 export default async function CatalogPage({ searchParams }: Props) {
   const params = await searchParams;
-  const result = await getCatalog(params);
+  const result = await getCatalog(params, { pageSize: 12 });
   // The catalog is public, but it is also where a parent lands after signing in, so
   // a signed-in parent needs a way out of the session from here as well.
   const token = (await cookies()).get(process.env.AUTH_COOKIE_NAME || 'auth_token')?.value;
