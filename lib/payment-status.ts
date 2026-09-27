@@ -1,9 +1,23 @@
+/**
+ * Weekly slot of a group enrollment, as returned by the academic service
+ * (KEL-70). Absent for a private enrollment and for a schedule that no longer
+ * exists, even when `schedule_id` is still set.
+ */
+export type EnrollmentScheduleSummary = {
+  day_of_week?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  location?: string | null;
+};
+
 export type EnrollmentRecord = {
   id: string;
   status: string;
   class?: { name?: string | null } | null;
   student?: { first_name?: string | null; last_name?: string | null; lastå_name?: string | null } | null;
   joined_at?: string;
+  schedule_id?: string | null;
+  schedule?: EnrollmentScheduleSummary | null;
 };
 
 export type TransactionRecord = {

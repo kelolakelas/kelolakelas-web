@@ -210,3 +210,46 @@ describe('parent enrollment screen resume-payment link (KEL-53)', () => {
     expect(html).not.toContain(CHECKOUT_URL);
   });
 });
+
+describe('parent enrollment card schedule summary (KEL-70)', () => {
+  const SCHEDULE_ID = 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f';
+
+  it('shows the Indonesian day, time and location of a group enrollment', async () => {
+    setRows([
+      {
+        id: ACTIVE_ID,
+        status: 'active',
+        class: { name: 'Matematika Dasar' },
+        schedule_id: SCHEDULE_ID,
+        schedule: { day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00', location: 'Ruang A' },
+      },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain('Jadwal: Senin, 16:00–17:30 · Ruang A');
+  });
+
+  it('shows no schedule row for a private enrollment', async () => {
+    setRows([{ id: ACTIVE_ID, status: 'active', class: { name: 'Les Privat' } }]);
+
+    const html = await render();
+
+    expect(html).toContain('Les Privat');
+    expect(html).not.toContain('Jadwal');
+  });
+
+  it('labels a deleted schedule as unavailable and keeps the card and its status', async () => {
+    setRows(
+      [{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' }, schedule_id: SCHEDULE_ID }],
+      [{ id: 'tx-1', enrollment_id: PENDING_ID, status: 'pending' }]
+    );
+
+    const html = await render();
+
+    expect(html).toContain('Jadwal tidak tersedia');
+    expect(html).not.toContain('Jadwal:');
+    expect(html).toContain('Matematika Dasar');
+    expect(html).toContain('Batalkan pendaftaran');
+  });
+});
