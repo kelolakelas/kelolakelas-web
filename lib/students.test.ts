@@ -5,6 +5,7 @@ import {
   studentFormSchema,
   studentLastName,
   studentPayload,
+  type Student,
 } from './students';
 import { getSessionIdentityFromToken, getUserIdFromToken } from './auth-session';
 
@@ -30,10 +31,29 @@ describe('student helpers', () => {
     });
   });
 
-  it('handles the current response field typo without exposing it in the UI', () => {
-    expect(studentLastName({ id: '1', parent_id: parentId, first_name: 'Alya', ['lastå_name']: 'Zam' })).toBe('Zam');
+  it('reads the corrected last_name key and still accepts the legacy key during rollout', () => {
+    const base: Student = { id: '1', parent_id: parentId, first_name: 'Alya' };
+    expect(studentLastName({ ...base, last_name: 'Zam' })).toBe('Zam');
+    expect(studentLastName({ ...base, ['lastå_name']: 'Zam' })).toBe('Zam');
+    expect(studentLastName({ ...base, last_name: 'Zam', ['lastå_name']: 'Salah' })).toBe('Zam');
+    // A blank or null corrected key must not hide a legacy value, nor render whitespace.
+    expect(studentLastName({ ...base, last_name: '  ', ['lastå_name']: ' Zam ' })).toBe('Zam');
+    expect(studentLastName({ ...base, last_name: null })).toBe('');
+    expect(studentLastName({ ...base })).toBe('');
+    expect(studentLastName(undefined)).toBe('');
+  });
+
+  it('normalizes dates and list envelopes', () => {
     expect(dateInputValue('2018-02-03T00:00:00Z')).toBe('2018-02-03');
     expect(normalizeStudentList({ items: [{ id: '1' }] }).items).toHaveLength(1);
+  });
+
+  it('still rejects an over-long last name and never sends the legacy key', () => {
+    const tooLong = studentFormSchema.safeParse({ first_name: 'Alya', last_name: 'x'.repeat(256), date_of_birth: '2018-02-03' });
+    expect(tooLong.success).toBe(false);
+    const payload = studentPayload(studentFormSchema.parse({ first_name: 'Alya', last_name: ' Zam ', date_of_birth: '2018-02-03' }));
+    expect(payload).toEqual({ first_name: 'Alya', last_name: 'Zam', date_of_birth: '2018-02-03' });
+    expect(Object.keys(payload)).not.toContain('lastå_name');
   });
 });
 

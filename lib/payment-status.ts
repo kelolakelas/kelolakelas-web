@@ -1,3 +1,5 @@
+import type { StudentSurnameFields } from './students';
+
 /**
  * Weekly slot of a group enrollment, as returned by the academic service
  * (KEL-70). Absent for a private enrollment and for a schedule that no longer
@@ -14,7 +16,7 @@ export type EnrollmentRecord = {
   id: string;
   status: string;
   class?: { name?: string | null } | null;
-  student?: { first_name?: string | null; last_name?: string | null; lastå_name?: string | null } | null;
+  student?: ({ first_name?: string | null } & StudentSurnameFields) | null;
   joined_at?: string;
   schedule_id?: string | null;
   schedule?: EnrollmentScheduleSummary | null;

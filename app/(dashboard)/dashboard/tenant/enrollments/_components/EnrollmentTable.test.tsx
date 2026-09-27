@@ -33,8 +33,8 @@ describe('EnrollmentTable', () => {
           status: 'active',
           joined_at: '2026-09-01T04:00:00Z',
           billing_cycle: 'monthly',
-          // The academic service serialises the last name under this key.
-          student: { first_name: 'Ayu', ['lastå_name']: 'Lestari' },
+          // The academic service serialises the surname as `last_name` (KEL-43).
+          student: { first_name: 'Ayu', last_name: 'Lestari' },
           class: { id: 'class-1', name: 'Matematika Dasar' },
         },
         schedule: {

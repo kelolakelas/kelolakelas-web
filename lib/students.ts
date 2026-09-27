@@ -26,12 +26,19 @@ export interface Student {
   parent_id: string;
   first_name: string;
   last_name?: string | null;
-  /** Kept for compatibility with the current academic service response typo. */
+  /**
+   * Legacy surname key the academic service emitted before KEL-43 corrected its
+   * JSON tag. Read only as a fallback while an older academic build can still
+   * answer; drop it once every academic deployment serves `last_name`.
+   */
   ['lastå_name']?: string | null;
   nickname?: string | null;
   gender?: 'male' | 'female' | null;
   date_of_birth?: string | null;
 }
+
+/** The surname fields of any academic student payload, corrected and legacy. */
+export type StudentSurnameFields = Pick<Student, 'last_name' | 'lastå_name'>;
 
 export interface StudentListData {
   items: Student[];
@@ -60,8 +67,18 @@ export function studentPayload(input: StudentFormInput, parentId?: string) {
   };
 }
 
-export function studentLastName(student: Student) {
-  return student.last_name ?? student['lastå_name'] ?? '';
+/**
+ * Surname of a student payload, trimmed; `''` when it has none.
+ *
+ * `last_name` wins whenever it holds text. The legacy `lastå_name` key is only a
+ * fallback so a web release deployed ahead of the corrected academic service
+ * still shows the surname.
+ */
+export function studentLastName(student: StudentSurnameFields | null | undefined) {
+  const corrected = typeof student?.last_name === 'string' ? student.last_name.trim() : '';
+  if (corrected) return corrected;
+  const legacy = student?.['lastå_name'];
+  return typeof legacy === 'string' ? legacy.trim() : '';
 }
 
 export function dateInputValue(value?: string | null) {
