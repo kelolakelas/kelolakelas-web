@@ -67,3 +67,44 @@ describe('enrollInClass conflict messages', () => {
     expect(state).toEqual({ success: false, message: serverError });
   });
 });
+
+describe('enrollInClass platform fee rejection', () => {
+  const platformFeeMessage = 'Kelas ini belum dapat dibayar karena biaya platform melebihi jumlah pembayaran. Hubungi penyelenggara kelas.';
+
+  it('shows the platform fee message for the coded 422', async () => {
+    respondWith(422, { status: 'error', code: 'platform_fee_exceeds_gross', message: 'Biaya platform melebihi jumlah pembayaran', data: null });
+    const state = await enrollInClass(id, { success: false, message: '' }, form());
+    expect(state).toEqual({ success: false, message: platformFeeMessage });
+  });
+
+  it('keeps the previous 422 message when the response carries no code', async () => {
+    respondWith(422, { status: 'error', message: 'Biaya platform melebihi jumlah pembayaran', data: null });
+    const state = await enrollInClass(id, { success: false, message: '' }, form());
+    expect(state).toEqual({ success: false, message: 'Pilihan enrollment tidak dapat diproses. Periksa student dan jadwal Anda.' });
+  });
+
+  it('keeps the ownership 422 message', async () => {
+    respondWith(422, { status: 'error', message: 'student does not belong to this parent', data: null });
+    const state = await enrollInClass(id, { success: false, message: '' }, form());
+    expect(state).toEqual({ success: false, message: 'Student yang dipilih bukan milik akun parent ini.' });
+  });
+
+  it('keeps the server error message from an older academic that answered the rejection with 500', async () => {
+    respondWith(500, { status: 'error', message: 'Failed to create enrollment', data: null });
+    const state = await enrollInClass(id, { success: false, message: '' }, form());
+    expect(state).toEqual({ success: false, message: serverError });
+  });
+
+  it('ignores the platform fee code on a non-422 status', async () => {
+    respondWith(500, { status: 'error', code: 'platform_fee_exceeds_gross', message: 'Failed to create enrollment' });
+    const state = await enrollInClass(id, { success: false, message: '' }, form());
+    expect(state).toEqual({ success: false, message: serverError });
+  });
+
+  it('still redirects to checkout on success', async () => {
+    respondWith(201, { status: 'success', data: { payment: { checkout_session_url: 'https://checkout.test/session' } } });
+    await expect(enrollInClass(id, { success: false, message: '' }, form())).rejects.toThrow('REDIRECT');
+    const { redirect } = await import('next/navigation');
+    expect(redirect).toHaveBeenCalledWith('https://checkout.test/session');
+  });
+});

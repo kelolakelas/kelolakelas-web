@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { enrollmentFormSchema, enrollmentPayload } from './enrollment';
+import { enrollmentFormSchema, enrollmentPayload, isPlatformFeeRejectedResponse } from './enrollment';
+
+describe('isPlatformFeeRejectedResponse', () => {
+  it('matches only a 422 carrying the platform fee code', () => {
+    expect(isPlatformFeeRejectedResponse(422, { code: 'platform_fee_exceeds_gross' })).toBe(true);
+    expect(isPlatformFeeRejectedResponse(422, { code: 'duplicate_enrollment' })).toBe(false);
+    expect(isPlatformFeeRejectedResponse(422, { message: 'Biaya platform melebihi jumlah pembayaran' })).toBe(false);
+    expect(isPlatformFeeRejectedResponse(500, { code: 'platform_fee_exceeds_gross' })).toBe(false);
+    expect(isPlatformFeeRejectedResponse(422, null)).toBe(false);
+    expect(isPlatformFeeRejectedResponse(422, 'platform_fee_exceeds_gross')).toBe(false);
+  });
+});
 
 describe('enrollment helpers', () => {
   it('omits an optional schedule while keeping the validated intent', () => {

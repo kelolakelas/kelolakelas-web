@@ -35,6 +35,23 @@ export function isDuplicateEnrollmentResponse(status: number, result: unknown) {
   return status === 409 && typeof result === 'object' && result !== null && (result as { code?: unknown }).code === DUPLICATE_ENROLLMENT_CODE;
 }
 
+/** Machine-readable `code` academic sends with the 422 when billing refuses the invoice because the platform fee exceeds the payment. */
+export const PLATFORM_FEE_EXCEEDS_GROSS_CODE = 'platform_fee_exceeds_gross';
+
+export const platformFeeRejectedState: EnrollmentActionState = {
+  success: false,
+  message: 'Kelas ini belum dapat dibayar karena biaya platform melebihi jumlah pembayaran. Hubungi penyelenggara kelas.',
+};
+
+/**
+ * True only for academic's platform-fee 422. Other 422s (ownership, closed class)
+ * carry no such `code`, and an older academic answers this rejection as a 500
+ * without one, so both keep their existing messages.
+ */
+export function isPlatformFeeRejectedResponse(status: number, result: unknown) {
+  return status === 422 && typeof result === 'object' && result !== null && (result as { code?: unknown }).code === PLATFORM_FEE_EXCEEDS_GROSS_CODE;
+}
+
 export function enrollmentPayload(input: z.infer<typeof enrollmentFormSchema>) {
   return {
     student_id: input.student_id,
