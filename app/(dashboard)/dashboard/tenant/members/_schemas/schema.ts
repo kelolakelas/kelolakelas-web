@@ -26,6 +26,8 @@ export const roleSchema = z.object({
  */
 export const memberSchema = z.object({
   id: z.string(),
+  /** Account id of the member; identity always returns it. Used to recognise the signed-in user's own row (KEL-81). */
+  user_id: z.string().optional(),
   email: z.string().email(),
   first_name: z.string(),
   last_name: z.string(),
@@ -99,6 +101,14 @@ export interface InvitationListItem {
  */
 export const revokeInvitationSchema = z.object({
   invitationId: z.guid('Invitation ID is invalid.'),
+});
+
+/**
+ * Zod schema for the remove-member form payload (KEL-81). Identity answers 400
+ * for an id that is not a UUID, so an invalid id is rejected before any request.
+ */
+export const removeMemberSchema = z.object({
+  memberId: z.guid('Member ID is invalid.'),
 });
 
 /**

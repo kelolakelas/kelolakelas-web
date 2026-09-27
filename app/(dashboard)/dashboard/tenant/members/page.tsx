@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { getUserIdFromToken } from '@/lib/auth-session';
 import { InviteMemberModal } from './_components/InviteMemberModal';
 import { MembersSkeleton } from './_components/MembersSkeleton';
 import { MembersTable } from './_components/MembersTable';
@@ -51,6 +53,12 @@ async function MembersContent({ searchParams }: Props) {
   const membersRead = page === requestedPage
     ? initialMembersRead
     : await getTenantMembers(page);
+  // Hides the remove control on the signed-in user's own row (KEL-81). The
+  // token is only decoded here, not trusted: identity verifies it and refuses
+  // self-removal with 409 on its own.
+  const currentUserId = getUserIdFromToken(
+    (await cookies()).get(process.env.AUTH_COOKIE_NAME || 'auth_token')?.value
+  );
 
   return (
     <div className="space-y-6">
@@ -69,7 +77,7 @@ async function MembersContent({ searchParams }: Props) {
       </div>
 
       {/* Members Table & Mobile Card View */}
-      <MembersTable members={membersRead.members} roles={roles} />
+      <MembersTable members={membersRead.members} roles={roles} currentUserId={currentUserId} />
 
       {membersRead.pagination.total_pages > 1 && (
         <nav

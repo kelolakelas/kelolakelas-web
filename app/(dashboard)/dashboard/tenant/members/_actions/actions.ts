@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { inviteDeliveryMessage } from '@/lib/invitation';
-import { inviteMemberSchema, resendInvitationSchema, revokeInvitationSchema, updateMemberRoleSchema } from '../_schemas/schema';
+import { inviteMemberSchema, removeMemberSchema, resendInvitationSchema, revokeInvitationSchema, updateMemberRoleSchema } from '../_schemas/schema';
 
 export interface ActionResponse {
   success: boolean;
@@ -198,6 +198,82 @@ export async function updateMemberRole(
 function revalidateInvitationPaths() {
   revalidatePath('/dashboard/tenant/members');
   revalidatePath('/dashboard/tenant');
+}
+
+/**
+ * Messages for a refused member removal (KEL-81). They are fixed on purpose:
+ * the backend message is never shown, so no technical detail reaches the page.
+ */
+const REMOVE_MEMBER_MESSAGES: Record<number, string> = {
+  400: 'This member could not be identified. Refresh the page and try again.',
+  401: 'Your session has expired. Sign in again to remove members.',
+  403: 'Access denied. You do not have permission to remove members.',
+  404: 'This member is no longer in the organization. They may have been removed in another session. Refresh the page to see the current members.',
+  409: 'You cannot remove your own membership.',
+};
+const REMOVE_MEMBER_FAILED = 'The member could not be removed right now. Please try again later.';
+
+/**
+ * Server Action: Remove a member from the active tenant (KEL-81).
+ * Endpoint: DELETE /api/v1/members/{memberId}
+ *
+ * Identity checks `member:delete` against the caller's active membership and
+ * refuses the caller's own membership with 409, so this action adds no
+ * authorization of its own. An invalid id is rejected before any request. On
+ * refusal nothing is revalidated, so the confirmation dialog keeps the reason
+ * on screen. On success both the member list and the tenant overview's
+ * member count are refreshed.
+ */
+export async function removeTenantMember(
+  _prevState: ActionResponse,
+  formData: FormData
+): Promise<ActionResponse> {
+  const validation = removeMemberSchema.safeParse({
+    memberId: String(formData.get('memberId') ?? '').trim(),
+  });
+
+  if (!validation.success) {
+    return {
+      success: false,
+      message: REMOVE_MEMBER_MESSAGES[400],
+      errors: validation.error.flatten().fieldErrors,
+    };
+  }
+
+  const { memberId } = validation.data;
+  const memberName = String(formData.get('memberName') ?? '').trim();
+  try {
+    const baseUrl = getGatewayBaseUrl();
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${baseUrl}/api/v1/members/${encodeURIComponent(memberId)}`, {
+      method: 'DELETE',
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: REMOVE_MEMBER_MESSAGES[response.status] ?? REMOVE_MEMBER_FAILED,
+      };
+    }
+
+    revalidatePath('/dashboard/tenant/members');
+    revalidatePath('/dashboard/tenant');
+
+    return {
+      success: true,
+      message: memberName
+        ? `${memberName} was removed from the organization.`
+        : 'The member was removed from the organization.',
+    };
+  } catch (error) {
+    console.error('[removeTenantMember Error]:', error);
+    return {
+      success: false,
+      message: getGatewayConfigurationErrorMessage(error) || REMOVE_MEMBER_FAILED,
+    };
+  }
 }
 
 /**
