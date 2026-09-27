@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import { catalogQuery, descriptionText, scheduleDetailLabel, scheduleLabels, scheduleOptions } from './catalog';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { catalogQuery, descriptionText, getCatalog, scheduleDetailLabel, scheduleLabels, scheduleOptions } from './catalog';
+
+const gatewayUrl = process.env.GATEWAY_API_URL;
+const clientIpSource = process.env.CLIENT_IP_SOURCE_HEADER;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  if (gatewayUrl === undefined) delete process.env.GATEWAY_API_URL;
+  else process.env.GATEWAY_API_URL = gatewayUrl;
+  if (clientIpSource === undefined) delete process.env.CLIENT_IP_SOURCE_HEADER;
+  else process.env.CLIENT_IP_SOURCE_HEADER = clientIpSource;
+});
 
 describe('catalog query helpers', () => {
   it('accepts core filters and uses a safe page size', () => {
@@ -7,6 +18,34 @@ describe('catalog query helpers', () => {
     expect(query.error).toBe(false);
     expect(query.params.toString()).toContain('page_size=12');
     expect(query.params.get('search')).toBe('matematika');
+  });
+
+  it('allows sitemap-sized pages but rejects pages larger than the gateway limit', () => {
+    expect(catalogQuery({}, { pageSize: 100 }).params.get('page_size')).toBe('100');
+    expect(catalogQuery({}, { pageSize: 101 }).error).toBe(true);
+  });
+
+  it('allows the public page to keep its fixed page size separate from user input', async () => {
+    process.env.GATEWAY_API_URL = 'https://gateway.example.test';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      status: 'success',
+      data: { items: [], pagination: { page: 1, total_pages: 1, total_items: 0 } },
+    })));
+
+    await expect(getCatalog({ page_size: '101' }, { pageSize: 12 })).resolves.toMatchObject({ data: { items: [] } });
+    expect(new URL(fetchMock.mock.calls[0][0] as string).searchParams.get('page_size')).toBe('12');
+  });
+
+  it('uses the cached catalog request without forwarding client IP for sitemap data', async () => {
+    process.env.GATEWAY_API_URL = 'https://gateway.example.test';
+    process.env.CLIENT_IP_SOURCE_HEADER = 'X-Real-IP';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      status: 'success',
+      data: { items: [], pagination: { page: 1, total_pages: 1, total_items: 0 } },
+    })));
+
+    await expect(getCatalog({ page: '1' }, { pageSize: 100, revalidateSeconds: 3600, forwardClientIp: false })).resolves.toMatchObject({ data: { items: [] } });
+    expect(fetchMock.mock.calls[0][1]).toEqual({ headers: { Accept: 'application/json' }, next: { revalidate: 3600 } });
   });
 
   it('combines tenant filtering with other catalog filters', () => {
