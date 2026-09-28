@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   enrollmentState: { current: { success: false, message: '' } as Record<string, unknown> },
   studentState: { current: { success: false, message: '' } as Record<string, unknown> },
   enrollInClass: vi.fn(),
+  createScheduleRequest: vi.fn(),
+  cancelScheduleRequest: vi.fn(),
   createStudent: vi.fn(),
   updateStudent: vi.fn(),
 }));
@@ -24,7 +26,11 @@ vi.mock('react-dom', async (importOriginal) => ({
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode }) => <a href={href} {...props}>{children}</a>,
 }));
-vi.mock('../_actions/actions', () => ({ enrollInClass: mocks.enrollInClass }));
+vi.mock('../_actions/actions', () => ({
+  enrollInClass: mocks.enrollInClass,
+  createScheduleRequest: mocks.createScheduleRequest,
+  cancelScheduleRequest: mocks.cancelScheduleRequest,
+}));
 vi.mock('@/app/(dashboard)/dashboard/parent/students/_actions/actions', () => ({
   createStudent: mocks.createStudent,
   updateStudent: mocks.updateStudent,
