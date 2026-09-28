@@ -8,6 +8,9 @@ import { StudentForm } from '@/app/(dashboard)/dashboard/parent/students/_compon
 import type { CatalogScheduleOption } from '@/lib/catalog';
 import type { EnrollmentActionState } from '@/lib/enrollment';
 import { studentLastName, type Student } from '@/lib/students';
+import type { EnrollmentLinkCandidate, ScheduleRequest } from '@/lib/schedule-request';
+import { ScheduleRequestForm } from './ScheduleRequestForm';
+import { ScheduleRequestList } from './ScheduleRequestList';
 
 const initialState: EnrollmentActionState = { success: false, message: '' };
 
@@ -21,7 +24,18 @@ function FieldError({ errors, name }: { errors?: Record<string, string[]>; name:
   return message ? <p className="mt-1 text-sm text-[#b42318]">{message}</p> : null;
 }
 
-export function EnrollmentPanel({ classId, classType, isParent, students, schedules, idempotencyKey, studentError }: {
+/**
+ * Enrollment entry point on the class detail page.
+ *
+ * - Group classes keep the checkout flow: the parent picks a student and a
+ *   fixed schedule, then continues to payment.
+ * - Private classes (KEL-109) show a schedule request form instead of
+ *   "Lanjut ke pembayaran": the parent proposes weekly slots, and the tenant
+ *   reviews the request. The parent's requests for this class are listed below
+ *   the form with their status, a cancel control for pending rows, and a
+ *   resubmit option for rejected rows.
+ */
+export function EnrollmentPanel({ classId, classType, isParent, students, schedules, idempotencyKey, studentError, scheduleRequests = [], enrollments = [] }: {
   classId: string;
   classType: 'private' | 'group';
   isParent: boolean;
@@ -29,11 +43,15 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   schedules: CatalogScheduleOption[];
   idempotencyKey: string;
   studentError?: string;
+  scheduleRequests?: ScheduleRequest[];
+  enrollments?: EnrollmentLinkCandidate[];
 }) {
   const [state, formAction] = useActionState(enrollInClass.bind(null, classId), initialState);
   const [studentOptions, setStudentOptions] = useState(students);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [resubmitSeed, setResubmitSeed] = useState(0);
+  const [resubmitFrom, setResubmitFrom] = useState<ScheduleRequest | undefined>(undefined);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -61,6 +79,36 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
 
   if (studentError) return <section className="mt-10 rounded-3xl border border-[#f2c6c3] bg-white p-6" role="alert"><h2 className="text-xl font-black">Student belum dapat dimuat.</h2><p className="mt-2 text-[#52615b]">{studentError}</p><Link className="mt-4 inline-block font-bold text-[#617c35] underline" href="/dashboard/parent/students">Kelola student</Link></section>;
   if (!studentOptions.length) return <section className="mt-10 rounded-3xl border border-dashed border-[#c8d0c5] bg-white p-6"><h2 className="text-xl font-black">Tambahkan student terlebih dahulu.</h2><p className="mt-2 text-[#52615b]">Enrollment membutuhkan profil student milik parent.</p><button ref={triggerRef} type="button" onClick={openStudentDialog} className="mt-4 rounded-xl bg-[#617c35] px-5 py-3 font-bold text-white">Tambah student</button><dialog ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={`create-student-title-${classId}`} className="max-w-2xl rounded-3xl border border-[#dfe3d7] bg-[#f8f7f3] p-0 text-[#17231f] backdrop:bg-black/40" onCancel={closeStudentDialog} onClose={() => { setDialogOpen(false); triggerRef.current?.focus(); }}><div className="p-6 sm:p-8"><h2 id={`create-student-title-${classId}`} className="sr-only">Tambah student</h2><StudentForm autoFocus onCancel={closeStudentDialog} onSuccess={handleStudentCreated} /></div></dialog></section>;
+
+  if (classType === 'private') {
+    return (
+      <section className="mt-10 rounded-3xl border border-[#dfe3d7] bg-[#eef3dd] p-6 sm:p-8">
+        <p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Permintaan jadwal private</p>
+        <h2 className="mt-2 text-2xl font-black">Ajukan jadwal les private</h2>
+        <p className="mt-2 text-[#52615b]">Usulkan slot mingguan; penyelenggara meninjau permintaan Anda sebelum enrollment dibuat. Kelas private tidak melalui checkout dari halaman ini.</p>
+        <div id="form-permintaan-jadwal">
+          <ScheduleRequestForm
+            key={resubmitSeed}
+            classId={classId}
+            students={studentOptions}
+            initialStudentId={selectedStudentId}
+            resubmitFrom={resubmitFrom}
+          />
+        </div>
+        <ScheduleRequestList
+          requests={scheduleRequests}
+          students={studentOptions}
+          enrollments={enrollments}
+          onResubmit={(request) => {
+            setResubmitFrom(request);
+            setResubmitSeed((seed) => seed + 1);
+            document.getElementById('form-permintaan-jadwal')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+        />
+      </section>
+    );
+  }
+
   if (classType === 'group' && !schedules.length) return <section className="mt-10 rounded-3xl border border-[#f2c6c3] bg-white p-6" role="alert"><h2 className="text-xl font-black">Jadwal belum tersedia.</h2><p className="mt-2 text-[#52615b]">Kelas grup belum memiliki jadwal yang dapat dipilih. Coba lagi nanti atau hubungi penyelenggara.</p></section>;
 
   const availableSchedules = schedules.filter((schedule) => schedule.available);
