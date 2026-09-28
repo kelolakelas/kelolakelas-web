@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PLATFORM_FEE_EXCEEDS_GROSS_CODE, platformFeeRejectedState } from './enrollment';
 import { WEEKDAY_NAMES } from './enrollment-schedule';
 
 /**
@@ -11,14 +12,29 @@ import { WEEKDAY_NAMES } from './enrollment-schedule';
  *
  * - POST /api/v1/catalog/classes/{class_id}/schedule-requests (201)
  *   body {student_id, billing_cycle, slots, note}
- * - GET /api/v1/schedule-requests[?status=] (parent-scoped list)
+ * - GET /api/v1/schedule-requests[?status=] (caller-scoped list: the parent
+ *   sees only their own rows, a tenant member sees only their tenant's rows)
  * - POST /api/v1/schedule-requests/{id}/cancel (parent, pending only)
+ *
+ * KEL-110 adds the tenant decision side (guard `enrollment:update`):
+ *
+ * - POST /api/v1/schedule-requests/{id}/approve (pending only) answers 200
+ *   `{status, data: {enrollment, payment: {transaction_id,
+ *   checkout_session_url, gross_amount, status}}}`. Refusals: 403 (no
+ *   permission), 404 (unknown id), 409 (no longer pending: cancelled by the
+ *   parent or decided by another member), 422 (billing refused the invoice,
+ *   including the `platform_fee_exceeds_gross` case KEL-106 already handles
+ *   for enrollments).
+ * - POST /api/v1/schedule-requests/{id}/reject body {reason? max 2000}
+ *   answers 200 with the updated request. The same 403/404/409 refusals
+ *   apply.
  *
  * Every response is `{status, data}`. A request carries id, class_id,
  * student_id, billing_cycle, slots, note, status
  * (pending/approved/rejected/cancelled), rejection_reason and decided_at.
- * Rejecting is a tenant action and stays out of scope: the web only displays
- * the reason.
+ * Tenant rows additionally carry tenant_id, parent_id, parent_email and
+ * created_at. On the parent surface the tenant's reason is display-only;
+ * deciding (approve/reject) happens on the tenant dashboard (KEL-110).
  */
 
 export const SCHEDULE_REQUEST_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const;
@@ -41,6 +57,14 @@ export type ScheduleRequest = {
   status: ScheduleRequestStatus;
   rejection_reason?: string | null;
   decided_at?: string | null;
+  /**
+   * Tenant-scoped rows (KEL-110): the parent list never carries these, so
+   * every key stays optional and is read defensively at runtime.
+   */
+  tenant_id?: string | null;
+  parent_id?: string | null;
+  parent_email?: string | null;
+  created_at?: string | null;
 };
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -159,6 +183,10 @@ export function normalizeScheduleRequests(value: unknown): ScheduleRequest[] {
         status: record.status as ScheduleRequestStatus,
         rejection_reason: typeof record.rejection_reason === 'string' ? record.rejection_reason : null,
         decided_at: typeof record.decided_at === 'string' ? record.decided_at : null,
+        tenant_id: typeof record.tenant_id === 'string' ? record.tenant_id : null,
+        parent_id: typeof record.parent_id === 'string' ? record.parent_id : null,
+        parent_email: typeof record.parent_email === 'string' ? record.parent_email : null,
+        created_at: typeof record.created_at === 'string' ? record.created_at : null,
       },
     ];
   });
@@ -240,4 +268,78 @@ export function scheduleRequestCancelErrorMessage(status: number, backendMessage
   if (status >= 500) return 'Pembatalan permintaan jadwal belum dapat diproses. Coba lagi nanti.';
   const trimmed = backendMessage?.trim();
   return trimmed ? trimmed : 'Pembatalan permintaan jadwal belum dapat diproses. Coba lagi nanti.';
+}
+
+const DECISION_PERMISSION_MESSAGE =
+  'Anda tidak memiliki izin memproses permintaan jadwal ini. Hubungi administrator tenant untuk mendapatkan permission enrollment:update.';
+const DECISION_NOT_FOUND_MESSAGE = 'Permintaan jadwal ini tidak ditemukan pada tenant Anda. Muat ulang halaman ini.';
+const DECISION_CONFLICT_MESSAGE =
+  'Permintaan ini sudah tidak dapat diproses karena statusnya sudah berubah (dibatalkan parent atau diproses anggota lain). Muat ulang halaman untuk melihat status terbaru.';
+const DECISION_VALIDATION_MESSAGE = 'Permintaan ini tidak dapat diproses. Muat ulang halaman lalu coba lagi.';
+const DECISION_UNAVAILABLE_MESSAGE = 'Layanan permintaan jadwal sedang tidak tersedia. Coba lagi nanti.';
+
+/**
+ * Maps a refused tenant approve/reject call onto what the member is told
+ * (KEL-110).
+ *
+ * 401/403 always mean the caller lacks `enrollment:update`, so they read as a
+ * permission state, never as a technical failure. 409 means the row left
+ * `pending` while the dialog was open: the parent cancelled it, or another
+ * member decided it first. A 422 carrying the KEL-106 machine-readable code
+ * reuses the platform-fee wording the tenant already knows from checkout;
+ * any other refusal body is replaced, never passed through.
+ */
+export function scheduleRequestDecisionErrorMessage(
+  status: number,
+  backendMessage?: string | null,
+  code?: string | null
+): string {
+  if (status === 401 || status === 403) return DECISION_PERMISSION_MESSAGE;
+  if (status === 404) return DECISION_NOT_FOUND_MESSAGE;
+  if (status === 409) return DECISION_CONFLICT_MESSAGE;
+  if (status === 422 && code === PLATFORM_FEE_EXCEEDS_GROSS_CODE) return platformFeeRejectedState.message;
+  if (status === 400 || status === 422) return DECISION_VALIDATION_MESSAGE;
+  if (status >= 500) return DECISION_UNAVAILABLE_MESSAGE;
+  const trimmed = backendMessage?.trim();
+  return trimmed ? trimmed : DECISION_UNAVAILABLE_MESSAGE;
+}
+
+/**
+ * Usable checkout URL from an approve answer, or null when it must not be
+ * shown (KEL-110).
+ *
+ * The approve payment carries no expiry field, so unlike `resumePayment` there
+ * is no liveness check here: only the http(s) scheme gate applies, and a
+ * non-URL value never renders a guessed link.
+ */
+export function scheduleRequestPaymentLink(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export type ScheduleRequestApprovePayment = {
+  url: string;
+  grossAmount: number | null;
+};
+
+/**
+ * Reads the `{enrollment, payment}` payload of a successful approve call.
+ *
+ * Returns null when the payment side is missing or its checkout URL is not
+ * usable: the dialog then confirms the approval without rendering a link
+ * rather than showing a broken one.
+ */
+export function normalizeApprovePayment(data: unknown): ScheduleRequestApprovePayment | null {
+  if (!data || typeof data !== 'object') return null;
+  const payment = (data as { payment?: unknown }).payment;
+  if (!payment || typeof payment !== 'object') return null;
+  const url = scheduleRequestPaymentLink((payment as { checkout_session_url?: unknown }).checkout_session_url);
+  if (!url) return null;
+  const grossAmount = (payment as { gross_amount?: unknown }).gross_amount;
+  return { url, grossAmount: typeof grossAmount === 'number' ? grossAmount : null };
 }
