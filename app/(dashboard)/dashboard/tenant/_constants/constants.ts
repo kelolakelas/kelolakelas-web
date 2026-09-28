@@ -26,6 +26,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     description: 'Review private schedule requests from parents',
   },
   {
+    label: 'Chat',
+    href: '/dashboard/tenant/chat',
+    description: 'Read and reply to conversations',
+  },
+  {
     label: 'Members',
     href: '/dashboard/tenant/members',
     description: 'Manage organization team members',
