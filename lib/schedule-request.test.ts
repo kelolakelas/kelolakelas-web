@@ -2,17 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   DUPLICATE_SCHEDULE_REQUEST_MESSAGE,
   findMatchingEnrollment,
+  normalizeApprovePayment,
   normalizeScheduleRequests,
   scheduleRequestCancelErrorMessage,
+  scheduleRequestDecisionErrorMessage,
   scheduleRequestErrorMessage,
   scheduleRequestListAnchor,
   scheduleRequestPayload,
+  scheduleRequestPaymentLink,
   scheduleRequestStatusLabel,
   scheduleSlotLabel,
   selectRequestsForClass,
   validateScheduleSlotDrafts,
   scheduleRequestFormSchema,
 } from './schedule-request';
+import { PLATFORM_FEE_EXCEEDS_GROSS_CODE, platformFeeRejectedState } from './enrollment';
 
 const CLASS_ID = '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11';
 const STUDENT_ID = '7c2e4d1b-5b8f-4d2e-8d3f-7a1c9e6b4f22';
@@ -232,5 +236,119 @@ describe('schedule request list helpers (KEL-109)', () => {
         { id: 'enrollment-1', student_id: STUDENT_ID, class_id: 'other-class' },
       ])
     ).toBeNull();
+  });
+});
+
+describe('schedule request decision error mapping (KEL-110)', () => {
+  it('maps 401/403 to the enrollment:update permission message', () => {
+    for (const status of [401, 403]) {
+      const message = scheduleRequestDecisionErrorMessage(status, 'forbidden: missing enrollment:update');
+      expect(message).toContain('enrollment:update');
+      expect(message).not.toContain('forbidden: missing enrollment:update');
+    }
+  });
+
+  it('maps 404 to the reload message for a row outside this tenant', () => {
+    expect(scheduleRequestDecisionErrorMessage(404)).toContain('tidak ditemukan');
+    expect(scheduleRequestDecisionErrorMessage(404)).toContain('Muat ulang');
+  });
+
+  it('maps 409 to the already-changed message', () => {
+    const message = scheduleRequestDecisionErrorMessage(409, 'duplicate key');
+    expect(message).toContain('statusnya sudah berubah');
+    expect(message).toContain('dibatalkan parent atau diproses anggota lain');
+    expect(message).not.toContain('duplicate key');
+  });
+
+  it('reuses the KEL-106 platform-fee wording for the matching 422 code', () => {
+    expect(scheduleRequestDecisionErrorMessage(422, 'fee too high', PLATFORM_FEE_EXCEEDS_GROSS_CODE)).toBe(
+      platformFeeRejectedState.message
+    );
+  });
+
+  it('maps other 400/422 refusals to the validation message', () => {
+    expect(scheduleRequestDecisionErrorMessage(400)).toContain('tidak dapat diproses');
+    expect(scheduleRequestDecisionErrorMessage(422, 'fee too high', 'other_code')).toContain('tidak dapat diproses');
+    expect(scheduleRequestDecisionErrorMessage(422, 'fee too high', 'other_code')).not.toContain('fee too high');
+  });
+
+  it('maps server errors to the unavailable message without leaking backend text', () => {
+    expect(scheduleRequestDecisionErrorMessage(500, 'ERROR: deadlock')).toContain('tidak tersedia');
+    expect(scheduleRequestDecisionErrorMessage(500, 'ERROR: deadlock')).not.toContain('deadlock');
+  });
+
+  it('passes a trimmed backend message through only for unmapped statuses', () => {
+    expect(scheduleRequestDecisionErrorMessage(418, '  teapot  ')).toBe('teapot');
+    expect(scheduleRequestDecisionErrorMessage(418)).toContain('tidak tersedia');
+  });
+});
+
+describe('schedule request approve payment helpers (KEL-110)', () => {
+  it('accepts only http(s) checkout links', () => {
+    expect(scheduleRequestPaymentLink('https://pay.test/checkout/x')).toBe('https://pay.test/checkout/x');
+    expect(scheduleRequestPaymentLink('http://pay.test/checkout/x')).toBe('http://pay.test/checkout/x');
+    expect(scheduleRequestPaymentLink('javascript:alert(1)')).toBeNull();
+    expect(scheduleRequestPaymentLink('ftp://pay.test/x')).toBeNull();
+    expect(scheduleRequestPaymentLink('not a url')).toBeNull();
+    expect(scheduleRequestPaymentLink('')).toBeNull();
+    expect(scheduleRequestPaymentLink(null)).toBeNull();
+  });
+
+  it('reads the payment side of a successful approve answer', () => {
+    expect(
+      normalizeApprovePayment({
+        enrollment: { id: 'enrollment-1' },
+        payment: {
+          transaction_id: 'tx-1',
+          checkout_session_url: 'https://pay.test/checkout/x',
+          gross_amount: 1500000,
+          status: 'pending',
+        },
+      })
+    ).toEqual({ url: 'https://pay.test/checkout/x', grossAmount: 1500000 });
+  });
+
+  it('keeps the approval usable when billing omits the nominal', () => {
+    expect(
+      normalizeApprovePayment({ payment: { checkout_session_url: 'https://pay.test/checkout/x' } })
+    ).toEqual({ url: 'https://pay.test/checkout/x', grossAmount: null });
+  });
+
+  it('returns null when no usable link can be shown', () => {
+    expect(normalizeApprovePayment(null)).toBeNull();
+    expect(normalizeApprovePayment({})).toBeNull();
+    expect(normalizeApprovePayment({ payment: null })).toBeNull();
+    expect(normalizeApprovePayment({ payment: { checkout_session_url: 'javascript:alert(1)' } })).toBeNull();
+    expect(normalizeApprovePayment({ payment: { checkout_session_url: 'https://pay.test/x', gross_amount: 'x' } })).toEqual({
+      url: 'https://pay.test/x',
+      grossAmount: null,
+    });
+  });
+});
+
+describe('schedule request tenant fields (KEL-110)', () => {
+  it('preserves the tenant-scoped columns when the backend sends them', () => {
+    const [row] = normalizeScheduleRequests({
+      items: [
+        request({
+          tenant_id: 'tenant-1',
+          parent_id: 'parent-1',
+          parent_email: 'ortu@example.com',
+          created_at: '2026-09-20T10:00:00Z',
+        }),
+      ],
+    });
+    expect(row.tenant_id).toBe('tenant-1');
+    expect(row.parent_id).toBe('parent-1');
+    expect(row.parent_email).toBe('ortu@example.com');
+    expect(row.created_at).toBe('2026-09-20T10:00:00Z');
+  });
+
+  it('defaults missing tenant columns to null instead of failing', () => {
+    const [row] = normalizeScheduleRequests({ items: [request()] });
+    expect(row.tenant_id).toBeNull();
+    expect(row.parent_id).toBeNull();
+    expect(row.parent_email).toBeNull();
+    expect(row.created_at).toBeNull();
   });
 });

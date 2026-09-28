@@ -21,6 +21,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     description: 'Monitor student enrollments and payment status',
   },
   {
+    label: 'Schedule Requests',
+    href: '/dashboard/tenant/schedule-requests',
+    description: 'Review private schedule requests from parents',
+  },
+  {
     label: 'Members',
     href: '/dashboard/tenant/members',
     description: 'Manage organization team members',
