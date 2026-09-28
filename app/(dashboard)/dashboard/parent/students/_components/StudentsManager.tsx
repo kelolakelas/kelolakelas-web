@@ -38,7 +38,7 @@ export function StudentsManager({ data }: { data: StudentListData }) {
     <>
       <header className="flex flex-col gap-5 border-b border-[#dfe3d7] pb-7 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Link href="/kelas" className="text-sm font-bold text-[#617c35] hover:underline">← Kembali ke katalog</Link>
+          <Link href="/kelas" className="text-sm font-bold text-[#617c35] hover:underline">← Kembali ke katalog</Link><Link href="/dashboard/parent/chat" className="ml-4 text-sm font-bold text-[#617c35] hover:underline">Chat</Link>
           <p className="mt-6 text-sm font-bold uppercase tracking-[.16em] text-[#617c35]">Profil parent</p>
           <h1 className="mt-2 text-4xl font-black tracking-[-.055em]">Student saya</h1>
           <p className="mt-3 max-w-2xl text-[#52615b]">Simpan profil student yang akan digunakan saat mendaftar kelas. Data ini hanya menampilkan student milik akun parent Anda.</p>
