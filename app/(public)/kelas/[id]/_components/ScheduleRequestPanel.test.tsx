@@ -6,10 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requestState: { current: { success: false, message: '' } as Record<string, unknown> },
   cancelState: { current: { success: false, message: '' } as Record<string, unknown> },
+  acceptState: { current: { success: false, message: '' } as Record<string, unknown> },
+  declineState: { current: { success: false, message: '' } as Record<string, unknown> },
   enrollmentState: { current: { success: false, message: '' } as Record<string, unknown> },
   studentState: { current: { success: false, message: '' } as Record<string, unknown> },
   createScheduleRequest: vi.fn(),
   cancelScheduleRequest: vi.fn(),
+  acceptScheduleRecommendation: vi.fn(),
+  declineScheduleRecommendation: vi.fn(),
   enrollInClass: vi.fn(),
   createStudent: vi.fn(),
   updateStudent: vi.fn(),
@@ -21,6 +25,8 @@ vi.mock('react', async (importOriginal) => ({
     if (action === mocks.createStudent || action === mocks.updateStudent) return [mocks.studentState.current, vi.fn()];
     if (action === mocks.createScheduleRequest) return [mocks.requestState.current, vi.fn()];
     if (action === mocks.cancelScheduleRequest) return [mocks.cancelState.current, vi.fn()];
+    if (action === mocks.acceptScheduleRecommendation) return [mocks.acceptState.current, vi.fn()];
+    if (action === mocks.declineScheduleRecommendation) return [mocks.declineState.current, vi.fn()];
     return [mocks.enrollmentState.current, vi.fn()];
   },
 }));
@@ -35,6 +41,8 @@ vi.mock('../_actions/actions', () => ({
   enrollInClass: mocks.enrollInClass,
   createScheduleRequest: mocks.createScheduleRequest,
   cancelScheduleRequest: mocks.cancelScheduleRequest,
+  acceptScheduleRecommendation: mocks.acceptScheduleRecommendation,
+  declineScheduleRecommendation: mocks.declineScheduleRecommendation,
 }));
 vi.mock('@/app/(dashboard)/dashboard/parent/students/_actions/actions', () => ({
   createStudent: mocks.createStudent,
@@ -95,6 +103,8 @@ function renderGroup() {
 beforeEach(() => {
   mocks.requestState.current = { success: false, message: '' };
   mocks.cancelState.current = { success: false, message: '' };
+  mocks.acceptState.current = { success: false, message: '' };
+  mocks.declineState.current = { success: false, message: '' };
   mocks.enrollmentState.current = { success: false, message: '' };
   mocks.studentState.current = { success: false, message: '' };
   if (typeof Element.prototype.scrollIntoView !== 'function') {
@@ -218,5 +228,40 @@ describe('ScheduleRequestList statuses (KEL-109)', () => {
 
     expect(screen.getAllByText('Senin, 16:00–17:30')).toHaveLength(2);
     expect(screen.getByText('Permintaan jadwal Anda')).toBeTruthy();
+  });
+});
+
+describe('ScheduleRequestList recommendation round-trip (KEL-116)', () => {
+  const recommended = [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }];
+
+  it('shows the recommended slots with accept and decline controls while waiting', () => {
+    renderPrivate({
+      scheduleRequests: [request({ status: 'rejected', rejection_reason: 'Slot penuh.', recommended_slots: recommended })],
+    });
+
+    expect(screen.getByText('Jadwal rekomendasi dari penyelenggara')).toBeTruthy();
+    expect(screen.getByText('Selasa, 10:00–11:00')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Terima jadwal ini' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tolak rekomendasi' })).toBeTruthy();
+  });
+
+  it('hides the accept control and states the outcome once the parent declines', () => {
+    renderPrivate({
+      scheduleRequests: [request({ status: 'declined', rejection_reason: 'Slot penuh.', recommended_slots: recommended })],
+    });
+
+    expect(screen.getByText('Rekomendasi ditolak')).toBeTruthy();
+    expect(screen.getByText('Selasa, 10:00–11:00')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Terima jadwal ini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tolak rekomendasi' })).toBeNull();
+  });
+
+  it('shows a plain rejection with no recommendation block', () => {
+    renderPrivate({
+      scheduleRequests: [request({ status: 'rejected', rejection_reason: 'Slot penuh, usulkan hari lain.' })],
+    });
+
+    expect(screen.queryByText('Jadwal rekomendasi dari penyelenggara')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Terima jadwal ini' })).toBeNull();
   });
 });

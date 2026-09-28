@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { scheduleRequestStatusLabel } from '@/lib/schedule-request';
 import { TENANT_SCHEDULE_REQUESTS_PATH } from '../_lib/schema';
 
-const STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'cancelled'] as const;
+const STATUS_OPTIONS = ['pending', 'approved', 'rejected', 'declined', 'cancelled'] as const;
 
 /**
  * Status filter for the tenant schedule-request work queue (KEL-110).

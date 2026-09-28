@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   DUPLICATE_SCHEDULE_REQUEST_MESSAGE,
   findMatchingEnrollment,
+  hasPendingRecommendation,
   normalizeApprovePayment,
+  normalizeRecommendedSlots,
   normalizeScheduleRequests,
+  scheduleRecommendationDecisionErrorMessage,
+  scheduleRecommendationStatus,
+  scheduleRecommendationStatusLabel,
   scheduleRequestCancelErrorMessage,
   scheduleRequestDecisionErrorMessage,
   scheduleRequestErrorMessage,
@@ -11,6 +16,7 @@ import {
   scheduleRequestPayload,
   scheduleRequestPaymentLink,
   scheduleRequestStatusLabel,
+  scheduleRequestTimeForBackend,
   scheduleSlotLabel,
   selectRequestsForClass,
   validateScheduleSlotDrafts,
@@ -350,5 +356,124 @@ describe('schedule request tenant fields (KEL-110)', () => {
     expect(row.parent_id).toBeNull();
     expect(row.parent_email).toBeNull();
     expect(row.created_at).toBeNull();
+  });
+});
+
+describe('schedule recommendation helpers (KEL-116)', () => {
+  const recommended = [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }];
+
+  it('labels the declined status in Indonesian', () => {
+    expect(scheduleRequestStatusLabel('declined')).toContain('ditolak');
+  });
+
+  it('keeps well-formed recommended slots from a network row', () => {
+    expect(normalizeRecommendedSlots(recommended)).toEqual(recommended);
+  });
+
+  it('drops malformed recommended slots instead of guessing', () => {
+    expect(normalizeRecommendedSlots([{ day_of_week: 0, start_time: '10:00', end_time: '11:00' }])).toBeUndefined();
+    expect(
+      normalizeRecommendedSlots([{ day_of_week: 1.5, start_time: '10:00', end_time: '11:00' }])
+    ).toBeUndefined();
+    expect(normalizeRecommendedSlots([{ day_of_week: 1, start_time: '', end_time: '11:00' }])).toBeUndefined();
+    expect(normalizeRecommendedSlots([{ day_of_week: 1, start_time: '10:00' }])).toBeUndefined();
+    expect(normalizeRecommendedSlots([null])).toBeUndefined();
+  });
+
+  it('treats absent or empty recommended slots as no recommendation', () => {
+    expect(normalizeRecommendedSlots(undefined)).toBeUndefined();
+    expect(normalizeRecommendedSlots(null)).toBeUndefined();
+    expect(normalizeRecommendedSlots([])).toBeUndefined();
+    expect(normalizeRecommendedSlots('nope')).toBeUndefined();
+  });
+
+  it('preserves recommended slots through the request normalizer', () => {
+    const [row] = normalizeScheduleRequests({ items: [request({ status: 'rejected', recommended_slots: recommended })] });
+    expect(row.recommended_slots).toEqual(recommended);
+  });
+
+  it('defaults missing recommended slots to undefined instead of failing', () => {
+    const [row] = normalizeScheduleRequests({ items: [request()] });
+    expect(row.recommended_slots).toBeUndefined();
+  });
+
+  it('still normalizes declined rows', () => {
+    const [row] = normalizeScheduleRequests({
+      items: [request({ status: 'declined', recommended_slots: recommended })],
+    });
+    expect(row.status).toBe('declined');
+    expect(row.recommended_slots).toEqual(recommended);
+  });
+
+  it('expands HH:MM drafts to the backend HH:MM:SS format', () => {
+    expect(scheduleRequestTimeForBackend('16:00')).toBe('16:00:00');
+    expect(scheduleRequestTimeForBackend('09:05')).toBe('09:05:00');
+    expect(scheduleRequestTimeForBackend('16:00:00')).toBe('16:00:00');
+  });
+
+  it('derives the recommendation status from the row', () => {
+    expect(scheduleRecommendationStatus({ status: 'rejected', recommended_slots: recommended })).toBe('pending');
+    expect(scheduleRecommendationStatus({ status: 'approved', recommended_slots: recommended })).toBe('accepted');
+    expect(scheduleRecommendationStatus({ status: 'declined', recommended_slots: recommended })).toBe('declined');
+    expect(scheduleRecommendationStatus({ status: 'rejected', recommended_slots: undefined })).toBe('none');
+    expect(scheduleRecommendationStatus({ status: 'rejected', recommended_slots: [] })).toBe('none');
+    expect(scheduleRecommendationStatus({ status: 'pending', recommended_slots: recommended })).toBe('none');
+  });
+
+  it('labels every live recommendation status in Indonesian', () => {
+    expect(scheduleRecommendationStatusLabel('pending')).toContain('Menunggu');
+    expect(scheduleRecommendationStatusLabel('accepted')).toContain('diterima');
+    expect(scheduleRecommendationStatusLabel('declined')).toContain('ditolak');
+    expect(scheduleRecommendationStatusLabel('none')).toBeNull();
+  });
+
+  it('reports only rejected rows with slots as still awaiting the parent', () => {
+    expect(hasPendingRecommendation({ status: 'rejected', recommended_slots: recommended })).toBe(true);
+    expect(hasPendingRecommendation({ status: 'declined', recommended_slots: recommended })).toBe(false);
+    expect(hasPendingRecommendation({ status: 'approved', recommended_slots: recommended })).toBe(false);
+    expect(hasPendingRecommendation({ status: 'rejected', recommended_slots: undefined })).toBe(false);
+    expect(hasPendingRecommendation({ status: 'rejected', recommended_slots: [] })).toBe(false);
+  });
+});
+
+describe('schedule recommendation decision error mapping (KEL-116)', () => {
+  it('maps 401/403 to the owning-parent login message', () => {
+    for (const status of [401, 403]) {
+      const message = scheduleRecommendationDecisionErrorMessage(status, 'forbidden');
+      expect(message).toContain('parent');
+      expect(message).not.toContain('forbidden');
+    }
+  });
+
+  it('maps 404 to the reload message for a recommendation outside this account', () => {
+    expect(scheduleRecommendationDecisionErrorMessage(404)).toContain('tidak ditemukan');
+    expect(scheduleRecommendationDecisionErrorMessage(404)).toContain('Muat ulang');
+  });
+
+  it('maps 409 to the already-changed message', () => {
+    const message = scheduleRecommendationDecisionErrorMessage(409, 'already accepted');
+    expect(message).toContain('statusnya sudah berubah');
+    expect(message).not.toContain('already accepted');
+  });
+
+  it('reuses the KEL-106 platform-fee wording for the matching 422 code', () => {
+    expect(scheduleRecommendationDecisionErrorMessage(422, 'fee too high', PLATFORM_FEE_EXCEEDS_GROSS_CODE)).toBe(
+      platformFeeRejectedState.message
+    );
+  });
+
+  it('maps other 400/422 refusals to the validation message', () => {
+    expect(scheduleRecommendationDecisionErrorMessage(400)).toContain('tidak dapat diproses');
+    expect(scheduleRecommendationDecisionErrorMessage(422, 'slots invalid', 'other_code')).toContain('tidak dapat diproses');
+    expect(scheduleRecommendationDecisionErrorMessage(422, 'slots invalid', 'other_code')).not.toContain('slots invalid');
+  });
+
+  it('maps server errors to the unavailable message without leaking backend text', () => {
+    expect(scheduleRecommendationDecisionErrorMessage(500, 'ERROR: deadlock')).toContain('tidak tersedia');
+    expect(scheduleRecommendationDecisionErrorMessage(500, 'ERROR: deadlock')).not.toContain('deadlock');
+  });
+
+  it('reports network failures without backend text', () => {
+    expect(scheduleRecommendationDecisionErrorMessage(0)).toContain('tidak tersedia');
   });
 });

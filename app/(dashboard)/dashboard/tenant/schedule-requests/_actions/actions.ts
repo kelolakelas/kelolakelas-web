@@ -6,6 +6,8 @@ import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/ga
 import {
   normalizeApprovePayment,
   scheduleRequestDecisionErrorMessage,
+  scheduleRequestSlotSchema,
+  scheduleRequestTimeForBackend,
 } from '@/lib/schedule-request';
 import { TENANT_SCHEDULE_REQUESTS_PATH } from '../_lib/schema';
 
@@ -134,13 +136,17 @@ export async function approveScheduleRequest(
 }
 
 /**
- * Rejects one pending private schedule request of the caller's tenant
- * (KEL-110).
+ * Rejects one pending private schedule request of the caller's tenant,
+ * optionally with recommended alternative slots (KEL-116).
  *
  * The reason is optional and capped at 2000 characters, matching the backend
  * validation; a blank reason is omitted from the body rather than sent as an
- * empty string. On success the page is revalidated so the row re-renders as
- * rejected.
+ * empty string. The recommended slots arrive as a JSON array in the `slots`
+ * field (the dialog pre-validates them with the shared slot schema); each
+ * one is re-validated here and expanded to the backend `HH:MM:SS` format
+ * before sending, because the academic service parses times strictly and
+ * answers 422 for `HH:MM`. On success the page is revalidated so the row
+ * re-renders as rejected.
  */
 export async function rejectScheduleRequest(
   _previous: ScheduleRequestDecisionState,
@@ -156,6 +162,14 @@ export async function rejectScheduleRequest(
     return { success: false, message: 'Alasan penolakan maksimal 2000 karakter.' };
   }
 
+  const recommendedSlots = parseRecommendedSlots(formData.get('slots'));
+  if (recommendedSlots === null) {
+    return { success: false, message: 'Slot rekomendasi tidak valid. Periksa hari dan jam setiap slot.' };
+  }
+  if (recommendedSlots !== undefined && recommendedSlots.length === 0) {
+    return { success: false, message: 'Tambahkan minimal satu slot rekomendasi atau tolak tanpa rekomendasi.' };
+  }
+
   try {
     const headers = await getAuthHeaders();
     const response = await fetch(
@@ -163,7 +177,18 @@ export async function rejectScheduleRequest(
       {
         method: 'POST',
         headers,
-        body: JSON.stringify(reason ? { reason } : {}),
+        body: JSON.stringify({
+          ...(reason ? { reason } : {}),
+          ...(recommendedSlots !== undefined
+            ? {
+                recommended_slots: recommendedSlots.map((slot) => ({
+                  day_of_week: slot.day_of_week,
+                  start_time: scheduleRequestTimeForBackend(slot.start_time),
+                  end_time: scheduleRequestTimeForBackend(slot.end_time),
+                })),
+              }
+            : {}),
+        }),
         cache: 'no-store',
       }
     );
@@ -177,11 +202,48 @@ export async function rejectScheduleRequest(
     }
 
     revalidatePath(TENANT_SCHEDULE_REQUESTS_PATH);
-    return { success: true, message: 'Permintaan jadwal berhasil ditolak.' };
+    return {
+      success: true,
+      message:
+        recommendedSlots !== undefined
+          ? 'Permintaan jadwal berhasil ditolak dengan rekomendasi jadwal.'
+          : 'Permintaan jadwal berhasil ditolak.',
+    };
   } catch (error) {
     return {
       success: false,
       message: getGatewayConfigurationErrorMessage(error) || 'Penolakan belum dapat diproses. Coba lagi nanti.',
     };
   }
+}
+
+/**
+ * Reads the dialog's recommended slots from the `slots` form field (KEL-116).
+ *
+ * Returns `undefined` when the dialog sent no slots (a plain rejection),
+ * `null` when the payload cannot be parsed or a slot fails the shared slot
+ * schema, and the validated drafts otherwise. Validation mirrors the client
+ * pre-check so a tampered body cannot smuggle an invalid slot to the
+ * backend.
+ */
+function parseRecommendedSlots(
+  value: FormDataEntryValue | null
+): { day_of_week: number; start_time: string; end_time: string }[] | undefined | null {
+  if (value === null) return undefined;
+  const raw = String(value).trim();
+  if (raw === '') return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const slots: { day_of_week: number; start_time: string; end_time: string }[] = [];
+  for (const item of parsed) {
+    const result = scheduleRequestSlotSchema.safeParse(item);
+    if (!result.success) return null;
+    slots.push(result.data);
+  }
+  return slots;
 }

@@ -96,6 +96,16 @@ function rejectForm(id = REQUEST_ID, reason?: string): FormData {
   return formData;
 }
 
+function rejectWithRecommendationForm(
+  id = REQUEST_ID,
+  reason: string | undefined,
+  slots: unknown
+): FormData {
+  const formData = rejectForm(id, reason);
+  formData.set('slots', typeof slots === 'string' ? slots : JSON.stringify(slots));
+  return formData;
+}
+
 const savedGateway = process.env.GATEWAY_API_URL;
 
 beforeEach(() => {
@@ -291,6 +301,140 @@ describe('rejectScheduleRequest', () => {
 
     expect(state.success).toBe(false);
     expect(state.message).toContain('GATEWAY_API_URL');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('rejectScheduleRequest with a recommendation (KEL-116)', () => {
+  it('rejects with recommended slots expanded to the backend HH:MM:SS format', async () => {
+    respondWith(200, rejectSuccessBody());
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, 'Slot penuh.', [
+        { day_of_week: 2, start_time: '10:00', end_time: '11:00' },
+        { day_of_week: 4, start_time: '13:30', end_time: '14:30' },
+      ])
+    );
+
+    expect(state.success).toBe(true);
+    expect(state.message).toContain('rekomendasi');
+
+    const { url, init } = lastRequest();
+    expect(url).toBe(REJECT_PATH);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({
+      reason: 'Slot penuh.',
+      recommended_slots: [
+        { day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' },
+        { day_of_week: 4, start_time: '13:30:00', end_time: '14:30:00' },
+      ],
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(TENANT_SCHEDULE_REQUESTS_PATH);
+  });
+
+  it('rejects with a recommendation and no reason by omitting the reason field', async () => {
+    respondWith(200, { status: 'success', data: { id: REQUEST_ID, status: 'rejected' } });
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, undefined, [
+        { day_of_week: 2, start_time: '10:00', end_time: '11:00' },
+      ])
+    );
+
+    expect(state.success).toBe(true);
+    const { init } = lastRequest();
+    expect(JSON.parse(String(init.body))).toEqual({
+      recommended_slots: [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }],
+    });
+  });
+
+  it('keeps a plain rejection free of recommended slots', async () => {
+    respondWith(200, rejectSuccessBody());
+
+    const state = await rejectScheduleRequest({ success: false, message: '' }, rejectForm(REQUEST_ID, 'Slot penuh.'));
+
+    expect(state.success).toBe(true);
+    expect(state.message).toContain('ditolak');
+    expect(state.message).not.toContain('rekomendasi');
+    const { init } = lastRequest();
+    expect(JSON.parse(String(init.body))).toEqual({ reason: 'Slot penuh.' });
+  });
+
+  it('refuses an empty recommendation without calling the backend', async () => {
+    respondWith(200, rejectSuccessBody());
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, 'Slot penuh.', [])
+    );
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('minimal satu slot rekomendasi');
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an end time that is not after the start', [{ day_of_week: 2, start_time: '11:00', end_time: '10:00' }]],
+    ['an equal start and end', [{ day_of_week: 2, start_time: '10:00', end_time: '10:00' }]],
+    ['a day outside ISO 1-7', [{ day_of_week: 8, start_time: '10:00', end_time: '11:00' }]],
+  ])('refuses %s without calling the backend', async (_label, slots) => {
+    respondWith(200, rejectSuccessBody());
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, undefined, slots)
+    );
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('Slot rekomendasi tidak valid');
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unparseable slots payload without calling the backend', async () => {
+    respondWith(200, rejectSuccessBody());
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, undefined, 'bukan json')
+    );
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('Slot rekomendasi tidak valid');
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('maps a 422 slot refusal from the backend without leaking backend text', async () => {
+    respondWith(422, { status: 'error', message: 'slots must have valid times', data: null });
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, undefined, [
+        { day_of_week: 2, start_time: '10:00', end_time: '11:00' },
+      ])
+    );
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('tidak dapat diproses');
+    expect(state.message).not.toContain('slots must have valid times');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('maps a 409 on a recommendation reject to the already-changed message', async () => {
+    respondWith(409, { status: 'error', message: 'request is no longer pending', data: null });
+
+    const state = await rejectScheduleRequest(
+      { success: false, message: '' },
+      rejectWithRecommendationForm(REQUEST_ID, undefined, [
+        { day_of_week: 2, start_time: '10:00', end_time: '11:00' },
+      ])
+    );
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('statusnya sudah berubah');
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
