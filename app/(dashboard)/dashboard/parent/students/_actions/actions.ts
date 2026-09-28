@@ -52,7 +52,7 @@ export async function createStudent(_previous: StudentActionState, formData: For
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.status !== 'success') return { success: false, message: responseMessage(response, result) };
     revalidatePath(STUDENTS_PATH);
-    return { success: true, message: 'Profil student berhasil dibuat.' };
+    return { success: true, message: 'Profil student berhasil dibuat.', data: result.data?.student || result.data };
   } catch (error) {
     return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan student sedang tidak tersedia. Coba lagi nanti.' };
   }

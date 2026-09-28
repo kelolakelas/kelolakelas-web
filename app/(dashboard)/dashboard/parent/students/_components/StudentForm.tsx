@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createStudent, updateStudent } from '../_actions/actions';
 import {
@@ -30,9 +30,18 @@ function FieldError({ errors, name }: { errors?: Record<string, string[]>; name:
   return message ? <p className="mt-1 text-sm text-[#b42318]">{message}</p> : null;
 }
 
-export function StudentForm({ student, onCancel }: { student?: Student; onCancel: () => void }) {
+export function StudentForm({ student, onCancel, onSuccess, autoFocus = false }: {
+  student?: Student;
+  onCancel: () => void;
+  onSuccess?: (student: Student) => void;
+  autoFocus?: boolean;
+}) {
   const editing = Boolean(student);
   const [state, formAction] = useActionState(editing ? updateStudent : createStudent, initialState);
+
+  useEffect(() => {
+    if (!editing && state.success && state.data && onSuccess) onSuccess(state.data);
+  }, [editing, onSuccess, state]);
 
   return (
     <form action={formAction} className="space-y-5 rounded-3xl border border-[#dfe3d7] bg-white p-5 shadow-sm sm:p-7">
@@ -57,7 +66,7 @@ export function StudentForm({ student, onCancel }: { student?: Student; onCancel
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="first_name" className="text-sm font-bold">Nama depan <span aria-hidden="true">*</span></label>
-          <input id="first_name" name="first_name" required maxLength={255} defaultValue={student?.first_name || ''} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3" />
+          <input id="first_name" name="first_name" required maxLength={255} autoFocus={autoFocus} defaultValue={student?.first_name || ''} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3" />
           <FieldError errors={state.errors} name="first_name" />
         </div>
         <div>

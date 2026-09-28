@@ -54,6 +54,7 @@ export type StudentActionState = {
   success: boolean;
   message: string;
   errors?: Record<string, string[]>;
+  data?: Student;
 };
 
 export function studentPayload(input: StudentFormInput, parentId?: string) {
