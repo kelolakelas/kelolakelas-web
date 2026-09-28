@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { CancelScheduleRequestButton } from './CancelScheduleRequestButton';
+import { AcceptRecommendationButton, DeclineRecommendationButton } from './ScheduleRecommendationActions';
 import {
   findMatchingEnrollment,
+  hasPendingRecommendation,
+  scheduleRecommendationStatusLabel,
   scheduleRequestStatusLabel,
   scheduleSlotLabel,
   type EnrollmentLinkCandidate,
@@ -15,6 +18,7 @@ const tones: Record<string, string> = {
   pending: 'bg-[#fff3d6] text-[#815d00]',
   approved: 'bg-[#e9f5df] text-[#356318]',
   rejected: 'bg-[#fde9e7] text-[#9b2922]',
+  declined: 'bg-[#fde9e7] text-[#9b2922]',
   cancelled: 'bg-[#eef3f1] text-[#365047]',
 };
 
@@ -25,12 +29,17 @@ const BILLING_CYCLE_LABELS: Record<string, string> = {
 };
 
 /**
- * Parent's schedule requests for the class being viewed (KEL-109).
+ * Parent's schedule requests for the class being viewed (KEL-109, extended
+ * KEL-116 with the recommendation round-trip).
  *
  * - Pending rows offer cancellation; the request stays listed as pending until
  *   the backend decides.
  * - Rejected rows show the tenant's reason when the backend sends one, plus a
  *   resubmit option that refills the same form above (via `onResubmit`).
+ * - Rejected rows carrying `recommended_slots` additionally show the
+ *   tenant-proposed slots: while the recommendation waits, the parent can
+ *   accept it (redirect to payment) or decline it; a declined row states the
+ *   outcome and offers no further recommendation action.
  * - Approved rows link to the matching enrollment on the enrollment status
  *   screen (KEL-53), matched via student + class; when no enrollment row is
  *   loaded the approval is shown without a link rather than a guessed one.
@@ -77,6 +86,33 @@ export function ScheduleRequestList({
                       <p className="mt-2 text-sm font-medium text-[#8e2119]">
                         Alasan penolakan: {request.rejection_reason}
                       </p>
+                    )}
+                    {!!request.recommended_slots?.length && (
+                      <div className="mt-2 rounded-xl bg-[#eef3dd] p-3 text-sm">
+                        <p className="font-bold text-[#31463d]">Jadwal rekomendasi dari penyelenggara</p>
+                        <ul className="mt-1 space-y-1 text-[#52615b]">
+                          {request.recommended_slots.map((slot, index) => (
+                            <li key={index}>{scheduleSlotLabel(slot) || 'Slot tidak valid'}</li>
+                          ))}
+                        </ul>
+                        {hasPendingRecommendation(request) ? (
+                          <>
+                            <p className="mt-1 font-medium text-[#365047]">
+                              {scheduleRecommendationStatusLabel('pending')}. Pilih salah satu:
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <AcceptRecommendationButton requestId={request.id} />
+                              <DeclineRecommendationButton requestId={request.id} />
+                            </div>
+                          </>
+                        ) : (
+                          <p className="mt-1 font-medium text-[#365047]">
+                            {request.status === 'declined'
+                              ? 'Anda menolak rekomendasi ini.'
+                              : scheduleRecommendationStatusLabel('accepted')}
+                          </p>
+                        )}
+                      </div>
                     )}
                     {request.status === 'approved' &&
                       (match ? (

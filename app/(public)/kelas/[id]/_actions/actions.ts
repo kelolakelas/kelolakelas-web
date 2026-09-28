@@ -7,6 +7,8 @@ import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClie
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
 import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState } from '@/lib/enrollment';
 import {
+  normalizeApprovePayment,
+  scheduleRecommendationDecisionErrorMessage,
   scheduleRequestCancelErrorMessage,
   scheduleRequestErrorMessage,
   scheduleRequestFormSchema,
@@ -204,5 +206,121 @@ export async function cancelScheduleRequest(_previous: EnrollmentActionState, fo
     return { success: true, message: 'Permintaan jadwal berhasil dibatalkan.' };
   } catch (error) {
     return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan permintaan jadwal sedang tidak tersedia. Coba lagi nanti.' };
+  }
+}
+
+/**
+ * Accepts the tenant's recommended slots on one of the signed-in parent's own
+ * rejected schedule requests (KEL-116).
+ *
+ * The accept path shares the approval purchase flow: on success the backend
+ * answers the same `{enrollment, payment}` payload, and the parent is
+ * redirected straight to the billing checkout link — gated to http(s) like
+ * every other checkout redirect. A missing or unusable link is reported
+ * instead of redirecting anywhere. Like `enrollInClass`, the redirect throws;
+ * anything returned is a failure state. On success the class detail page is
+ * revalidated before redirecting so the row re-renders as approved.
+ */
+export async function acceptScheduleRecommendation(
+  _previous: EnrollmentActionState,
+  formData: FormData
+): Promise<EnrollmentActionState> {
+  const requestId = formData.get('request_id')?.toString().trim() || '';
+  if (!UUID_PATTERN.test(requestId)) {
+    return { success: false, message: 'ID permintaan jadwal tidak valid.' };
+  }
+
+  let destination: string | null = null;
+  try {
+    const token = (await cookies()).get(AUTH_COOKIE)?.value;
+    const session = getSessionIdentityFromToken(token);
+    if (!session?.isParent) return { success: false, message: 'Hanya parent yang login dapat menerima rekomendasi jadwal.' };
+
+    const response = await fetch(
+      `${getGatewayBaseUrl()}/api/v1/schedule-requests/${encodeURIComponent(requestId)}/recommendation/accept`,
+      {
+        method: 'POST',
+        headers: await withGatewayClientIp({
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        cache: 'no-store',
+      }
+    );
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.status !== 'success') {
+      return {
+        success: false,
+        message: scheduleRecommendationDecisionErrorMessage(response.status, result.message, result.code),
+      };
+    }
+
+    const payment = normalizeApprovePayment(result.data);
+    revalidatePath('/kelas');
+    destination = payment?.url ?? null;
+    if (!destination) {
+      return {
+        success: false,
+        message: 'Rekomendasi diterima tetapi URL checkout belum tersedia. Silakan buka riwayat enrollment Anda.',
+      };
+    }
+  } catch (error) {
+    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan rekomendasi jadwal sedang tidak tersedia. Coba lagi nanti.' };
+  }
+
+  if (!destination) return { success: false, message: 'URL checkout belum tersedia. Coba lagi dari detail kelas.' };
+  redirect(destination);
+}
+
+/**
+ * Declines the tenant's recommended slots on one of the signed-in parent's
+ * own rejected schedule requests (KEL-116).
+ *
+ * The backend owns the transition through the caller's parent id; the
+ * browser supplies only the request id. On success the class detail page is
+ * revalidated so the row re-renders as declined and the accept control is
+ * gone.
+ */
+export async function declineScheduleRecommendation(
+  _previous: EnrollmentActionState,
+  formData: FormData
+): Promise<EnrollmentActionState> {
+  const requestId = formData.get('request_id')?.toString().trim() || '';
+  if (!UUID_PATTERN.test(requestId)) {
+    return { success: false, message: 'ID permintaan jadwal tidak valid.' };
+  }
+
+  try {
+    const token = (await cookies()).get(AUTH_COOKIE)?.value;
+    const session = getSessionIdentityFromToken(token);
+    if (!session?.isParent) return { success: false, message: 'Hanya parent yang login dapat menolak rekomendasi jadwal.' };
+
+    const response = await fetch(
+      `${getGatewayBaseUrl()}/api/v1/schedule-requests/${encodeURIComponent(requestId)}/recommendation/decline`,
+      {
+        method: 'POST',
+        headers: await withGatewayClientIp({
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        cache: 'no-store',
+      }
+    );
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.status !== 'success') {
+      return {
+        success: false,
+        message: scheduleRecommendationDecisionErrorMessage(response.status, result.message, result.code),
+      };
+    }
+
+    const classId = typeof result.data?.class_id === 'string' && UUID_PATTERN.test(result.data.class_id) ? result.data.class_id : null;
+    if (classId) revalidatePath(`/kelas/${classId}`);
+    else revalidatePath('/kelas');
+    return { success: true, message: 'Rekomendasi jadwal berhasil ditolak.' };
+  } catch (error) {
+    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan rekomendasi jadwal sedang tidak tersedia. Coba lagi nanti.' };
   }
 }

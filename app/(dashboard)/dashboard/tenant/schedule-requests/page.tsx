@@ -101,7 +101,7 @@ async function ScheduleRequestsContent({ searchParams }: Props) {
           className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm font-medium text-amber-900 dark:text-amber-200"
         >
           Filter tidak valid. Status permintaan jadwal hanya menerima pending, approved,
-          rejected, atau cancelled.
+          rejected, declined, atau cancelled.
         </p>
       )}
 

@@ -135,4 +135,50 @@ describe('ScheduleRequestTable', () => {
     expect(html).toContain('Tidak ada permintaan jadwal pada status ini');
     expect(html).toContain('Ubah filter status untuk melihat permintaan jadwal lain.');
   });
+
+  it('shows a waiting recommendation with its slots on a rejected row', () => {
+    const html = render([
+      row({
+        status: 'rejected',
+        rejection_reason: 'Slot penuh.',
+        recommended_slots: [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }],
+      }),
+    ]);
+
+    expect(html).toContain('Rekomendasi jadwal');
+    expect(html).toContain('Selasa, 10:00–11:00');
+    expect(html).toContain('Menunggu keputusan parent');
+  });
+
+  it('shows the accepted recommendation state on an approved row with slots', () => {
+    const html = render([
+      row({
+        status: 'approved',
+        recommended_slots: [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }],
+      }),
+    ]);
+
+    expect(html).toContain('Disetujui');
+    expect(html).toContain('Rekomendasi diterima');
+  });
+
+  it('shows the declined recommendation state with its tone', () => {
+    const html = render([
+      row({
+        status: 'declined',
+        rejection_reason: 'Slot penuh.',
+        recommended_slots: [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }],
+      }),
+    ]);
+
+    expect(html).toContain('Rekomendasi ditolak');
+    expect(html).toContain('Selasa, 10:00–11:00');
+  });
+
+  it('renders no recommendation block on rows without one', () => {
+    const html = render([row({ status: 'rejected', rejection_reason: 'Slot penuh.' })]);
+
+    expect(html).toContain('Ditolak');
+    expect(html).not.toContain('Rekomendasi jadwal');
+  });
 });

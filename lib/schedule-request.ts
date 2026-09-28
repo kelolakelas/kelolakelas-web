@@ -25,19 +25,37 @@ import { WEEKDAY_NAMES } from './enrollment-schedule';
  *   parent or decided by another member), 422 (billing refused the invoice,
  *   including the `platform_fee_exceeds_gross` case KEL-106 already handles
  *   for enrollments).
- * - POST /api/v1/schedule-requests/{id}/reject body {reason? max 2000}
+ * - POST /api/v1/schedule-requests/{id}/reject body {reason? max 2000,
+ *   recommended_slots?: [{day_of_week ISO 1-7, start_time, end_time}]}
  *   answers 200 with the updated request. The same 403/404/409 refusals
- *   apply.
+ *   apply. Slot validation matches the create contract.
+ *
+ * KEL-116 adds the recommendation round-trip (guard `enrollment:update` for
+ * the tenant side, parent ownership for the parent side):
+ *
+ * - A rejection carrying `recommended_slots` keeps the request `rejected`
+ *   but with the tenant's alternative slots attached; list/detail expose
+ *   `recommended_slots` alongside `rejection_reason`.
+ * - POST /api/v1/schedule-requests/{id}/recommendation/accept (owning
+ *   parent only) answers 200 with the same approval checkout shape as
+ *   approve: `{status, data: {enrollment, payment: {transaction_id,
+ *   checkout_session_url, gross_amount, status}}}`. Refusals: 403 (not the
+ *   owner), 404 (unknown id), 409 (already accepted, declined, or
+ *   otherwise moved on), 422 (billing refused the invoice, including the
+ *   `platform_fee_exceeds_gross` case).
+ * - POST /api/v1/schedule-requests/{id}/recommendation/decline (owning
+ *   parent only) moves the row to `declined`; a later accept answers 409.
  *
  * Every response is `{status, data}`. A request carries id, class_id,
  * student_id, billing_cycle, slots, note, status
- * (pending/approved/rejected/cancelled), rejection_reason and decided_at.
+ * (pending/approved/rejected/declined/cancelled), rejection_reason,
+ * recommended_slots and decided_at.
  * Tenant rows additionally carry tenant_id, parent_id, parent_email and
  * created_at. On the parent surface the tenant's reason is display-only;
  * deciding (approve/reject) happens on the tenant dashboard (KEL-110).
  */
 
-export const SCHEDULE_REQUEST_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const;
+export const SCHEDULE_REQUEST_STATUSES = ['pending', 'approved', 'rejected', 'declined', 'cancelled'] as const;
 
 export type ScheduleRequestStatus = (typeof SCHEDULE_REQUEST_STATUSES)[number];
 
@@ -56,6 +74,12 @@ export type ScheduleRequest = {
   note?: string | null;
   status: ScheduleRequestStatus;
   rejection_reason?: string | null;
+  /**
+   * Tenant-proposed alternative slots attached by a rejection with a
+   * recommendation (KEL-116). Present only on `rejected` rows whose
+   * rejection carried slots; absent everywhere else.
+   */
+  recommended_slots?: ScheduleRequestSlot[];
   decided_at?: string | null;
   /**
    * Tenant-scoped rows (KEL-110): the parent list never carries these, so
@@ -151,11 +175,87 @@ const STATUS_LABELS: Record<ScheduleRequestStatus, string> = {
   pending: 'Menunggu peninjauan',
   approved: 'Disetujui',
   rejected: 'Ditolak',
+  declined: 'Rekomendasi ditolak',
   cancelled: 'Dibatalkan',
 };
 
 export function scheduleRequestStatusLabel(status: string): string {
   return (STATUS_LABELS as Record<string, string>)[status] || status;
+}
+
+/**
+ * Keeps only well-formed recommended slots from a network row (KEL-116).
+ *
+ * The day must be an ISO integer 1–7 and both times strings; anything else
+ * is dropped rather than rendered as a guessed label. Times longer than
+ * `HH:MM` (the backend stores `HH:MM:SS`) pass through untouched — the
+ * display helper only reads the first five characters. Absent or empty
+ * input normalizes to `undefined` so the UI can tell "no recommendation"
+ * apart from "a recommendation with no usable slot".
+ */
+export function normalizeRecommendedSlots(value: unknown): ScheduleRequestSlot[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const slots = value.flatMap((item): ScheduleRequestSlot[] => {
+    if (!item || typeof item !== 'object') return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.day_of_week !== 'number' || !Number.isInteger(record.day_of_week)) return [];
+    if (record.day_of_week < 1 || record.day_of_week > 7) return [];
+    if (typeof record.start_time !== 'string' || typeof record.end_time !== 'string') return [];
+    if (record.start_time === '' || record.end_time === '') return [];
+    return [{ day_of_week: record.day_of_week, start_time: record.start_time, end_time: record.end_time }];
+  });
+  return slots.length > 0 ? slots : undefined;
+}
+
+/**
+ * Backend time format for a validated slot draft (KEL-116).
+ *
+ * The academic service parses times strictly as `HH:MM:SS`, while the web
+ * form inputs (`<input type="time">`) and the zod schema work in `HH:MM`.
+ * A validated draft is therefore expanded with `:00` when it carries only
+ * two parts, mirroring the tenant class-schedule payload. Unknown shapes
+ * pass through untouched so a malformed value fails loudly at the backend
+ * instead of being silently rewritten.
+ */
+export function scheduleRequestTimeForBackend(value: string): string {
+  return value.split(':').length === 2 ? `${value}:00` : value;
+}
+
+export type ScheduleRecommendationStatus = 'none' | 'pending' | 'accepted' | 'declined';
+
+const RECOMMENDATION_STATUS_LABELS: Record<Exclude<ScheduleRecommendationStatus, 'none'>, string> = {
+  pending: 'Menunggu keputusan parent',
+  accepted: 'Rekomendasi diterima',
+  declined: 'Rekomendasi ditolak parent',
+};
+
+/**
+ * Where a tenant's recommendation stands from the reader's side (KEL-116).
+ *
+ * - `declined` rows: the parent turned the recommendation down.
+ * - `approved` rows with slots attached: the parent accepted the
+ *   recommendation (acceptance moves through the same purchase path as an
+ *   approval, so the row reads approved).
+ * - `rejected` rows with slots attached: the recommendation still waits.
+ * - anything else: no recommendation involved.
+ */
+export function scheduleRecommendationStatus(request: Pick<ScheduleRequest, 'status' | 'recommended_slots'>): ScheduleRecommendationStatus {
+  if (!request.recommended_slots || request.recommended_slots.length === 0) return 'none';
+  if (request.status === 'declined') return 'declined';
+  if (request.status === 'approved') return 'accepted';
+  if (request.status === 'rejected') return 'pending';
+  return 'none';
+}
+
+/** Indonesian label of a non-`none` recommendation status; null when there is none. */
+export function scheduleRecommendationStatusLabel(status: ScheduleRecommendationStatus): string | null {
+  if (status === 'none') return null;
+  return RECOMMENDATION_STATUS_LABELS[status];
+}
+
+/** Whether a rejected-with-recommendation row still awaits the parent's decision. */
+export function hasPendingRecommendation(request: Pick<ScheduleRequest, 'status' | 'recommended_slots'>): boolean {
+  return request.status === 'rejected' && !!request.recommended_slots && request.recommended_slots.length > 0;
 }
 
 /** Keeps only records the list UI can render; malformed rows are dropped, never thrown on. */
@@ -182,6 +282,7 @@ export function normalizeScheduleRequests(value: unknown): ScheduleRequest[] {
         note: typeof record.note === 'string' ? record.note : null,
         status: record.status as ScheduleRequestStatus,
         rejection_reason: typeof record.rejection_reason === 'string' ? record.rejection_reason : null,
+        recommended_slots: normalizeRecommendedSlots(record.recommended_slots),
         decided_at: typeof record.decided_at === 'string' ? record.decided_at : null,
         tenant_id: typeof record.tenant_id === 'string' ? record.tenant_id : null,
         parent_id: typeof record.parent_id === 'string' ? record.parent_id : null,
@@ -302,6 +403,38 @@ export function scheduleRequestDecisionErrorMessage(
   if (status >= 500) return DECISION_UNAVAILABLE_MESSAGE;
   const trimmed = backendMessage?.trim();
   return trimmed ? trimmed : DECISION_UNAVAILABLE_MESSAGE;
+}
+
+const RECOMMENDATION_SESSION_MESSAGE = 'Hanya parent pemilik permintaan yang login dapat memproses rekomendasi ini.';
+const RECOMMENDATION_NOT_FOUND_MESSAGE = 'Rekomendasi jadwal ini tidak ditemukan pada akun Anda. Muat ulang halaman ini.';
+const RECOMMENDATION_CONFLICT_MESSAGE =
+  'Rekomendasi ini sudah tidak dapat diproses karena statusnya sudah berubah (sudah diterima, ditolak, atau diproses ulang). Muat ulang halaman untuk melihat status terbaru.';
+const RECOMMENDATION_VALIDATION_MESSAGE = 'Rekomendasi ini tidak dapat diproses. Muat ulang halaman lalu coba lagi.';
+const RECOMMENDATION_UNAVAILABLE_MESSAGE = 'Layanan rekomendasi jadwal sedang tidak tersedia. Coba lagi nanti.';
+
+/**
+ * Maps a refused parent accept/decline call onto what the parent is told
+ * (KEL-116).
+ *
+ * The accept path shares the approval purchase flow, so a 422 carrying the
+ * KEL-106 machine-readable code reuses the platform-fee wording; any other
+ * refusal body is replaced, never passed through. 409 means the row left
+ * the actionable state while the parent was deciding: the recommendation
+ * was already accepted or declined, or the request moved on.
+ */
+export function scheduleRecommendationDecisionErrorMessage(
+  status: number,
+  backendMessage?: string | null,
+  code?: string | null
+): string {
+  if (status === 401 || status === 403) return RECOMMENDATION_SESSION_MESSAGE;
+  if (status === 404) return RECOMMENDATION_NOT_FOUND_MESSAGE;
+  if (status === 409) return RECOMMENDATION_CONFLICT_MESSAGE;
+  if (status === 422 && code === PLATFORM_FEE_EXCEEDS_GROSS_CODE) return platformFeeRejectedState.message;
+  if (status === 400 || status === 422) return RECOMMENDATION_VALIDATION_MESSAGE;
+  if (status >= 500) return RECOMMENDATION_UNAVAILABLE_MESSAGE;
+  const trimmed = backendMessage?.trim();
+  return trimmed ? trimmed : RECOMMENDATION_UNAVAILABLE_MESSAGE;
 }
 
 /**

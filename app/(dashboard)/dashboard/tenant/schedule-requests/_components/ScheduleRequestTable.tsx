@@ -1,6 +1,9 @@
 import {
+  scheduleRecommendationStatus,
+  scheduleRecommendationStatusLabel,
   scheduleRequestStatusLabel,
   scheduleSlotLabel,
+  type ScheduleRequest,
 } from '@/lib/schedule-request';
 import {
   scheduleRequestBillingCycleLabel,
@@ -17,6 +20,7 @@ const STATUS_TONES: Record<string, string> = {
   pending: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
   approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
   rejected: 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300',
+  declined: 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300',
   cancelled: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
 };
 
@@ -44,6 +48,39 @@ function SlotList({ slots }: { slots: TenantScheduleRequestRow['request']['slots
         <li key={index}>{scheduleSlotLabel(slot) || 'Slot tidak valid'}</li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Tenant's recommendation and where it stands (KEL-116).
+ *
+ * Rendered on rows whose rejection carried alternative slots: the slots
+ * themselves plus whether the parent still has to decide, already accepted
+ * (the row reads approved then), or declined. Rows without a recommendation
+ * render nothing.
+ */
+function RecommendationStatus({ request }: { request: ScheduleRequest }) {
+  const status = scheduleRecommendationStatus(request);
+  const label = scheduleRecommendationStatusLabel(status);
+  if (!label || !request.recommended_slots) return null;
+
+  const tone =
+    status === 'accepted'
+      ? 'text-emerald-700 dark:text-emerald-300'
+      : status === 'declined'
+        ? 'text-red-700 dark:text-red-300'
+        : 'text-blue-700 dark:text-blue-300';
+
+  return (
+    <div>
+      <span className="block text-[11px] text-gray-500 dark:text-gray-400">
+        Rekomendasi jadwal
+      </span>
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        <SlotList slots={request.recommended_slots} />
+      </span>
+      <span className={`mt-0.5 block font-medium ${tone}`}>{label}</span>
+    </div>
   );
 }
 
@@ -142,6 +179,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                   Alasan penolakan: {request.rejection_reason}
                 </p>
               )}
+              <RecommendationStatus request={request} />
             </div>
 
             {request.status === 'pending' && (
@@ -225,6 +263,9 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                       Alasan penolakan: {request.rejection_reason}
                     </span>
                   )}
+                  <div className="mt-1 max-w-xs text-xs">
+                    <RecommendationStatus request={request} />
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   {request.status === 'pending' ? (

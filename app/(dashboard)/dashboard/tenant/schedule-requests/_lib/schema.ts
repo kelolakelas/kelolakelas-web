@@ -31,9 +31,11 @@ export const TENANT_SCHEDULE_REQUESTS_PATH = '/dashboard/tenant/schedule-request
  *
  * The vocabulary matches `SCHEDULE_REQUEST_STATUSES` in
  * `lib/schedule-request`; the filter form and the request builder share this
- * single schema instead of repeating the strings.
+ * single schema instead of repeating the strings. `declined` (KEL-116) is a
+ * parent-side terminal state of a recommendation that still belongs to this
+ * tenant's queue.
  */
-export const scheduleRequestStatusFilterSchema = z.enum(['pending', 'approved', 'rejected', 'cancelled']);
+export const scheduleRequestStatusFilterSchema = z.enum(['pending', 'approved', 'rejected', 'declined', 'cancelled']);
 
 export type ScheduleRequestStatusFilter = z.infer<typeof scheduleRequestStatusFilterSchema>;
 

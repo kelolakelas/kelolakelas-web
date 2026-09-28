@@ -212,3 +212,84 @@ describe('RejectScheduleRequestDialog', () => {
     expect(ids).toContain(`desktop-reject-schedule-request-reason-${REQUEST_ID}`);
   });
 });
+
+describe('RejectScheduleRequestDialog with a recommendation (KEL-116)', () => {
+  function openDialog() {
+    render(<RejectScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="mobile" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Tolak' }));
+  }
+
+  function chooseRecommendation() {
+    fireEvent.click(screen.getByLabelText('Tolak dengan rekomendasi jadwal'));
+  }
+
+  it('offers a plain reject and a reject-with-recommendation choice', () => {
+    openDialog();
+
+    expect(screen.getByLabelText('Tolak', { exact: true })).toBeTruthy();
+    expect(screen.getByLabelText('Tolak dengan rekomendasi jadwal')).toBeTruthy();
+    // Plain mode is the default: no slot inputs and no slots payload yet.
+    expect(screen.queryByText('Slot rekomendasi')).toBeNull();
+    expect(document.querySelector('input[name="slots"]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tolak permintaan' })).toBeTruthy();
+  });
+
+  it('reveals the slot editor and the slots payload in recommendation mode', () => {
+    const { container } = render(
+      <RejectScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="mobile" />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tolak' }));
+    chooseRecommendation();
+
+    expect(screen.getByText('Slot rekomendasi')).toBeTruthy();
+    expect(screen.getByLabelText('Hari')).toBeTruthy();
+    expect(screen.getByLabelText('Jam mulai')).toBeTruthy();
+    expect(screen.getByLabelText('Jam selesai')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tambah slot' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tolak dengan rekomendasi' })).toBeTruthy();
+
+    const payload = container.querySelector('input[name="slots"]') as HTMLInputElement;
+    expect(payload).toBeTruthy();
+    expect(JSON.parse(payload.value)).toEqual([{ day_of_week: 1, start_time: '', end_time: '' }]);
+  });
+
+  it('blocks a recommendation whose end is not after its start before sending', () => {
+    const { container } = render(
+      <RejectScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="mobile" />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tolak' }));
+    chooseRecommendation();
+
+    fireEvent.change(screen.getByLabelText('Jam mulai'), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText('Jam selesai'), { target: { value: '17:30' } });
+    const form = container.querySelector('dialog form');
+    if (!form) throw new Error('reject dialog form not rendered');
+    fireEvent.submit(form);
+
+    expect(screen.getByRole('alert').textContent).toContain('setelah jam mulai');
+  });
+
+  it('adds and removes recommendation slots', () => {
+    openDialog();
+    chooseRecommendation();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tambah slot' }));
+    expect(screen.getAllByLabelText('Hari')).toHaveLength(2);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Hapus slot ini' })[0]);
+    expect(screen.getAllByLabelText('Hari')).toHaveLength(1);
+  });
+
+  it('keeps the recommendation slot ids unique across the mobile and desktop copies', () => {
+    const { container } = render(
+      <>
+        <RejectScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="mobile" />
+        <RejectScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="desktop" />
+      </>
+    );
+    const ids = [...container.querySelectorAll('[id]')].map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain(`mobile-reject-schedule-request-mode-recommend-${REQUEST_ID}`);
+    expect(ids).toContain(`desktop-reject-schedule-request-mode-recommend-${REQUEST_ID}`);
+  });
+});

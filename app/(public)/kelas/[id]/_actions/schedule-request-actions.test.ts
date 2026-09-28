@@ -6,7 +6,7 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn(() => { throw new Error('RED
 const revalidatePath = vi.fn();
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }));
 
-const { createScheduleRequest, cancelScheduleRequest } = await import('./actions');
+const { createScheduleRequest, cancelScheduleRequest, acceptScheduleRecommendation, declineScheduleRecommendation } = await import('./actions');
 const { cookies } = await import('next/headers');
 
 const classId = '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11';
@@ -186,5 +186,142 @@ describe('cancelScheduleRequest', () => {
 
     expect(state.message).toContain('statusnya sudah berubah');
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('acceptScheduleRecommendation (KEL-116)', () => {
+  it('posts to the recommendation accept route and redirects to the checkout link', async () => {
+    respondWith(200, {
+      status: 'success',
+      data: {
+        enrollment: { id: 'enrollment-1', status: 'pending_payment' },
+        payment: { transaction_id: 'txn-1', checkout_session_url: 'https://pay.test/checkout/1', gross_amount: 150000, status: 'pending' },
+      },
+    });
+
+    let redirectTarget: string | null = null;
+    const { redirect } = await import('next/navigation');
+    vi.mocked(redirect).mockImplementationOnce(((url: string) => {
+      redirectTarget = url;
+      throw new Error('REDIRECT');
+    }) as never);
+
+    await expect(
+      acceptScheduleRecommendation({ success: false, message: '' }, cancelForm())
+    ).rejects.toThrow('REDIRECT');
+
+    const { url, init } = lastRequest();
+    expect(url).toBe(`http://gateway.test/api/v1/schedule-requests/${requestId}/recommendation/accept`);
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${token}`);
+    expect(init.body).toBeUndefined();
+    expect(redirectTarget).toBe('https://pay.test/checkout/1');
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it('reports a missing checkout link instead of redirecting anywhere', async () => {
+    respondWith(200, {
+      status: 'success',
+      data: { enrollment: { id: 'enrollment-1' }, payment: { checkout_session_url: 'notaurl', gross_amount: 0 } },
+    });
+
+    const state = await acceptScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('URL checkout');
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it('never accepts an identifier that is not a UUID over the network', async () => {
+    respondWith(200, { status: 'success', data: {} });
+
+    const state = await acceptScheduleRecommendation({ success: false, message: '' }, cancelForm('not-a-uuid'));
+
+    expect(state.message).toContain('ID permintaan jadwal tidak valid');
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('explains a 409 on accept as a recommendation that already changed', async () => {
+    respondWith(409, { status: 'error', message: 'recommendation was already declined', data: null });
+
+    const state = await acceptScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.success).toBe(false);
+    expect(state.message).toContain('statusnya sudah berubah');
+    expect(state.message).not.toContain('already declined');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('maps 401/403 to the owning-parent login message', async () => {
+    respondWith(403, { status: 'error', message: 'forbidden', data: null });
+
+    const state = await acceptScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.message).toContain('parent');
+    expect(state.message).not.toContain('forbidden');
+  });
+
+  it('never surfaces the raw server error text on accept', async () => {
+    respondWith(500, { status: 'error', message: 'ERROR: deadlock detected (SQLSTATE 40P01)', data: null });
+
+    const state = await acceptScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.message).not.toContain('deadlock');
+    expect(state.message).toContain('tidak tersedia');
+  });
+});
+
+describe('declineScheduleRecommendation (KEL-116)', () => {
+  it('posts to the recommendation decline route and confirms the declined state', async () => {
+    respondWith(200, { status: 'success', data: { id: requestId, class_id: classId, status: 'declined' } });
+
+    const state = await declineScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state).toEqual({ success: true, message: 'Rekomendasi jadwal berhasil ditolak.' });
+    const { url, init } = lastRequest();
+    expect(url).toBe(`http://gateway.test/api/v1/schedule-requests/${requestId}/recommendation/decline`);
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${token}`);
+    expect(init.body).toBeUndefined();
+    expect(revalidatePath).toHaveBeenCalledWith(`/kelas/${classId}`);
+  });
+
+  it('never declines an identifier that is not a UUID over the network', async () => {
+    respondWith(200, { status: 'success', data: {} });
+
+    const state = await declineScheduleRecommendation({ success: false, message: '' }, cancelForm('not-a-uuid'));
+
+    expect(state.message).toContain('ID permintaan jadwal tidak valid');
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('reports another parent\u2019s recommendation as not found', async () => {
+    respondWith(404, { status: 'error', message: 'Schedule request not found', data: null });
+
+    const state = await declineScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.message).toContain('tidak ditemukan');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('explains a 409 on decline as a recommendation that already changed', async () => {
+    respondWith(409, { status: 'error', message: 'recommendation was already accepted', data: null });
+
+    const state = await declineScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.message).toContain('statusnya sudah berubah');
+    expect(state.message).not.toContain('already accepted');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('never surfaces the raw server error text on decline', async () => {
+    respondWith(500, { status: 'error', message: 'ERROR: deadlock detected (SQLSTATE 40P01)', data: null });
+
+    const state = await declineScheduleRecommendation({ success: false, message: '' }, cancelForm());
+
+    expect(state.message).not.toContain('deadlock');
+    expect(state.message).toContain('tidak tersedia');
   });
 });
