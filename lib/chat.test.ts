@@ -13,6 +13,26 @@ describe('chat state', () => {
     expect(updateDelivery([optimistic], 'client', 'failed')[0].delivery).toBe('failed');
   });
 
+  it('orders optimistic and failed rows by instant across UTC and offset timestamps', () => {
+    const older = { ...message, id: 'older', client_message_id: 'older', created_at: '2026-09-29T02:19:40.92659+07:00' };
+    const failed = { ...message, id: 'failed', client_message_id: 'failed', created_at: '2026-09-28T19:20:40.927Z', delivery: 'failed' as const };
+    const sameInstant = { ...message, id: 'same', client_message_id: 'same', created_at: '2026-09-29T02:20:40.927+07:00' };
+    expect(mergeMessages([older], [failed, sameInstant]).map((row) => row.id)).toEqual(['older', 'failed', 'same']);
+    expect(mergeMessages([older], [{ ...failed, delivery: 'sending' }]).map((row) => row.id)).toEqual(['older', 'failed']);
+  });
+
+  it('keeps the newest conversation preview by instant, using id for a timestamp tie', () => {
+    const latest = { ...message, id: 'b', created_at: '2026-09-29T02:20:40+07:00' };
+    const current = { ...room, last_message: latest, last_message_at: latest.created_at };
+    const older = { ...message, id: 'z', created_at: '2026-09-28T19:19:40Z' };
+    const event = (row: ChatMessage) => ({ type: 'message.created' as const, conversation_id: 'room', message: row });
+    expect(applyChatEvent([current], event(older), 'me', null)[0].last_message).toEqual(latest);
+    const tiedEarlier = { ...message, id: 'a', created_at: '2026-09-28T19:20:40Z' };
+    expect(applyChatEvent([current], event(tiedEarlier), 'me', null)[0].last_message).toEqual(latest);
+    const tiedLater = { ...tiedEarlier, id: 'c' };
+    expect(applyChatEvent([current], event(tiedLater), 'me', null)[0].last_message).toEqual(tiedLater);
+  });
+
   it('applies message and read events, preserving other rooms', () => {
     const rooms = [room, { ...room, id: 'other' }];
     const event = { type: 'message.created' as const, conversation_id: 'room', message: { ...message, sender_user_id: 'them' } };

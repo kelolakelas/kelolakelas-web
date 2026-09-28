@@ -29,6 +29,7 @@ export function ChatInbox({ initial, userId, tenant }: { initial: ChatConversati
         setOlder((previous) => ({ ...previous, [id]: items.data.length === 100 }));
       }
     }
+    if (!list.error && list.data && (!id || (items && !items.error && items.data))) setError('');
   }, []);
 
   const select = useCallback(async (id: string) => {
@@ -94,6 +95,7 @@ export function ChatInbox({ initial, userId, tenant }: { initial: ChatConversati
         socket.onopen = () => {
           retry = 0;
           setConnection('connected');
+          setError('');
           void refresh(activeRef.current);
         };
         socket.onmessage = (message) => {
@@ -137,6 +139,7 @@ export function ChatInbox({ initial, userId, tenant }: { initial: ChatConversati
       setMessages((previous) => ({ ...previous, [id]: updateDelivery(previous[id] || [], clientId, 'failed') }));
     } else if (result.data) {
       const confirmed = result.data;
+      setError('');
       setMessages((previous) => ({ ...previous, [id]: mergeMessages(previous[id] || [], [confirmed]) }));
       void refresh(id);
     }

@@ -24,6 +24,10 @@ export type ChatEvent =
 
 export const CHAT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function compareMessages(a: ChatMessage, b: ChatMessage): number {
+  return Date.parse(a.created_at) - Date.parse(b.created_at) || a.id.localeCompare(b.id);
+}
+
 export function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   let merged = [...existing];
   for (const message of incoming) {
@@ -32,7 +36,7 @@ export function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]):
     merged = merged.filter((row) => row.id !== message.id && !(row.client_message_id && row.client_message_id === message.client_message_id && row.sender_user_id === message.sender_user_id));
     merged.push(message);
   }
-  return merged.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  return merged.sort(compareMessages);
 }
 
 export function updateDelivery(messages: ChatMessage[], clientId: string, delivery: 'sending' | 'failed'): ChatMessage[] {
@@ -49,7 +53,7 @@ export function applyChatEvent(conversations: ChatConversation[], event: ChatEve
   return conversations.map((c) => {
     if (c.id !== event.conversation_id) return c;
     if (c.last_message?.id === event.message.id) return c;
-    const newer = !c.last_message || event.message.created_at >= c.last_message.created_at;
+    const newer = !c.last_message || compareMessages(event.message, c.last_message) >= 0;
     return {
       ...c,
       last_message: newer ? event.message : c.last_message,
