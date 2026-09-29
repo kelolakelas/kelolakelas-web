@@ -24,3 +24,23 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer base {
+  /* KEL-114: elemen yang dapat diklik menampilkan cursor pointer. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  summary,
+  select:not(:disabled),
+  label:has(input[type='checkbox'], input[type='radio']) {
+    cursor: pointer;
+  }
+
+  /* KEL-114: elemen disabled menampilkan not-allowed. Utility
+     `disabled:cursor-not-allowed` yang sudah ada tetap menang karena
+     layer utilities berada di atas layer base. */
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
