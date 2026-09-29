@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { applyChatEvent, chatTitle, chatWebSocketUrl, mergeMessages, senderLabel, updateDelivery, type ChatConversation, type ChatEvent, type ChatMessage } from '@/lib/chat';
-import { createStaffChat, issueChatTicket, listChatConversations, listChatMessages, markChatRead, sendChatMessage } from '@/lib/chat-actions';
+import { createStaffChat, getChatConversation, issueChatTicket, listChatConversations, listChatMessages, markChatRead, sendChatMessage } from '@/lib/chat-actions';
 
 type Connection = 'connecting' | 'connected' | 'disconnected';
 
-export function ChatInbox({ initial, userId, tenant }: { initial: ChatConversation[]; userId: string; tenant: boolean }) {
+export function ChatInbox({ initial, userId, tenant, initialConversationId }: { initial: ChatConversation[]; userId: string; tenant: boolean; initialConversationId?: string | null }) {
   const [conversations, setConversations] = useState(initial);
-  const [activeId, setActiveId] = useState<string | null>(initial[0]?.id || null);
+  const [activeId, setActiveId] = useState<string | null>(initialConversationId || initial[0]?.id || null);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [older, setOlder] = useState<Record<string, boolean>>({});
   const [connection, setConnection] = useState<Connection>(() => chatWebSocketUrl(process.env.NEXT_PUBLIC_CHAT_WS_URL, 'probe') && typeof WebSocket !== 'undefined' ? 'connecting' : 'disconnected');
@@ -21,7 +21,19 @@ export function ChatInbox({ initial, userId, tenant }: { initial: ChatConversati
   const refresh = useCallback(async (id?: string | null) => {
     const [list, items] = await Promise.all([listChatConversations(), id ? listChatMessages(id) : Promise.resolve(null)]);
     if (list.error) setError(list.error);
-    else if (list.data) setConversations(list.data);
+    // A deep-linked conversation may be missing from the first list read
+    // (e.g. just created): fetch it directly so the entry button's landing
+    // target is selectable rather than silently defaulting elsewhere.
+    else if (list.data) {
+      setConversations(list.data);
+      if (id && !list.data.some((c) => c.id === id)) {
+        const direct = await getChatConversation(id);
+        if (!direct.error && direct.data) {
+          const conversation = direct.data;
+          setConversations((previous) => previous.some((c) => c.id === conversation.id) ? previous : [conversation, ...previous]);
+        }
+      }
+    }
     if (id && items) {
       if (items.error) setError(items.error);
       else if (items.data) {

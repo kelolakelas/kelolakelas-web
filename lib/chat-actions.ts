@@ -20,6 +20,7 @@ async function chatRequest<T>(path: string, method = 'GET', body?: unknown): Pro
     });
     const result = await response.json().catch(() => ({}));
     if (response.status === 401) return { data: null, error: 'Sesi Anda tidak valid. Silakan login kembali.' };
+    if (response.status === 403) return { data: null, error: 'Anda tidak memiliki akses ke percakapan ini.' };
     if (response.status === 404) return { data: null, error: 'Percakapan tidak ditemukan.' };
     if (response.status === 400) return { data: null, error: 'Input chat tidak valid. Periksa kembali pesan Anda.' };
     if (!response.ok || result.status !== 'success') return { data: null, error: 'Layanan chat sedang tidak tersedia. Coba lagi nanti.' };
@@ -55,6 +56,27 @@ export async function markChatRead(id: string): Promise<ChatResult<null>> {
 
 export async function createStaffChat(): Promise<ChatResult<ChatConversation>> {
   return chatRequest<ChatConversation>('/conversations', 'POST', { kind: 'staff' });
+}
+
+/**
+ * Get-or-create entry points (KEL-124).
+ *
+ * Both post `{kind, subject_id}` to the chat-service, which resolves the
+ * subject against academic-service and returns the existing conversation when
+ * one already links the same tenant/kind/subject — a second click on the same
+ * row therefore lands in the same conversation. A refusal (subject unknown,
+ * another tenant's row, or a missing `chat:manage`/`report:read` permission)
+ * surfaces as "not found / no access", never as a technical failure: the
+ * caller hides the entry button or shows the message.
+ */
+export async function createScheduleRequestChat(requestId: string): Promise<ChatResult<ChatConversation>> {
+  if (!CHAT_ID.test(requestId)) return { data: null, error: 'Percakapan tidak ditemukan.' };
+  return chatRequest<ChatConversation>('/conversations', 'POST', { kind: 'schedule_request', subject_id: requestId });
+}
+
+export async function createReportChat(reportId: string): Promise<ChatResult<ChatConversation>> {
+  if (!CHAT_ID.test(reportId)) return { data: null, error: 'Percakapan tidak ditemukan.' };
+  return chatRequest<ChatConversation>('/conversations', 'POST', { kind: 'report', subject_id: reportId });
 }
 
 export async function issueChatTicket(): Promise<ChatResult<{ ticket: string; expires_at: string }>> {

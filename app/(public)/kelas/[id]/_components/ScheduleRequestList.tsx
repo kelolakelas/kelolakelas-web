@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { CancelScheduleRequestButton } from './CancelScheduleRequestButton';
+import { ScheduleRequestChatButton } from '@/app/(dashboard)/dashboard/parent/chat/_components/ScheduleRequestChatButton';
 import { AcceptRecommendationButton, DeclineRecommendationButton } from './ScheduleRecommendationActions';
 import {
   findMatchingEnrollment,
@@ -137,6 +138,14 @@ export function ScheduleRequestList({
                     <CancelScheduleRequestButton requestId={request.id} />
                   </div>
                 )}
+                <div className="mt-4">
+                  <ScheduleRequestChatButton
+                    requestId={request.id}
+                    label="Chat dengan tenant"
+                    chatPath="/dashboard/parent/chat"
+                    className="min-h-11 rounded-xl border border-[#c8d0c5] bg-white px-4 text-sm font-bold text-[#31463d] hover:bg-[#f3f6ef]"
+                  />
+                </div>
                 {request.status === 'rejected' && onResubmit && (
                   <button
                     type="button"

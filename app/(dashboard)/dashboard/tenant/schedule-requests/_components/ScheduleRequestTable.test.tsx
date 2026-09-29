@@ -23,6 +23,15 @@ vi.mock('../_actions/actions', () => ({
   rejectScheduleRequest: vi.fn(),
 }));
 
+// The table embeds the KEL-124 chat entry button, a Client Component that
+// navigates with `useRouter`. Static markup rendering has no router, so both
+// collaborators are stubbed: the button then renders its label and the test
+// asserts the entry point is present without exercising navigation.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/lib/chat-actions', () => ({
+  createScheduleRequestChat: vi.fn(async () => ({ data: null, error: null })),
+}));
+
 const { ScheduleRequestTable } = await import('./ScheduleRequestTable');
 
 const REQUEST_ID = '9a1c3e5f-2b4d-4e6f-8a0b-1c2d3e4f5a6b';
@@ -92,6 +101,15 @@ describe('ScheduleRequestTable', () => {
     expect(html).toContain(`desktop-reject-schedule-request-reason-${REQUEST_ID}`);
   });
 
+  it('offers a parent-chat entry on every pending row copy (KEL-124)', () => {
+    const html = render([row()]);
+
+    // Both layout branches stay in the DOM, so the entry button appears once
+    // per branch. Permission itself is enforced server-side by the
+    // chat-service; the button stays visible and a refusal surfaces inline.
+    expect(html.split('Chat dengan parent')).toHaveLength(3);
+  });
+
   it('offers no decision controls once the row leaves pending', () => {
     const approved = render([row({ status: 'approved' })]);
     expect(approved).toContain('Disetujui');
@@ -106,6 +124,9 @@ describe('ScheduleRequestTable', () => {
     const cancelled = render([row({ status: 'cancelled' })]);
     expect(cancelled).toContain('Dibatalkan');
     expect(cancelled).not.toContain('Setujui');
+    // Chat entries live with the pending decision controls only; decided rows
+    // keep their neutral placeholder.
+    expect(cancelled).not.toContain('Chat dengan parent');
   });
 
   it('hides the rejection reason line when none was recorded', () => {

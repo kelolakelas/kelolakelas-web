@@ -7,8 +7,9 @@ import type { ChatConversation, ChatMessage } from '@/lib/chat';
 vi.mock('@/lib/chat-actions', () => ({
   listChatConversations: vi.fn(), listChatMessages: vi.fn(), markChatRead: vi.fn(),
   sendChatMessage: vi.fn(), issueChatTicket: vi.fn(), createStaffChat: vi.fn(),
+  getChatConversation: vi.fn(),
 }));
-import { issueChatTicket, listChatConversations, listChatMessages, markChatRead, sendChatMessage } from '@/lib/chat-actions';
+import { getChatConversation, issueChatTicket, listChatConversations, listChatMessages, markChatRead, sendChatMessage } from '@/lib/chat-actions';
 
 const room: ChatConversation = { id: 'ab321b1a-63b2-4d3a-8b56-acc739170972', kind: 'staff', context: {}, last_message: null, last_message_at: null, unread_count: 0 };
 beforeEach(() => {
@@ -16,6 +17,7 @@ beforeEach(() => {
   vi.mocked(listChatMessages).mockResolvedValue({ data: [], error: null });
   vi.mocked(markChatRead).mockResolvedValue({ data: null, error: null });
   vi.mocked(sendChatMessage).mockResolvedValue({ data: null, error: 'Layanan chat sedang tidak tersedia.' });
+  vi.mocked(getChatConversation).mockResolvedValue({ data: null, error: 'Percakapan tidak ditemukan.' });
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
@@ -89,5 +91,49 @@ describe('chat fallback', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Pesan gagal dimuat.'));
     fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+});
+
+describe('chat deep-link (KEL-124)', () => {
+  const requested: ChatConversation = {
+    id: '9a1c3e5f-2b4d-4e6f-8a0b-1c2d3e4f5a6b',
+    kind: 'schedule_request',
+    context: { class_name: 'Matematika Private' },
+    last_message: null,
+    last_message_at: null,
+    unread_count: 0,
+  };
+
+  it('selects the linked conversation instead of the first row', async () => {
+    vi.mocked(listChatConversations).mockResolvedValue({ data: [room, requested], error: null });
+    render(<ChatInbox initial={[room, requested]} userId="me" tenant={false} initialConversationId={requested.id} />);
+
+    // The heading names the active room: the entry button's target, not the
+    // default first row.
+    expect(screen.getByRole('heading', { name: 'Matematika Private' })).toBeTruthy();
+    await waitFor(() => expect(listChatMessages).toHaveBeenCalledWith(requested.id));
+    expect(getChatConversation).not.toHaveBeenCalled();
+  });
+
+  it('fetches a just-created conversation missing from the first list read', async () => {
+    vi.mocked(listChatConversations).mockResolvedValue({ data: [room], error: null });
+    vi.mocked(getChatConversation).mockResolvedValue({ data: requested, error: null });
+    render(<ChatInbox initial={[room]} userId="me" tenant={false} initialConversationId={requested.id} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
+
+    await waitFor(() => expect(getChatConversation).toHaveBeenCalledWith(requested.id));
+    await screen.findByRole('heading', { name: 'Matematika Private' });
+  });
+
+  it('falls back to no selection when the linked conversation cannot be read', async () => {
+    vi.mocked(listChatConversations).mockResolvedValue({ data: [room], error: null });
+    render(<ChatInbox initial={[room]} userId="me" tenant={false} initialConversationId={requested.id} />);
+
+    // The missing room has no selectable row, so the detail pane keeps the
+    // neutral prompt instead of rendering a room the member cannot read.
+    // (In the real flow the entry button only navigates on success, so this
+    // covers stale links, not denials — those surface inline on the button.)
+    expect(screen.getByRole('heading', { name: 'Pilih percakapan' })).toBeTruthy();
   });
 });
