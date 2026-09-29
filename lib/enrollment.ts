@@ -1,9 +1,43 @@
 import { z } from 'zod';
+import type { CheckoutInstructions } from './payment-instructions';
+
+/**
+ * Duitku channel the parent picks at checkout (KEL-127).
+ *
+ * Codes mirror the billing allowlist (KEL-125): `VC` card, `VA`/`BC` virtual
+ * account, `SP`/`NQ` QRIS. Absent means the legacy hosted card flow. The
+ * default is `VC` so an older form post without the field (cached page, retry
+ * through an old tab) keeps paying exactly as before instead of failing
+ * validation.
+ */
+export const PAYMENT_CHANNELS = ['VC', 'VA', 'BC', 'SP', 'NQ'] as const;
+
+export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
+
+/** Channels rendered as the card option: always the hosted provider redirect. */
+export const CARD_PAYMENT_CHANNELS: readonly PaymentChannel[] = ['VC'];
+
+/** Channels rendered with in-page KelolaKelas instructions after checkout. */
+export const INSTRUCTION_PAYMENT_CHANNELS: readonly PaymentChannel[] = ['VA', 'BC', 'SP', 'NQ'];
+
+/**
+ * Channel options offered by the checkout picker (KEL-127).
+ *
+ * One representative code per kind: `VA` for virtual account, `NQ` for QRIS.
+ * `BC`/`SP` remain accepted from the backend (history rows paid through them
+ * render the same way) but are not offered as separate choices.
+ */
+export const PAYMENT_CHANNEL_OPTIONS: ReadonlyArray<{ value: PaymentChannel; label: string; hint: string }> = [
+  { value: 'VC', label: 'Kartu kredit/debit', hint: 'Diarahkan ke halaman pembayaran aman Duitku.' },
+  { value: 'VA', label: 'Virtual Account', hint: 'Nomor VA tampil di halaman ini, tanpa pindah halaman.' },
+  { value: 'NQ', label: 'QRIS', hint: 'Kode QR tampil di halaman ini, tanpa pindah halaman.' },
+];
 
 export const enrollmentFormSchema = z.object({
   student_id: z.string().uuid('Pilih student yang valid.'),
   billing_cycle: z.enum(['monthly', 'quarterly', 'yearly'], { message: 'Pilih periode pembayaran.' }),
   schedule_id: z.union([z.string().uuid('Pilih jadwal yang valid.'), z.literal('')]),
+  payment_method: z.enum(PAYMENT_CHANNELS, { message: 'Pilih metode pembayaran.' }).default('VC'),
   idempotency_key: z.string().uuid('Sesi checkout tidak valid. Muat ulang halaman lalu coba lagi.'),
 });
 
@@ -13,6 +47,12 @@ export type EnrollmentActionState = {
   errors?: Record<string, string[]>;
   /** Follow-up page shown as a link under the message, e.g. the parent's enrollment status. */
   link?: { href: string; label: string };
+  /**
+   * In-page payment instructions after a VA/QRIS checkout (KEL-127), read
+   * back from billing by the action itself. Card checkouts keep the redirect
+   * flow and never set this.
+   */
+  payment?: CheckoutInstructions;
 };
 
 export const PARENT_ENROLLMENTS_PATH = '/dashboard/parent/enrollments';
@@ -57,5 +97,6 @@ export function enrollmentPayload(input: z.infer<typeof enrollmentFormSchema>) {
     student_id: input.student_id,
     billing_cycle: input.billing_cycle,
     ...(input.schedule_id ? { schedule_id: input.schedule_id } : {}),
+    payment_method: input.payment_method,
   };
 }

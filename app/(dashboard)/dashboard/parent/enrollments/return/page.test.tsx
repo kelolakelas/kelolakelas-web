@@ -133,4 +133,36 @@ describe('payment return landing (KEL-44)', () => {
     expect(html).toContain('Akses ditolak.');
     expect(html).not.toContain(AUTO_REFRESH_TEXT);
   });
+
+  it('shows VA instructions from the scoped backend row on refresh', async () => {
+    getPaymentReturnStatus.mockResolvedValue(backend('pending', { payment_method: 'VA', va_number: '88001234', invoice_expires_at: '2100-01-01T00:00:00Z' }));
+    const html = await render({ merchantOrderId: ORDER_ID });
+    expect(html).toContain('88001234');
+    expect(html).toContain('Nomor pesanan');
+    expect(html).toContain(ORDER_ID);
+    expect(html).toContain('Virtual Account');
+    expect(html).not.toContain('Buka halaman pembayaran kartu');
+  });
+
+  it('renders the backend QR payload as an image and keeps the raw payload accessible', async () => {
+    getPaymentReturnStatus.mockResolvedValue(backend('pending', { payment_method: 'NQ', qr_string: '000201010212123QRIS', invoice_expires_at: '2100-01-01T00:00:00Z' }));
+    const html = await render({ merchantOrderId: ORDER_ID });
+    expect(html).toContain('data:image/png;base64,');
+    expect(html).toContain('000201010212123QRIS');
+    expect(html).toContain('Tidak dapat memindai?');
+  });
+
+  it('shows a safe fallback when pending QR instructions are absent', async () => {
+    getPaymentReturnStatus.mockResolvedValue(backend('pending', { payment_method: 'NQ', invoice_expires_at: '2100-01-01T00:00:00Z' }));
+    const html = await render({ merchantOrderId: ORDER_ID });
+    expect(html).toContain('Instruksi pembayaran belum tersedia');
+    expect(html).not.toContain('data:image/png;base64,');
+  });
+
+  it('never displays stale VA details after the payment expires', async () => {
+    getPaymentReturnStatus.mockResolvedValue(backend('pending', { status: 'expired', payment_method: 'VA', va_number: '88001234', invoice_expires_at: '2000-01-01T00:00:00Z' }));
+    const html = await render({ merchantOrderId: ORDER_ID });
+    expect(html).toContain('Kedaluwarsa');
+    expect(html).not.toContain('88001234');
+  });
 });

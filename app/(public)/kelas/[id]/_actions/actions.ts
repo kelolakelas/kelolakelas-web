@@ -5,7 +5,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
-import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState } from '@/lib/enrollment';
+import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, INSTRUCTION_PAYMENT_CHANNELS, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState } from '@/lib/enrollment';
+import { getCheckoutInstructions } from '@/lib/payment-instructions';
 import {
   normalizeApprovePayment,
   scheduleRecommendationDecisionErrorMessage,
@@ -53,6 +54,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     student_id: formData.get('student_id')?.toString() || '',
     billing_cycle: formData.get('billing_cycle')?.toString() || '',
     schedule_id: formData.get('schedule_id')?.toString() || '',
+    payment_method: formData.get('payment_method')?.toString() || undefined,
     idempotency_key: formData.get('idempotency_key')?.toString() || '',
   });
   if (!validation.success) return validationError(validation.error);
@@ -62,6 +64,8 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
   }
 
   let destination: string | null = null;
+  let enrollmentId: string | null = null;
+  const channel = validation.data.payment_method;
   try {
     const token = (await cookies()).get(AUTH_COOKIE)?.value;
     const session = getSessionIdentityFromToken(token);
@@ -83,6 +87,9 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     if (isPlatformFeeRejectedResponse(response.status, result)) return platformFeeRejectedState;
     if (!response.ok || result.status !== 'success') return { success: false, message: responseMessage(response, result) };
 
+    const enrollment = result.data?.enrollment;
+    if (typeof enrollment?.id === 'string' && UUID_PATTERN.test(enrollment.id)) enrollmentId = enrollment.id;
+
     destination = checkoutUrl(result.data?.payment?.checkout_session_url);
     if (!destination) return { success: false, message: 'Enrollment tersimpan tetapi URL checkout belum tersedia. Silakan buka riwayat enrollment Anda.' };
   } catch (error) {
@@ -90,6 +97,29 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
   }
 
   if (!destination) return { success: false, message: 'URL checkout belum tersedia. Coba lagi dari detail kelas.' };
+  // VA/QRIS stay on the page: the action reads the instructions back from
+  // billing instead of leaving for the provider (KEL-127). The lookup runs
+  // server-side under the parent's session, so a parent cannot point the
+  // panel at another parent's payment. Card keeps the hosted-provider
+  // redirect below. A backend outage surfaces as a failure rather than a
+  // success with an empty panel; a merely-missing row renders the safe
+  // fallback with the history link.
+  if ((INSTRUCTION_PAYMENT_CHANNELS as readonly string[]).includes(channel)) {
+    if (!enrollmentId) {
+      return { success: true, message: 'Enrollment tersimpan. Lihat instruksi pembayaran pada riwayat enrollment Anda.', link: { href: '/dashboard/parent/enrollments', label: 'Lihat status enrollment' } };
+    }
+    const instructions = await getCheckoutInstructions({ enrollmentId });
+    if (instructions.error) {
+      return { success: false, message: instructions.message };
+    }
+    // A same-key replay may return a card invoice created before the picker
+    // changed (billing preserves the original method). Never show a VA/QR
+    // panel for that card transaction; send the parent to the hosted link.
+    if (instructions.data.channel === 'VC') {
+      redirect(destination);
+    }
+    return { success: true, message: 'Enrollment tersimpan. Selesaikan pembayaran di bawah sebelum batas waktu.', payment: instructions.data };
+  }
   redirect(destination);
 }
 
@@ -270,6 +300,11 @@ export async function acceptScheduleRecommendation(
   }
 
   if (!destination) return { success: false, message: 'URL checkout belum tersedia. Coba lagi dari detail kelas.' };
+  // Private purchases invoice on the default card channel (KEL-133 owns
+  // private selection), so the redirect below stays unconditional. The
+  // transaction lookup is intentionally not inlined here: without a channel
+  // choice the approval answer carries no method, and guessing VA/QR against
+  // a card invoice would show instructions the provider never issued.
   redirect(destination);
 }
 

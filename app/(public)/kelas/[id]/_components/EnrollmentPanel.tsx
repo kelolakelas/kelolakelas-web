@@ -6,7 +6,10 @@ import { useFormStatus } from 'react-dom';
 import { enrollInClass } from '../_actions/actions';
 import { StudentForm } from '@/app/(dashboard)/dashboard/parent/students/_components/StudentForm';
 import type { CatalogScheduleOption } from '@/lib/catalog';
-import type { EnrollmentActionState } from '@/lib/enrollment';
+import { PAYMENT_CHANNEL_OPTIONS, type EnrollmentActionState } from '@/lib/enrollment';
+import { PaymentInstructionsPanel } from '@/app/_components/PaymentInstructionsPanel';
+import { PAYMENT_RETURN_PATH } from '@/lib/payment-return';
+import { parseMerchantOrderId } from '@/lib/payment-return';
 import { studentLastName, type Student } from '@/lib/students';
 import type { EnrollmentLinkCandidate, ScheduleRequest } from '@/lib/schedule-request';
 import { ScheduleRequestForm } from './ScheduleRequestForm';
@@ -112,13 +115,38 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   if (classType === 'group' && !schedules.length) return <section className="mt-10 rounded-3xl border border-[#f2c6c3] bg-white p-6" role="alert"><h2 className="text-xl font-black">Jadwal belum tersedia.</h2><p className="mt-2 text-[#52615b]">Kelas grup belum memiliki jadwal yang dapat dipilih. Coba lagi nanti atau hubungi penyelenggara.</p></section>;
 
   const availableSchedules = schedules.filter((schedule) => schedule.available);
+  const orderId = state.payment?.merchantOrderId;
+  const statusHref = orderId && parseMerchantOrderId(orderId) ? `${PAYMENT_RETURN_PATH}?merchantOrderId=${encodeURIComponent(orderId)}` : null;
   return <section className="mt-10 rounded-3xl border border-[#dfe3d7] bg-[#eef3dd] p-6 sm:p-8"><p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Enrollment parent</p><h2 className="mt-2 text-2xl font-black">Pilih student dan jadwal</h2><p className="mt-2 text-[#52615b]">Harga dan status pembayaran ditentukan oleh backend setelah enrollment tervalidasi.</p><form action={formAction} className="mt-6 space-y-5">
     {state.message && <div role={state.success ? 'status' : 'alert'} className={`rounded-2xl p-3 text-sm font-medium ${state.success ? 'bg-[#e8f3df] text-[#31551d]' : 'bg-[#fde8e7] text-[#8e2119]'}`}><p>{state.message}</p>{state.link && <Link className="mt-2 inline-block font-bold underline" href={state.link.href}>{state.link.label}</Link>}</div>}
     <div><label htmlFor="enrollment-student" className="text-sm font-bold">Student</label><select id="enrollment-student" name="student_id" value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">Pilih student</option>{studentOptions.map((student) => <option value={student.id} key={student.id}>{student.first_name}{studentLastName(student) ? ` ${studentLastName(student)}` : ''}{student.nickname ? ` (${student.nickname})` : ''}</option>)}</select><FieldError errors={state.errors} name="student_id" /></div>
     <div><label htmlFor="enrollment-schedule" className="text-sm font-bold">Jadwal</label><select id="enrollment-schedule" name="schedule_id" required={schedules.length > 0} disabled={!availableSchedules.length} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">{availableSchedules.length ? 'Pilih jadwal' : 'Tidak ada jadwal yang tersedia'}</option>{schedules.map((schedule) => <option value={schedule.id} key={schedule.id} disabled={!schedule.available}>{schedule.label}{schedule.available ? (schedule.availableSlots !== undefined ? ` · ${schedule.availableSlots} slot` : '') : ' · penuh'}</option>)}</select>{!availableSchedules.length && schedules.length > 0 && <p className="mt-1 text-sm text-[#8e2119]">Semua jadwal sedang penuh. Coba lagi setelah ada slot tersedia.</p>}<FieldError errors={state.errors} name="schedule_id" /></div>
     <div><label htmlFor="enrollment-cycle" className="text-sm font-bold">Periode pembayaran</label><select id="enrollment-cycle" name="billing_cycle" defaultValue="monthly" required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="monthly">Bulanan</option><option value="quarterly">Per tiga bulan</option><option value="yearly">Tahunan</option></select><FieldError errors={state.errors} name="billing_cycle" /></div>
+    <fieldset className="rounded-2xl border border-[#c8d0c5] bg-white p-4">
+      <legend className="px-1 text-sm font-bold">Metode pembayaran</legend>
+      <div className="mt-2 space-y-2">
+        {PAYMENT_CHANNEL_OPTIONS.map((option) => (
+          <label key={option.value} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-2 hover:bg-[#f4f8ec]">
+            <input type="radio" name="payment_method" value={option.value} defaultChecked={option.value === 'VC'} required className="mt-1 h-5 w-5 accent-[#617c35]" />
+            <span><span className="block font-bold">{option.label}</span><span className="block text-sm text-[#52615b]">{option.hint}</span></span>
+          </label>
+        ))}
+      </div>
+      <FieldError errors={state.errors} name="payment_method" />
+    </fieldset>
     <input type="hidden" name="idempotency_key" value={idempotencyKey} />
     <p className="text-sm text-[#52615b]">Jika provider belum merespons, kirim ulang form ini untuk melanjutkan intent yang sama.</p>
     <SubmitButton disabled={!availableSchedules.length && schedules.length > 0} />
-  </form></section>;
+  </form>
+  {state.success && state.payment && <div className="mt-6"><PaymentInstructionsPanel
+    instructions={state.payment.instructions}
+    channel={state.payment.channel}
+    merchantOrderId={state.payment.merchantOrderId}
+    amount={state.payment.amount}
+    currency={state.payment.currency}
+    qrImage={state.payment.qrImage}
+    expiresAt={state.payment.expiresAt}
+    statusHref={statusHref}
+  /></div>}
+  </section>;
 }
