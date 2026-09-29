@@ -102,6 +102,9 @@ const classPriceField = z
 /**
  * Class validation schema for creating a new class under a category.
  * API Reference: POST /api/v1/classes
+ *
+ * Capacity is intentionally absent: it is set per schedule on the scheduling
+ * step (`scheduleItemSchema`), so the creation form never submits it.
  */
 export const createClassSchema = z.object({
   category_id: classCategoryField,
@@ -112,11 +115,6 @@ export const createClassSchema = z.object({
   price: z.coerce
     .number({ message: 'Price must be a number' })
     .min(0, 'Price cannot be negative'),
-  capacity: z.coerce
-    .number({ message: 'Capacity must be a number' })
-    .int('Capacity must be an integer')
-    .min(1, 'Capacity must be at least 1')
-    .optional(),
   description: classDescriptionField,
 });
 
