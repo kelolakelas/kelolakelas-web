@@ -3,7 +3,12 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createSchedule, type ActionResponse } from '../_actions/classActions';
-import type { ClassEntity, ScheduleItemInput } from '../_lib/schema';
+import {
+  generateWeeklySlots,
+  weeklySlotGeneratorSchema,
+  type ClassEntity,
+  type ScheduleItemInput,
+} from '../_lib/schema';
 
 /**
  * A slot as the form holds it while the tenant is typing.
@@ -96,6 +101,112 @@ export function ScheduleForm({
     }
   }, [state, onScheduleSuccess]);
 
+  /**
+   * Weekly slot generator drafts (KEL-112).
+   *
+   * The generator fields stay raw strings so a half-typed or cleared value is
+   * never rewritten into a fake number. Validation runs through
+   * `weeklySlotGeneratorSchema` on generate, and each failure surfaces as a
+   * per-field message without producing any slot.
+   */
+  const [generatorDays, setGeneratorDays] = useState<number[]>([1, 2]);
+  const [generatorStart, setGeneratorStart] = useState('08:00');
+  const [generatorEnd, setGeneratorEnd] = useState('12:00');
+  const [generatorSessionMinutes, setGeneratorSessionMinutes] = useState('90');
+  const [generatorBreakMinutes, setGeneratorBreakMinutes] = useState('15');
+  const [generatorCapacity, setGeneratorCapacity] = useState('10');
+  const [generatorLocation, setGeneratorLocation] = useState('');
+  const [generatorErrors, setGeneratorErrors] = useState<Record<string, string>>(
+    {}
+  );
+  const [generatorNotice, setGeneratorNotice] = useState<string | null>(null);
+
+  const toggleGeneratorDay = (day: number) => {
+    setGeneratorDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+  };
+
+  const isDuplicateSlot = (
+    existing: ScheduleSlotDraft[],
+    day: number,
+    start: string,
+    end: string
+  ) =>
+    existing.some(
+      (slot) =>
+        slot.day_of_week === day &&
+        slot.start_time === start &&
+        slot.end_time === end
+    );
+
+  const handleGenerateSlots = () => {
+    const validation = weeklySlotGeneratorSchema.safeParse({
+      days: generatorDays,
+      start_time: generatorStart,
+      end_time: generatorEnd,
+      session_minutes: generatorSessionMinutes,
+      break_minutes: generatorBreakMinutes,
+      capacity: generatorCapacity,
+      location: generatorLocation,
+    });
+
+    if (!validation.success) {
+      const fieldErrors = validation.error.flatten().fieldErrors;
+      const errors: Record<string, string> = {};
+      for (const [field, messages] of Object.entries(fieldErrors)) {
+        if (messages?.[0]) {
+          errors[field] = messages[0];
+        }
+      }
+      setGeneratorErrors(errors);
+      setGeneratorNotice(null);
+      return;
+    }
+
+    setGeneratorErrors({});
+    const generated = generateWeeklySlots(validation.data);
+
+    if (generated.length === 0) {
+      // Valid input whose window fits no whole session: nothing to append,
+      // reported as a form-level message so the tenant can adjust the range.
+      setGeneratorNotice(
+        'No session fits the selected time range. Adjust the hours, session length, or break.'
+      );
+      return;
+    }
+
+    const fresh = generated.filter(
+      (slot) =>
+        !isDuplicateSlot(schedules, slot.day_of_week, slot.start_time, slot.end_time)
+    );
+
+    if (fresh.length === 0) {
+      setGeneratorNotice(
+        'All generated slots already exist. No duplicate slots were added.'
+      );
+      return;
+    }
+
+    setGeneratorNotice(
+      `Added ${fresh.length} slot${fresh.length === 1 ? '' : 's'}${
+        fresh.length < generated.length
+          ? ` (${generated.length - fresh.length} duplicate${generated.length - fresh.length === 1 ? '' : 's'} skipped)`
+          : ''
+      }.`
+    );
+    setSchedules([
+      ...schedules,
+      ...fresh.map((slot) => ({
+        day_of_week: slot.day_of_week,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        capacity: String(slot.capacity),
+        location: slot.location ?? '',
+      })),
+    ]);
+  };
+
   const addScheduleSlot = () => {
     setSchedules((prev) => [
       ...prev,
@@ -156,6 +267,182 @@ export function ScheduleForm({
           {state.message}
         </div>
       )}
+
+      {/* Weekly Slot Generator (KEL-112) */}
+      <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/30 p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Weekly Slot Generator
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Pick days and a time window, then generate weekly sessions to review
+            below. Generated slots are added to the list and stay editable.
+          </p>
+        </div>
+
+        {/* Days */}
+        <fieldset className="space-y-1">
+          <legend className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+            Days
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {DAYS_OF_WEEK.map((day) => (
+              <label
+                key={day.id}
+                className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs font-semibold text-gray-700 dark:text-gray-200"
+              >
+                <input
+                  type="checkbox"
+                  checked={generatorDays.includes(day.id)}
+                  onChange={() => toggleGeneratorDay(day.id)}
+                  aria-label={`Generate on ${day.label}`}
+                  className="h-4 w-4 rounded accent-blue-600"
+                />
+                {day.label}
+              </label>
+            ))}
+          </div>
+          {generatorErrors.days && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              {generatorErrors.days}
+            </p>
+          )}
+        </fieldset>
+
+        {/* Time window */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+              Start Time
+            </label>
+            <input
+              type="time"
+              value={generatorStart}
+              onChange={(e) => setGeneratorStart(e.target.value)}
+              aria-label="Generator start time"
+              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+            />
+            {generatorErrors.start_time && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {generatorErrors.start_time}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+              End Time
+            </label>
+            <input
+              type="time"
+              value={generatorEnd}
+              onChange={(e) => setGeneratorEnd(e.target.value)}
+              aria-label="Generator end time"
+              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+            />
+            {generatorErrors.end_time && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {generatorErrors.end_time}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Session / break */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+              Session Length (minutes)
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={generatorSessionMinutes}
+              onChange={(e) => setGeneratorSessionMinutes(e.target.value)}
+              aria-label="Generator session length in minutes"
+              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+            />
+            {generatorErrors.session_minutes && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {generatorErrors.session_minutes}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+              Break Between Sessions (minutes)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={generatorBreakMinutes}
+              onChange={(e) => setGeneratorBreakMinutes(e.target.value)}
+              aria-label="Generator break in minutes"
+              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+            />
+            {generatorErrors.break_minutes && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {generatorErrors.break_minutes}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Defaults */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+              Default Capacity
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={generatorCapacity}
+              onChange={(e) => setGeneratorCapacity(e.target.value)}
+              aria-label="Generator default capacity"
+              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+            />
+            {generatorErrors.capacity && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {generatorErrors.capacity}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+              Default Location
+            </label>
+            <input
+              type="text"
+              placeholder="Room 102 or Online Zoom Link (optional)"
+              value={generatorLocation}
+              onChange={(e) => setGeneratorLocation(e.target.value)}
+              aria-label="Generator default location"
+              className="block min-h-[44px] w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleGenerateSlots}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto"
+          >
+            Generate Slots
+          </button>
+          {generatorNotice && (
+            <p
+              role="status"
+              className="text-xs text-gray-600 dark:text-gray-300"
+            >
+              {generatorNotice}
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Recurring Schedule Slot Cards */}
       <div className="space-y-4">
