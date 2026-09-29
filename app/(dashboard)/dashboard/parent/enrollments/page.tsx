@@ -1,11 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
-import { formatCurrency, paymentPresentation, resumePayment } from '@/lib/payment-status';
-import { getEnrollmentHistory } from './_queries/queries';
-import { CancelEnrollmentButton } from './_components/CancelEnrollmentButton';
+import { PaymentInstructionsPanel } from '@/app/_components/PaymentInstructionsPanel';
 import { canCancelEnrollment } from '@/lib/enrollment-cancellation';
 import { enrollmentScheduleLabel, SCHEDULE_UNAVAILABLE_LABEL } from '@/lib/enrollment-schedule';
+import { qrDataUrl } from '@/lib/pay-qr';
+import { parseMerchantOrderId, PAYMENT_RETURN_PATH } from '@/lib/payment-return';
+import { formatCurrency, paymentChannelLabel, paymentInstructionsView, paymentPresentation, resumePayment } from '@/lib/payment-status';
+import { CancelEnrollmentButton } from './_components/CancelEnrollmentButton';
+import { getEnrollmentHistory } from './_queries/queries';
 
 export const metadata: Metadata = { title: 'Status enrollment - KelolaKelas', description: 'Status enrollment dan pembayaran parent.' };
 
@@ -14,6 +17,89 @@ const tones = { neutral: 'bg-[#eef3f1] text-[#365047]', success: 'bg-[#e9f5df] t
 export default async function ParentEnrollmentHistoryPage() {
   const result = await getEnrollmentHistory();
   if (result.error) return <main className="min-h-screen bg-[#f8f7f3] px-5 py-10 text-[#17231f]"><section className="mx-auto max-w-4xl rounded-3xl border border-[#f2c6c3] bg-white p-8" role="alert"><p className="text-sm font-bold text-[#b42318]">{result.error === 'forbidden' ? 'Akses ditolak' : 'Riwayat tidak tersedia'}</p><h1 className="mt-2 text-3xl font-black">Status enrollment belum dapat dimuat.</h1><p className="mt-3 text-[#52615b]">{result.message}</p></section></main>;
+
   const transactions = new Map(result.data.transactions.map((transaction) => [transaction.enrollment_id, transaction]));
-  return <main className="min-h-screen bg-[#f8f7f3] px-5 py-10 text-[#17231f] sm:px-8"><div className="mx-auto max-w-4xl"><div className="flex flex-wrap items-center justify-between gap-3"><Link href="/kelas" className="text-sm font-bold text-[#617c35] hover:underline">← Kembali ke katalog</Link><Link href="/dashboard/parent/chat" className="text-sm font-bold text-[#617c35] hover:underline">Chat</Link><LogoutButton className="min-h-11 rounded-xl border border-[#dfe3d7] bg-white px-4 text-sm font-bold text-[#617c35] hover:bg-[#eef4e8]" /></div><header className="mt-7 border-b border-[#dfe3d7] pb-7"><p className="text-sm font-bold uppercase tracking-[.16em] text-[#617c35]">Profil parent</p><h1 className="mt-2 text-4xl font-black tracking-[-.055em]">Status enrollment</h1><p className="mt-3 max-w-2xl text-[#52615b]">Muat ulang halaman ini setelah kembali dari provider pembayaran. Status di bawah selalu berasal dari backend, bukan dari redirect provider.</p></header>{result.data.enrollments.length ? <section className="mt-8 space-y-4" aria-label="Riwayat enrollment">{result.data.enrollments.map((enrollment) => { const transaction = transactions.get(enrollment.id); const status = paymentPresentation(enrollment, transaction); return <article key={enrollment.id} className="rounded-3xl border border-[#dfe3d7] bg-white p-6"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-xl font-black">{enrollment.class?.name || 'Kelas'}</h2><p className="mt-1 text-sm text-[#52615b]">{enrollment.student?.first_name || 'Student'} · Enrollment {enrollment.status}</p>{(() => { const schedule = enrollmentScheduleLabel(enrollment); return schedule ? <p className="mt-1 text-sm font-semibold text-[#365047]">{schedule === SCHEDULE_UNAVAILABLE_LABEL ? schedule : `Jadwal: ${schedule}`}</p> : null; })()}</div><span className={`rounded-full px-3 py-1 text-sm font-bold ${tones[status.tone]}`}>{status.label}</span></div><p className="mt-4 text-[#52615b]">{status.detail}</p>{transaction && <dl className="mt-5 grid gap-3 border-t border-[#edf0e9] pt-4 text-sm sm:grid-cols-2"><div><dt className="text-[#65726c]">Status transaksi</dt><dd className="font-semibold">{transaction.status}</dd></div><div><dt className="text-[#65726c]">Nominal</dt><dd className="font-semibold">{formatCurrency(transaction.gross_amount, transaction.currency)}</dd></div></dl>}{canCancelEnrollment(enrollment, transaction) && <div className="mt-5 border-t border-[#edf0e9] pt-4"><CancelEnrollmentButton enrollmentId={enrollment.id} /></div>}{(() => { const payment = resumePayment(transaction); return payment ? <div className="mt-5 border-t border-[#edf0e9] pt-4"><a href={payment.url} target="_blank" rel="noopener noreferrer" className="inline-block rounded-xl bg-[#617c35] px-5 py-3 text-sm font-bold text-white hover:bg-[#54682d]">Lanjutkan pembayaran</a><p className="mt-2 text-sm text-[#65726c]">Selesaikan pembayaran sebelum {payment.expiresLabel}. Jika batas waktu terlewat, buat pembayaran baru dari detail kelas.</p></div> : null; })()}</article>; })}</section> : <section className="mt-8 rounded-3xl border border-dashed border-[#c8d0c5] bg-white p-10 text-center"><h2 className="text-2xl font-black">Belum ada enrollment.</h2><p className="mt-2 text-[#52615b]">Pilih kelas dari katalog untuk memulai enrollment.</p><Link href="/kelas" className="mt-5 inline-block rounded-xl bg-[#617c35] px-5 py-3 font-bold text-white">Lihat katalog</Link></section>}</div></main>;
+  const rows = await Promise.all(result.data.enrollments.map(async (enrollment) => {
+    const transaction = transactions.get(enrollment.id);
+    const instructions = paymentInstructionsView(transaction);
+    const qrImage = instructions?.kind === 'qris' ? await qrDataUrl(instructions.qrString) : null;
+    return { enrollment, transaction, instructions, qrImage };
+  }));
+
+  return (
+    <main className="min-h-screen bg-[#f8f7f3] px-5 py-10 text-[#17231f] sm:px-8">
+      <div className="mx-auto max-w-4xl">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/kelas" className="text-sm font-bold text-[#617c35] hover:underline">← Kembali ke katalog</Link>
+          <Link href="/dashboard/parent/chat" className="text-sm font-bold text-[#617c35] hover:underline">Chat</Link>
+          <LogoutButton className="min-h-11 rounded-xl border border-[#dfe3d7] bg-white px-4 text-sm font-bold text-[#617c35] hover:bg-[#eef4e8]" />
+        </div>
+        <header className="mt-7 border-b border-[#dfe3d7] pb-7">
+          <p className="text-sm font-bold uppercase tracking-[.16em] text-[#617c35]">Profil parent</p>
+          <h1 className="mt-2 text-4xl font-black tracking-[-.055em]">Status enrollment</h1>
+          <p className="mt-3 max-w-2xl text-[#52615b]">Muat ulang halaman ini setelah kembali dari provider pembayaran. Status di bawah selalu berasal dari backend, bukan dari redirect provider.</p>
+        </header>
+        {rows.length ? (
+          <section className="mt-8 space-y-4" aria-label="Riwayat enrollment">
+            {rows.map(({ enrollment, transaction, instructions, qrImage }) => {
+              const status = paymentPresentation(enrollment, transaction);
+              const schedule = enrollmentScheduleLabel(enrollment);
+              const payment = resumePayment(transaction);
+              const instructionChannel = ['VA', 'BC', 'SP', 'NQ'].includes(transaction?.payment_method || '');
+              const orderId = transaction?.merchant_order_id;
+              const statusHref = orderId && parseMerchantOrderId(orderId)
+                ? `${PAYMENT_RETURN_PATH}?merchantOrderId=${encodeURIComponent(orderId)}` : null;
+              return (
+                <article key={enrollment.id} className="rounded-3xl border border-[#dfe3d7] bg-white p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h2 className="text-xl font-black">{enrollment.class?.name || 'Kelas'}</h2>
+                      <p className="mt-1 text-sm text-[#52615b]">{enrollment.student?.first_name || 'Student'} · Enrollment {enrollment.status}</p>
+                      {schedule && <p className="mt-1 text-sm font-semibold text-[#365047]">{schedule === SCHEDULE_UNAVAILABLE_LABEL ? schedule : `Jadwal: ${schedule}`}</p>}
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-sm font-bold ${tones[status.tone]}`}>{status.label}</span>
+                  </div>
+                  <p className="mt-4 text-[#52615b]">{status.detail}</p>
+                  {transaction && (
+                    <dl className="mt-5 grid gap-3 border-t border-[#edf0e9] pt-4 text-sm sm:grid-cols-2">
+                      <div><dt className="text-[#65726c]">Status transaksi</dt><dd className="font-semibold">{transaction.status}</dd></div>
+                      <div><dt className="text-[#65726c]">Nominal</dt><dd className="font-semibold">{formatCurrency(transaction.gross_amount, transaction.currency)}</dd></div>
+                      {orderId && <div><dt className="text-[#65726c]">Nomor pesanan</dt><dd className="font-semibold break-all">{orderId}</dd></div>}
+                      {paymentChannelLabel(transaction) && <div><dt className="text-[#65726c]">Metode</dt><dd className="font-semibold">{paymentChannelLabel(transaction)}</dd></div>}
+                    </dl>
+                  )}
+                  {canCancelEnrollment(enrollment, transaction) && <div className="mt-5 border-t border-[#edf0e9] pt-4"><CancelEnrollmentButton enrollmentId={enrollment.id} /></div>}
+                  {instructionChannel ? (
+                    <div className="mt-5 border-t border-[#edf0e9] pt-4">
+                      <PaymentInstructionsPanel
+                        instructions={instructions}
+                        channel={transaction?.payment_method}
+                        merchantOrderId={orderId}
+                        amount={transaction?.gross_amount}
+                        currency={transaction?.currency}
+                        qrImage={qrImage}
+                        expiresAt={transaction?.invoice_expires_at}
+                        statusHref={statusHref}
+                      />
+                    </div>
+                  ) : payment ? (
+                    <div className="mt-5 border-t border-[#edf0e9] pt-4">
+                      <a href={payment.url} target="_blank" rel="noopener noreferrer" className="inline-block rounded-xl bg-[#617c35] px-5 py-3 text-sm font-bold text-white hover:bg-[#54682d]">Lanjutkan pembayaran</a>
+                      <p className="mt-2 text-sm text-[#65726c]">Selesaikan pembayaran sebelum {payment.expiresLabel}. Jika batas waktu terlewat, buat pembayaran baru dari detail kelas.</p>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </section>
+        ) : (
+          <section className="mt-8 rounded-3xl border border-dashed border-[#c8d0c5] bg-white p-10 text-center">
+            <h2 className="text-2xl font-black">Belum ada enrollment.</h2>
+            <p className="mt-2 text-[#52615b]">Pilih kelas dari katalog untuk memulai enrollment.</p>
+            <Link href="/kelas" className="mt-5 inline-block rounded-xl bg-[#617c35] px-5 py-3 font-bold text-white">Lihat katalog</Link>
+          </section>
+        )}
+      </div>
+    </main>
+  );
 }

@@ -47,6 +47,10 @@ function renderWithStudents(items: unknown[] = []) {
   return render(<EnrollmentPanel classId={classId} classType="private" isParent students={items as never} schedules={[]} idempotencyKey={classId} />);
 }
 
+function renderGroup() {
+  return render(<EnrollmentPanel classId={classId} classType="group" isParent students={[existingStudent]} schedules={[{ id: classId, label: 'Senin 09.00', available: true }]} idempotencyKey={classId} />);
+}
+
 beforeEach(() => {
   mocks.enrollmentState.current = { success: false, message: '' };
   mocks.studentState.current = { success: false, message: '' };
@@ -141,5 +145,35 @@ describe('EnrollmentPanel', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('Student ini sudah terdaftar');
     expect(screen.getByRole('link', { name: 'Lihat status enrollment' }).getAttribute('href')).toBe('/dashboard/parent/enrollments');
+  });
+
+  it('offers a labelled native keyboard-focusable channel group and no card fields', () => {
+    renderGroup();
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+    expect(radios.map((radio) => radio.value)).toEqual(['VC', 'VA', 'NQ']);
+    expect((screen.getByRole('group', { name: 'Metode pembayaran' }) as HTMLFieldSetElement).contains(radios[0])).toBe(true);
+    expect(screen.getByRole('radio', { name: /Kartu kredit\/debit/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Virtual Account/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /QRIS/ })).toBeTruthy();
+    expect(radios[0].checked).toBe(true);
+    radios[1].focus();
+    expect(document.activeElement).toBe(radios[1]);
+    fireEvent.click(radios[1]);
+    expect(radios[1].checked).toBe(true);
+    expect(screen.queryByLabelText(/card number|cvv|cvc/i)).toBeNull();
+  });
+
+  it('displays VA details after a successful checkout without leaving the page', () => {
+    mocks.enrollmentState.current = { success: true, message: 'Enrollment tersimpan.', payment: { channel: 'VA', merchantOrderId: classId, amount: 150000, currency: 'IDR', expiresAt: '2100-01-01T00:00:00Z', instructions: { kind: 'va', channelLabel: 'Virtual Account', vaNumber: '88001234', expiresLabel: '1 Jan 2100' }, qrImage: null } };
+    renderGroup();
+    expect(screen.getByTestId('va-number').textContent).toBe('88001234');
+    expect(screen.getByRole('link', { name: 'Periksa status pembayaran' }).getAttribute('href')).toContain(classId);
+  });
+
+  it('shows the safe fallback when billing omitted instructions', () => {
+    mocks.enrollmentState.current = { success: true, message: 'Enrollment tersimpan.', payment: { channel: 'NQ', merchantOrderId: null, instructions: null, qrImage: null } };
+    renderGroup();
+    expect(screen.getByText(/Instruksi pembayaran belum tersedia/)).toBeTruthy();
+    expect(screen.queryByTestId('qris-image')).toBeNull();
   });
 });

@@ -36,6 +36,18 @@ export type TransactionRecord = {
   /** Present on checkout-backed transactions; old rows predate both fields. */
   checkout_session_url?: string;
   invoice_expires_at?: string;
+  /**
+   * Selected Duitku channel (KEL-125/126): `VC` card, `VA`/`BC` virtual
+   * account, `SP`/`NQ` QRIS. Absent on rows written before KEL-125 and on
+   * non-payable responses, where billing omits the field.
+   */
+  payment_method?: string;
+  /** VA number from the provider inquiry; only emitted while payable. */
+  va_number?: string;
+  /** QRIS string from the provider inquiry; only emitted while payable. */
+  qr_string?: string;
+  /** Optional provider app URL accompanying a QRIS invoice. */
+  app_url?: string;
 };
 
 export type PaymentPresentation = { label: string; detail: string; tone: 'neutral' | 'success' | 'danger' | 'warning' };
@@ -72,6 +84,71 @@ export function formatCurrency(amount?: number, currency = 'IDR') {
 
 /** URL protocols a checkout link may use; anything else is refused before render. */
 const ALLOWED_CHECKOUT_PROTOCOLS = ['http:', 'https:'];
+
+/** Provider app links are rendered as anchors, so they get the same scheme gate as checkout links. */
+function allowedHttpUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Human-readable channel for the "Metode" row (KEL-127).
+ *
+ * Codes come from the billing allowlist (KEL-125): `VC` card, `VA`/`BC`
+ * virtual account, `SP`/`NQ` QRIS. Null when the row predates the field, so
+ * old transactions show no method rather than a guessed one. An unknown
+ * non-empty code is shown raw: hiding what the backend recorded would mislead
+ * more than an unfamiliar label.
+ */
+export function paymentChannelLabel(transaction?: TransactionRecord): string | null {
+  switch (transaction?.payment_method) {
+    case 'VC': return 'Kartu';
+    case 'VA':
+    case 'BC': return 'Virtual Account';
+    case 'SP':
+    case 'NQ': return 'QRIS';
+    default: break;
+  }
+  return typeof transaction?.payment_method === 'string' && transaction.payment_method !== '' ? transaction.payment_method : null;
+}
+
+export type PaymentInstructions =
+  | { kind: 'va'; channelLabel: string; vaNumber: string; expiresLabel: string }
+  | { kind: 'qris'; channelLabel: string; qrString: string; appUrl: string | null; expiresLabel: string };
+
+/**
+ * In-page payment instructions for a transaction, or null when none may be
+ * shown (KEL-127).
+ *
+ * Billing only emits `va_number`/`qr_string` while the invoice is payable
+ * (pending with a live expiry, KEL-126), and the render-time checks below
+ * repeat that judgment so a stale row can never paint usable instructions:
+ * non-`pending` status, missing or passed expiry, and a channel that does not
+ * match the instruction kind all refuse. Card (`VC`) transactions never yield
+ * instructions — the parent pays them on the hosted provider page.
+ *
+ * The QR string is returned verbatim from the backend; the caller must render
+ * it as an image and never synthesize one from anything else.
+ */
+export function paymentInstructionsView(transaction?: TransactionRecord, now: Date = new Date()): PaymentInstructions | null {
+  if (transaction?.status !== 'pending') return null;
+  if (!transaction.invoice_expires_at) return null;
+  const expiresAt = new Date(transaction.invoice_expires_at);
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) return null;
+  const method = transaction.payment_method;
+  if ((method === 'VA' || method === 'BC') && typeof transaction.va_number === 'string' && transaction.va_number !== '') {
+    return { kind: 'va', channelLabel: 'Virtual Account', vaNumber: transaction.va_number, expiresLabel: formatExpiry(expiresAt) };
+  }
+  if ((method === 'SP' || method === 'NQ') && typeof transaction.qr_string === 'string' && transaction.qr_string !== '') {
+    return { kind: 'qris', channelLabel: 'QRIS', qrString: transaction.qr_string, appUrl: allowedHttpUrl(transaction.app_url), expiresLabel: formatExpiry(expiresAt) };
+  }
+  return null;
+}
 
 export type ResumePayment = { url: string; expiresLabel: string };
 

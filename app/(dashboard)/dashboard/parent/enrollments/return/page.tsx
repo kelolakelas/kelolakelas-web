@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { formatCurrency, paymentIsSettling, paymentPresentation } from '@/lib/payment-status';
+import { formatCurrency, paymentChannelLabel, paymentInstructionsView, paymentIsSettling, paymentPresentation, resumePayment } from '@/lib/payment-status';
+import { qrDataUrl } from '@/lib/pay-qr';
+import { PaymentInstructionsPanel } from '@/app/_components/PaymentInstructionsPanel';
 import { parseMerchantOrderId } from '@/lib/payment-return';
 import { enrollmentScheduleLabel, SCHEDULE_UNAVAILABLE_LABEL } from '@/lib/enrollment-schedule';
 import { getPaymentReturnStatus } from '../_queries/queries';
@@ -68,6 +70,10 @@ export default async function PaymentReturnPage({ searchParams }: ReturnPageProp
   const { enrollment, transaction } = result.data;
   const status = paymentPresentation(enrollment, transaction);
   const schedule = enrollmentScheduleLabel(enrollment);
+  const instructions = paymentInstructionsView(transaction);
+  const qrImage = instructions?.kind === 'qris' ? await qrDataUrl(instructions.qrString) : null;
+  const cardLink = resumePayment(transaction);
+  const instructionChannel = ['VA', 'BC', 'SP', 'NQ'].includes(transaction.payment_method || '');
   return (
     <Shell>
       <section className="mt-8 rounded-3xl border border-[#dfe3d7] bg-white p-6" aria-live="polite">
@@ -83,7 +89,11 @@ export default async function PaymentReturnPage({ searchParams }: ReturnPageProp
         <dl className="mt-5 grid gap-3 border-t border-[#edf0e9] pt-4 text-sm sm:grid-cols-2">
           <div><dt className="text-[#65726c]">Status transaksi</dt><dd className="font-semibold">{transaction.status}</dd></div>
           <div><dt className="text-[#65726c]">Nominal</dt><dd className="font-semibold">{formatCurrency(transaction.gross_amount, transaction.currency)}</dd></div>
+          <div><dt className="text-[#65726c]">Nomor pesanan</dt><dd className="font-semibold break-all">{transaction.merchant_order_id || merchantOrderId}</dd></div>
+          {paymentChannelLabel(transaction) && <div><dt className="text-[#65726c]">Metode</dt><dd className="font-semibold">{paymentChannelLabel(transaction)}</dd></div>}
         </dl>
+        {instructionChannel && <div className="mt-5"><PaymentInstructionsPanel instructions={instructions} channel={transaction.payment_method} merchantOrderId={transaction.merchant_order_id || merchantOrderId} amount={transaction.gross_amount} currency={transaction.currency} qrImage={qrImage} expiresAt={transaction.invoice_expires_at} /></div>}
+        {transaction.payment_method === 'VC' && cardLink && <a href={cardLink.url} target="_blank" rel="noopener noreferrer" className="mt-5 inline-block rounded-xl bg-[#617c35] px-5 py-3 text-sm font-bold text-white hover:bg-[#54682d]">Buka halaman pembayaran kartu</a>}
         <PaymentReturnRefresher settling={paymentIsSettling(enrollment, transaction)} />
       </section>
       <Link href={HISTORY_PATH} className="mt-6 inline-block rounded-xl bg-[#617c35] px-5 py-3 text-sm font-bold text-white hover:bg-[#54682d]">Lihat riwayat enrollment</Link>

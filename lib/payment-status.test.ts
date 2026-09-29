@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paymentIsSettling, paymentPresentation, resumePayment } from './payment-status';
+import { paymentChannelLabel, paymentInstructionsView, paymentIsSettling, paymentPresentation, resumePayment } from './payment-status';
 
 const enrollment = { id: 'enrollment-1', status: 'pending' };
 
@@ -112,5 +112,41 @@ describe('resumePayment (KEL-53)', () => {
 
   it('returns null when there is no transaction at all', () => {
     expect(resumePayment(undefined, fixedNow)).toBeNull();
+  });
+});
+
+describe('paymentInstructionsView (KEL-127)', () => {
+  const now = new Date('2026-09-26T04:00:00Z');
+
+  it.each(['VA', 'BC'] as const)('uses the provider VA number for %s without a redirect', (payment_method) => {
+    const view = paymentInstructionsView(transaction({ payment_method, va_number: '88001234567890' }), now);
+    expect(view).toEqual({ kind: 'va', channelLabel: 'Virtual Account', vaNumber: '88001234567890', expiresLabel: expect.any(String) });
+    expect(paymentChannelLabel(transaction({ payment_method }))).toBe('Virtual Account');
+  });
+
+  it.each(['SP', 'NQ'] as const)('uses the provider QR string for %s without synthesising it', (payment_method) => {
+    const view = paymentInstructionsView(transaction({ payment_method, qr_string: '000201010212123QRIS', app_url: 'https://app.example.test/pay' }), now);
+    expect(view).toEqual({ kind: 'qris', channelLabel: 'QRIS', qrString: '000201010212123QRIS', appUrl: 'https://app.example.test/pay', expiresLabel: expect.any(String) });
+    expect(paymentChannelLabel(transaction({ payment_method }))).toBe('QRIS');
+  });
+
+  it.each(['paid', 'failed', 'expired', 'cancelled'] as const)('refuses stale instructions for a %s payment', (status) => {
+    expect(paymentInstructionsView(transaction({ status, payment_method: 'VA', va_number: '88001234567890' }), now)).toBeNull();
+  });
+
+  it.each([undefined, '', PAST_EXPIRY, 'broken-date'])('refuses missing or expired invoice deadline %s', (invoice_expires_at) => {
+    expect(paymentInstructionsView(transaction({ invoice_expires_at, payment_method: 'VA', va_number: '88001234567890' }), now)).toBeNull();
+  });
+
+  it('does not show a QR or VA instruction for card or mismatched methods', () => {
+    expect(paymentInstructionsView(transaction({ payment_method: 'VC', va_number: '8800', qr_string: 'QR' }), now)).toBeNull();
+    expect(paymentInstructionsView(transaction({ payment_method: 'VA', qr_string: 'QR' }), now)).toBeNull();
+    expect(paymentInstructionsView(transaction({ payment_method: 'NQ', va_number: '8800' }), now)).toBeNull();
+    expect(paymentChannelLabel(transaction({ payment_method: 'VC' }))).toBe('Kartu');
+    expect(paymentChannelLabel(transaction({ payment_method: undefined }))).toBeNull();
+  });
+
+  it('refuses a script URL in app_url but keeps the QR payload', () => {
+    expect(paymentInstructionsView(transaction({ payment_method: 'NQ', qr_string: 'QR', app_url: 'javascript:alert(1)' }), now)).toMatchObject({ kind: 'qris', qrString: 'QR', appUrl: null });
   });
 });
