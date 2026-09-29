@@ -177,3 +177,115 @@ describe('EnrollmentPanel', () => {
     expect(screen.queryByTestId('qris-image')).toBeNull();
   });
 });
+
+describe('EnrollmentPanel add student with existing students (KEL-130)', () => {
+  function rerenderWithStudents(view: ReturnType<typeof render>, items: unknown[], classType: 'group' | 'private' = 'group') {
+    view.rerender(
+      <EnrollmentPanel
+        classId={classId}
+        classType={classType}
+        isParent
+        students={items as never}
+        schedules={classType === 'group' ? [{ id: classId, label: 'Senin 09.00', available: true }] : []}
+        idempotencyKey={classId}
+      />
+    );
+  }
+
+  it('group: shows the add-student trigger next to the checkout form and opens the dialog without navigating', async () => {
+    renderGroup();
+    const url = window.location.href;
+    const trigger = screen.getByRole('button', { name: 'Tambah student' });
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Lanjut ke pembayaran' })).toBeTruthy();
+    expect(window.location.href).toBe(url);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/Nama depan/)));
+  });
+
+  it('group: success appends the option, selects the new student, closes, and returns focus', async () => {
+    const view = renderGroup();
+    const url = window.location.href;
+    const select = screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: existingStudent.id } });
+    const trigger = screen.getByRole('button', { name: 'Tambah student' });
+    fireEvent.click(trigger);
+
+    mocks.studentState.current = { success: true, message: 'Profil student berhasil dibuat.', data: createdStudent };
+    rerenderWithStudents(view, [existingStudent]);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(createdStudent.id);
+    expect(screen.getByRole('option', { name: 'Budi' })).toBeTruthy();
+    expect(document.activeElement).toBe(trigger);
+    expect(window.location.href).toBe(url);
+  });
+
+  it('group: cancel keeps the previous selection and returns focus to the trigger', async () => {
+    renderGroup();
+    const select = screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: existingStudent.id } });
+    const trigger = screen.getByRole('button', { name: 'Tambah student' });
+    fireEvent.click(trigger);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Batal' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(existingStudent.id);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('group: failed create keeps the dialog open and the previous selection, focus returns on close', async () => {
+    const view = renderGroup();
+    const select = screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: existingStudent.id } });
+    const trigger = screen.getByRole('button', { name: 'Tambah student' });
+    fireEvent.click(trigger);
+
+    mocks.studentState.current = { success: false, message: 'Layanan student sedang tidak tersedia. Coba lagi nanti.' };
+    rerenderWithStudents(view, [existingStudent]);
+
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(existingStudent.id);
+    expect(screen.getByRole('alert').textContent).toContain('Layanan student sedang tidak tersedia.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Batal' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(existingStudent.id);
+  });
+
+  it('private: success selects the new student in the schedule request form without leaving the page', async () => {
+    const view = renderWithStudents([existingStudent]);
+    const url = window.location.href;
+    const trigger = screen.getByRole('button', { name: 'Tambah student' });
+    fireEvent.click(trigger);
+
+    mocks.studentState.current = { success: true, message: 'Profil student berhasil dibuat.', data: createdStudent };
+    rerenderWithStudents(view, [existingStudent], 'private');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(createdStudent.id);
+    expect(screen.getByRole('option', { name: 'Budi' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Kirim permintaan jadwal' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Lanjut ke pembayaran' })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(window.location.href).toBe(url);
+  });
+
+  it('private: cancel keeps the schedule request selection and returns focus to the trigger', async () => {
+    renderWithStudents([existingStudent]);
+    const formSelect = screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement;
+    fireEvent.change(formSelect, { target: { value: existingStudent.id } });
+    const trigger = screen.getByRole('button', { name: 'Tambah student' });
+    fireEvent.click(trigger);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Batal' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(existingStudent.id);
+    expect(document.activeElement).toBe(trigger);
+  });
+});

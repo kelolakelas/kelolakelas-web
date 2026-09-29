@@ -37,6 +37,10 @@ function FieldError({ errors, name }: { errors?: Record<string, string[]>; name:
  *   reviews the request. The parent's requests for this class are listed below
  *   the form with their status, a cancel control for pending rows, and a
  *   resubmit option for rejected rows.
+ * - Parents who already have students can add another student from the same
+ *   page (KEL-130): every branch with a loaded student list renders a
+ *   "Tambah student" trigger that shares one dialog. The new student is
+ *   appended to the options and selected immediately without leaving the page.
  */
 export function EnrollmentPanel({ classId, classType, isParent, students, schedules, idempotencyKey, studentError, scheduleRequests = [], enrollments = [] }: {
   classId: string;
@@ -57,18 +61,25 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   const [resubmitFrom, setResubmitFrom] = useState<ScheduleRequest | undefined>(undefined);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!dialogOpen) return;
     dialogRef.current?.querySelector<HTMLInputElement>('#first_name')?.focus();
   }, [dialogOpen]);
 
-  const openStudentDialog = () => {
+  const openStudentDialog = (event: { currentTarget: HTMLButtonElement }) => {
+    openerRef.current = event.currentTarget;
     dialogRef.current?.showModal();
     setDialogOpen(true);
   };
 
   const closeStudentDialog = () => dialogRef.current?.close();
+
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    (openerRef.current ?? triggerRef.current)?.focus();
+  };
 
   const handleStudentCreated = useCallback((student: Student) => {
     setStudentOptions((current) => current.some((item) => item.id === student.id) ? current : [...current, student]);
@@ -81,7 +92,21 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   }
 
   if (studentError) return <section className="mt-10 rounded-3xl border border-[#f2c6c3] bg-white p-6" role="alert"><h2 className="text-xl font-black">Student belum dapat dimuat.</h2><p className="mt-2 text-[#52615b]">{studentError}</p><Link className="mt-4 inline-block font-bold text-[#617c35] underline" href="/dashboard/parent/students">Kelola student</Link></section>;
-  if (!studentOptions.length) return <section className="mt-10 rounded-3xl border border-dashed border-[#c8d0c5] bg-white p-6"><h2 className="text-xl font-black">Tambahkan student terlebih dahulu.</h2><p className="mt-2 text-[#52615b]">Enrollment membutuhkan profil student milik parent.</p><button ref={triggerRef} type="button" onClick={openStudentDialog} className="mt-4 rounded-xl bg-[#617c35] px-5 py-3 font-bold text-white">Tambah student</button><dialog ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={`create-student-title-${classId}`} className="max-w-2xl rounded-3xl border border-[#dfe3d7] bg-[#f8f7f3] p-0 text-[#17231f] backdrop:bg-black/40" onCancel={closeStudentDialog} onClose={() => { setDialogOpen(false); triggerRef.current?.focus(); }}><div className="p-6 sm:p-8"><h2 id={`create-student-title-${classId}`} className="sr-only">Tambah student</h2><StudentForm autoFocus onCancel={closeStudentDialog} onSuccess={handleStudentCreated} /></div></dialog></section>;
+
+  const studentDialog = (
+    <dialog ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={`create-student-title-${classId}`} className="max-w-2xl rounded-3xl border border-[#dfe3d7] bg-[#f8f7f3] p-0 text-[#17231f] backdrop:bg-black/40" onCancel={closeStudentDialog} onClose={handleDialogClose}>
+      <div className="p-6 sm:p-8">
+        <h2 id={`create-student-title-${classId}`} className="sr-only">Tambah student</h2>
+        <StudentForm autoFocus onCancel={closeStudentDialog} onSuccess={handleStudentCreated} />
+      </div>
+    </dialog>
+  );
+
+  const addStudentButton = (
+    <button ref={triggerRef} type="button" onClick={openStudentDialog} className="mt-4 rounded-xl bg-[#617c35] px-5 py-3 font-bold text-white">Tambah student</button>
+  );
+
+  if (!studentOptions.length) return <section className="mt-10 rounded-3xl border border-dashed border-[#c8d0c5] bg-white p-6"><h2 className="text-xl font-black">Tambahkan student terlebih dahulu.</h2><p className="mt-2 text-[#52615b]">Enrollment membutuhkan profil student milik parent.</p>{addStudentButton}{studentDialog}</section>;
 
   if (classType === 'private') {
     return (
@@ -89,6 +114,7 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
         <p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Permintaan jadwal private</p>
         <h2 className="mt-2 text-2xl font-black">Ajukan jadwal les private</h2>
         <p className="mt-2 text-[#52615b]">Usulkan slot mingguan; penyelenggara meninjau permintaan Anda sebelum enrollment dibuat. Kelas private tidak melalui checkout dari halaman ini.</p>
+        {addStudentButton}
         <div id="form-permintaan-jadwal">
           <ScheduleRequestForm
             key={resubmitSeed}
@@ -108,6 +134,7 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
             document.getElementById('form-permintaan-jadwal')?.scrollIntoView({ behavior: 'smooth' });
           }}
         />
+        {studentDialog}
       </section>
     );
   }
@@ -117,36 +144,44 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   const availableSchedules = schedules.filter((schedule) => schedule.available);
   const orderId = state.payment?.merchantOrderId;
   const statusHref = orderId && parseMerchantOrderId(orderId) ? `${PAYMENT_RETURN_PATH}?merchantOrderId=${encodeURIComponent(orderId)}` : null;
-  return <section className="mt-10 rounded-3xl border border-[#dfe3d7] bg-[#eef3dd] p-6 sm:p-8"><p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Enrollment parent</p><h2 className="mt-2 text-2xl font-black">Pilih student dan jadwal</h2><p className="mt-2 text-[#52615b]">Harga dan status pembayaran ditentukan oleh backend setelah enrollment tervalidasi.</p><form action={formAction} className="mt-6 space-y-5">
-    {state.message && <div role={state.success ? 'status' : 'alert'} className={`rounded-2xl p-3 text-sm font-medium ${state.success ? 'bg-[#e8f3df] text-[#31551d]' : 'bg-[#fde8e7] text-[#8e2119]'}`}><p>{state.message}</p>{state.link && <Link className="mt-2 inline-block font-bold underline" href={state.link.href}>{state.link.label}</Link>}</div>}
-    <div><label htmlFor="enrollment-student" className="text-sm font-bold">Student</label><select id="enrollment-student" name="student_id" value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">Pilih student</option>{studentOptions.map((student) => <option value={student.id} key={student.id}>{student.first_name}{studentLastName(student) ? ` ${studentLastName(student)}` : ''}{student.nickname ? ` (${student.nickname})` : ''}</option>)}</select><FieldError errors={state.errors} name="student_id" /></div>
-    <div><label htmlFor="enrollment-schedule" className="text-sm font-bold">Jadwal</label><select id="enrollment-schedule" name="schedule_id" required={schedules.length > 0} disabled={!availableSchedules.length} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">{availableSchedules.length ? 'Pilih jadwal' : 'Tidak ada jadwal yang tersedia'}</option>{schedules.map((schedule) => <option value={schedule.id} key={schedule.id} disabled={!schedule.available}>{schedule.label}{schedule.available ? (schedule.availableSlots !== undefined ? ` · ${schedule.availableSlots} slot` : '') : ' · penuh'}</option>)}</select>{!availableSchedules.length && schedules.length > 0 && <p className="mt-1 text-sm text-[#8e2119]">Semua jadwal sedang penuh. Coba lagi setelah ada slot tersedia.</p>}<FieldError errors={state.errors} name="schedule_id" /></div>
-    <div><label htmlFor="enrollment-cycle" className="text-sm font-bold">Periode pembayaran</label><select id="enrollment-cycle" name="billing_cycle" defaultValue="monthly" required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="monthly">Bulanan</option><option value="quarterly">Per tiga bulan</option><option value="yearly">Tahunan</option></select><FieldError errors={state.errors} name="billing_cycle" /></div>
-    <fieldset className="rounded-2xl border border-[#c8d0c5] bg-white p-4">
-      <legend className="px-1 text-sm font-bold">Metode pembayaran</legend>
-      <div className="mt-2 space-y-2">
-        {PAYMENT_CHANNEL_OPTIONS.map((option) => (
-          <label key={option.value} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-2 hover:bg-[#f4f8ec]">
-            <input type="radio" name="payment_method" value={option.value} defaultChecked={option.value === 'VC'} required className="mt-1 h-5 w-5 accent-[#617c35]" />
-            <span><span className="block font-bold">{option.label}</span><span className="block text-sm text-[#52615b]">{option.hint}</span></span>
-          </label>
-        ))}
-      </div>
-      <FieldError errors={state.errors} name="payment_method" />
-    </fieldset>
-    <input type="hidden" name="idempotency_key" value={idempotencyKey} />
-    <p className="text-sm text-[#52615b]">Jika provider belum merespons, kirim ulang form ini untuk melanjutkan intent yang sama.</p>
-    <SubmitButton disabled={!availableSchedules.length && schedules.length > 0} />
-  </form>
-  {state.success && state.payment && <div className="mt-6"><PaymentInstructionsPanel
-    instructions={state.payment.instructions}
-    channel={state.payment.channel}
-    merchantOrderId={state.payment.merchantOrderId}
-    amount={state.payment.amount}
-    currency={state.payment.currency}
-    qrImage={state.payment.qrImage}
-    expiresAt={state.payment.expiresAt}
-    statusHref={statusHref}
-  /></div>}
-  </section>;
+  return (
+    <section className="mt-10 rounded-3xl border border-[#dfe3d7] bg-[#eef3dd] p-6 sm:p-8">
+      <p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Enrollment parent</p>
+      <h2 className="mt-2 text-2xl font-black">Pilih student dan jadwal</h2>
+      <p className="mt-2 text-[#52615b]">Harga dan status pembayaran ditentukan oleh backend setelah enrollment tervalidasi.</p>
+      <form action={formAction} className="mt-6 space-y-5">
+        {state.message && <div role={state.success ? 'status' : 'alert'} className={`rounded-2xl p-3 text-sm font-medium ${state.success ? 'bg-[#e8f3df] text-[#31551d]' : 'bg-[#fde8e7] text-[#8e2119]'}`}><p>{state.message}</p>{state.link && <Link className="mt-2 inline-block font-bold underline" href={state.link.href}>{state.link.label}</Link>}</div>}
+        <div><label htmlFor="enrollment-student" className="text-sm font-bold">Student</label><select id="enrollment-student" name="student_id" value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">Pilih student</option>{studentOptions.map((student) => <option value={student.id} key={student.id}>{student.first_name}{studentLastName(student) ? ` ${studentLastName(student)}` : ''}{student.nickname ? ` (${student.nickname})` : ''}</option>)}</select><FieldError errors={state.errors} name="student_id" /></div>
+        {addStudentButton}
+        <div><label htmlFor="enrollment-schedule" className="text-sm font-bold">Jadwal</label><select id="enrollment-schedule" name="schedule_id" required={schedules.length > 0} disabled={!availableSchedules.length} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">{availableSchedules.length ? 'Pilih jadwal' : 'Tidak ada jadwal yang tersedia'}</option>{schedules.map((schedule) => <option value={schedule.id} key={schedule.id} disabled={!schedule.available}>{schedule.label}{schedule.available ? (schedule.availableSlots !== undefined ? ` · ${schedule.availableSlots} slot` : '') : ' · penuh'}</option>)}</select>{!availableSchedules.length && schedules.length > 0 && <p className="mt-1 text-sm text-[#8e2119]">Semua jadwal sedang penuh. Coba lagi setelah ada slot tersedia.</p>}<FieldError errors={state.errors} name="schedule_id" /></div>
+        <div><label htmlFor="enrollment-cycle" className="text-sm font-bold">Periode pembayaran</label><select id="enrollment-cycle" name="billing_cycle" defaultValue="monthly" required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="monthly">Bulanan</option><option value="quarterly">Per tiga bulan</option><option value="yearly">Tahunan</option></select><FieldError errors={state.errors} name="billing_cycle" /></div>
+        <fieldset className="rounded-2xl border border-[#c8d0c5] bg-white p-4">
+          <legend className="px-1 text-sm font-bold">Metode pembayaran</legend>
+          <div className="mt-2 space-y-2">
+            {PAYMENT_CHANNEL_OPTIONS.map((option) => (
+              <label key={option.value} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-2 hover:bg-[#f4f8ec]">
+                <input type="radio" name="payment_method" value={option.value} defaultChecked={option.value === 'VC'} required className="mt-1 h-5 w-5 accent-[#617c35]" />
+                <span><span className="block font-bold">{option.label}</span><span className="block text-sm text-[#52615b]">{option.hint}</span></span>
+              </label>
+            ))}
+          </div>
+          <FieldError errors={state.errors} name="payment_method" />
+        </fieldset>
+        <input type="hidden" name="idempotency_key" value={idempotencyKey} />
+        <p className="text-sm text-[#52615b]">Jika provider belum merespons, kirim ulang form ini untuk melanjutkan intent yang sama.</p>
+        <SubmitButton disabled={!availableSchedules.length && schedules.length > 0} />
+      </form>
+      {studentDialog}
+      {state.success && state.payment && <div className="mt-6"><PaymentInstructionsPanel
+        instructions={state.payment.instructions}
+        channel={state.payment.channel}
+        merchantOrderId={state.payment.merchantOrderId}
+        amount={state.payment.amount}
+        currency={state.payment.currency}
+        qrImage={state.payment.qrImage}
+        expiresAt={state.payment.expiresAt}
+        statusHref={statusHref}
+      /></div>}
+    </section>
+  );
 }
