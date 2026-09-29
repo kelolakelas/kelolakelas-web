@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createClassSchema,
   createScheduleSchema,
   scheduleItemSchema,
   updateClassSchema,
@@ -146,6 +147,95 @@ describe('updateClassSchema', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.code).toBe('unrecognized_keys');
+    }
+  });
+});
+
+/**
+ * Creation-form contract without class-level capacity (KEL-113).
+ *
+ * Capacity is set per schedule on the scheduling step, so `createClassSchema`
+ * carries no `capacity` field. The schema stays a plain `z.object` (not
+ * strict) so a stale tab that still submits the legacy field is stripped
+ * instead of rejected — the forwarded body never contains `capacity`.
+ */
+
+const validCreateClass = {
+  category_id: '8d2c7e10-9f3b-4a5c-b6d7-1e2f3a4b5c6d',
+  name: 'Fisika Dasar',
+  type: 'group',
+  price: 150000,
+  description: 'Kelas pengantar fisika.',
+} as const;
+
+describe('createClassSchema without capacity', () => {
+  it('accepts a group class without a capacity field', () => {
+    const result = createClassSchema.safeParse(validCreateClass);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect('capacity' in result.data).toBe(false);
+      expect(result.data.type).toBe('group');
+    }
+  });
+
+  it('accepts a private class without a capacity field', () => {
+    const result = createClassSchema.safeParse({
+      ...validCreateClass,
+      type: 'private',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect('capacity' in result.data).toBe(false);
+      expect(result.data.type).toBe('private');
+    }
+  });
+
+  it('strips a legacy capacity field instead of rejecting the submission', () => {
+    const result = createClassSchema.safeParse({
+      ...validCreateClass,
+      capacity: 10,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect('capacity' in result.data).toBe(false);
+    }
+  });
+
+  it('rejects invalid fields with field-scoped errors and no capacity error', () => {
+    const result = createClassSchema.safeParse({
+      ...validCreateClass,
+      category_id: '',
+      name: '   ',
+      price: -5,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const errors = result.error.flatten().fieldErrors as Record<
+        string,
+        string[] | undefined
+      >;
+      expect(errors.category_id?.[0]).toBe('Please select a valid category');
+      expect(errors.name?.[0]).toBe('Class name is required');
+      expect(errors.price?.[0]).toBe('Price cannot be negative');
+      expect(errors.capacity).toBeUndefined();
+    }
+  });
+
+  it('rejects an unknown class type', () => {
+    const result = createClassSchema.safeParse({
+      ...validCreateClass,
+      type: 'semi-private',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.type?.[0]).toBe(
+        'Class type must be either private or group'
+      );
     }
   });
 });

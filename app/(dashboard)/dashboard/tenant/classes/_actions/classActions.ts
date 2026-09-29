@@ -125,7 +125,6 @@ export async function createClass(
     name: formData.get('name')?.toString() || '',
     type: formData.get('type')?.toString() || 'group',
     price: formData.get('price') ? Number(formData.get('price')) : 0,
-    capacity: formData.get('capacity') ? Number(formData.get('capacity')) : undefined,
     description: formData.get('description')?.toString() || undefined,
   };
 

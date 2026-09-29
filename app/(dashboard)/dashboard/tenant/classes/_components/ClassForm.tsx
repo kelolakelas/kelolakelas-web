@@ -142,64 +142,42 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
             <span className="text-[11px] opacity-75">Single Student</span>
           </button>
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {classType === 'private'
+            ? 'Private class is 1-on-1 for a single student; schedules are agreed per enrollment.'
+            : 'Group class capacity is set per schedule in the next scheduling step.'}
+        </p>
         {state.errors?.type && (
           <p className="text-xs text-red-600 dark:text-red-400">{state.errors.type[0]}</p>
         )}
       </div>
 
-      {/* Price & Capacity Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Price Input */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="class-price"
-            className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
-          >
-            Price (IDR) <span className="text-red-500">*</span>
-          </label>
-          <div className="relative rounded-xl shadow-xs">
-            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-xs text-gray-500 font-medium">
-              Rp
-            </span>
-            <input
-              id="class-price"
-              name="price"
-              type="number"
-              min="0"
-              step="1000"
-              required
-              placeholder="150000"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 pl-10 pr-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-          {state.errors?.price && (
-            <p className="text-xs text-red-600 dark:text-red-400">{state.errors.price[0]}</p>
-          )}
-        </div>
-
-        {/* Capacity Input (relevant mainly for group) */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="class-capacity"
-            className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
-          >
-            Max Student Capacity
-          </label>
+      {/* Price */}
+      <div className="space-y-1.5">
+        <label
+          htmlFor="class-price"
+          className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+        >
+          Price (IDR) <span className="text-red-500">*</span>
+        </label>
+        <div className="relative rounded-xl shadow-xs">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-xs text-gray-500 font-medium">
+            Rp
+          </span>
           <input
-            id="class-capacity"
-            name="capacity"
+            id="class-price"
+            name="price"
             type="number"
-            min="1"
-            defaultValue={classType === 'private' ? 1 : 10}
-            placeholder="10"
-            className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            min="0"
+            step="1000"
+            required
+            placeholder="150000"
+            className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 pl-10 pr-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
-          {state.errors?.capacity && (
-            <p className="text-xs text-red-600 dark:text-red-400">
-              {state.errors.capacity[0]}
-            </p>
-          )}
         </div>
+        {state.errors?.price && (
+          <p className="text-xs text-red-600 dark:text-red-400">{state.errors.price[0]}</p>
+        )}
       </div>
 
       {/* Description Optional */}
