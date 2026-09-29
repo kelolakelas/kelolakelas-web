@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   cancelScheduleRequest: vi.fn(),
   acceptScheduleRecommendation: vi.fn(),
   declineScheduleRecommendation: vi.fn(),
+  createScheduleRequestChat: vi.fn(async () => ({ data: null, error: null })),
   enrollInClass: vi.fn(),
   createStudent: vi.fn(),
   updateStudent: vi.fn(),
@@ -36,6 +37,10 @@ vi.mock('react-dom', async (importOriginal) => ({
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode }) => <a href={href} {...props}>{children}</a>,
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/lib/chat-actions', () => ({
+  createScheduleRequestChat: mocks.createScheduleRequestChat,
 }));
 vi.mock('../_actions/actions', () => ({
   enrollInClass: mocks.enrollInClass,
@@ -169,6 +174,15 @@ describe('ScheduleRequestList statuses (KEL-109)', () => {
     expect(screen.getByText('Menunggu peninjauan')).toBeTruthy();
     expect(screen.getByText('Senin, 16:00–17:30')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Batalkan permintaan' })).toBeTruthy();
+  });
+
+  it('offers a tenant-chat entry on every request row (KEL-124)', () => {
+    renderPrivate({ scheduleRequests: [request(), request({ id: otherStudentId, student_id: otherStudentId })] });
+
+    // One entry per row: pressing it get-or-creates the `schedule_request`
+    // conversation and navigates to the parent inbox (covered in
+    // ScheduleRequestChatButton.test.tsx).
+    expect(screen.getAllByRole('button', { name: 'Chat dengan tenant' })).toHaveLength(2);
   });
 
   it('shows the tenant reason and a resubmit option for a rejected request', () => {

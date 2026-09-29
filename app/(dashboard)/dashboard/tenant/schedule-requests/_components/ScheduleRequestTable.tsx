@@ -14,6 +14,7 @@ import {
 import type { TenantScheduleRequestRow } from '../_queries/queries';
 import { ApproveScheduleRequestDialog } from './ApproveScheduleRequestDialog';
 import { RejectScheduleRequestDialog } from './RejectScheduleRequestDialog';
+import { ScheduleRequestChatButton } from '@/app/(dashboard)/dashboard/parent/chat/_components/ScheduleRequestChatButton';
 
 /** Badge colours for the request lifecycle status. */
 const STATUS_TONES: Record<string, string> = {
@@ -194,6 +195,12 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                   studentName={scheduleRequestStudentName(student)}
                   idPrefix="mobile"
                 />
+                <ScheduleRequestChatButton
+                  requestId={request.id}
+                  label="Chat dengan parent"
+                  chatPath="/dashboard/tenant/chat"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-200"
+                />
               </div>
             )}
           </article>
@@ -279,6 +286,12 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                         requestId={request.id}
                         studentName={scheduleRequestStudentName(student)}
                         idPrefix="desktop"
+                      />
+                      <ScheduleRequestChatButton
+                        requestId={request.id}
+                        label="Chat dengan parent"
+                        chatPath="/dashboard/tenant/chat"
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-200"
                       />
                     </div>
                   ) : (
