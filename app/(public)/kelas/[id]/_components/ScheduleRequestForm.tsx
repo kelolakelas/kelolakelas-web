@@ -61,6 +61,16 @@ export function ScheduleRequestForm({
 }) {
   const [state, formAction] = useActionState(createScheduleRequest, initialState);
   const [selectedStudentId, setSelectedStudentId] = useState(resubmitFrom?.student_id || initialStudentId);
+  const [syncedStudentId, setSyncedStudentId] = useState(initialStudentId);
+
+  // A student created from the class detail page (KEL-130) arrives through
+  // `initialStudentId` after this form has mounted. Adopt it during render
+  // (derived-state pattern) so the new student is selected immediately
+  // without an effect and without clobbering unrelated rerenders.
+  if (syncedStudentId !== initialStudentId) {
+    setSyncedStudentId(initialStudentId);
+    if (initialStudentId) setSelectedStudentId(initialStudentId);
+  }
   const initialDrafts: ScheduleSlotDraft[] = resubmitFrom
     ? resubmitFrom.slots.map((slot) => ({
         day_of_week: String(slot.day_of_week),
