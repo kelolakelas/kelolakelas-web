@@ -14,7 +14,7 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-const { getPaymentReturnStatus } = await import('./queries');
+const { getEnrollmentHistory, getPaymentReturnStatus } = await import('./queries');
 
 const ORDER_ID = '2d8f7a0c-7a0a-4aa8-8e54-000000000001';
 const ENROLLMENT_ID = '7c2e4d1b-5b8f-4d2e-8d3f-7a1c9e6b4f22';
@@ -132,6 +132,127 @@ describe('getPaymentReturnStatus (KEL-44)', () => {
     const calls = stubGateway({});
 
     const result = await getPaymentReturnStatus(ORDER_ID);
+
+    expect(result.error).toBe('configuration');
+    expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * History lookup (KEL-131) against a stubbed gateway. It pins the list
+ * contract with academic and billing: both answer
+ * `{status:'success',data:{items,pagination}}` and any payload without an
+ * `items` array is a retryable `api` error, never a valid empty list.
+ */
+describe('getEnrollmentHistory (KEL-131)', () => {
+  type HistoryRoute = { status: number; body: unknown };
+
+  function list(status: number, body: unknown): HistoryRoute {
+    return { status, body };
+  }
+
+  const successList = (items: unknown[]) =>
+    list(200, { status: 'success', data: { items, pagination: { page: 1, page_size: 100, total_items: items.length, total_pages: 1 } } });
+
+  const enrollmentRow = (overrides: Record<string, unknown> = {}) => ({
+    id: ENROLLMENT_ID,
+    status: 'pending',
+    class: { name: 'Matematika Dasar' },
+    ...overrides,
+  });
+
+  function stubHistory(routes: { enrollments?: HistoryRoute; transactions?: HistoryRoute }) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        calls.push({ url: input, init });
+        const route = input.includes('/api/v1/enrollments') ? routes.enrollments : routes.transactions;
+        if (!route) throw new Error(`unexpected gateway call ${input}`);
+        return new Response(JSON.stringify(route.body), { status: route.status, headers: { 'Content-Type': 'application/json' } });
+      }),
+    );
+    return calls;
+  }
+
+  it('unwraps both success envelopes into enrollments and transactions', async () => {
+    const calls = stubHistory({
+      enrollments: successList([enrollmentRow()]),
+      transactions: successList([tx()]),
+    });
+
+    const result = await getEnrollmentHistory();
+
+    expect(result.error).toBeNull();
+    expect(result.data?.enrollments).toHaveLength(1);
+    expect(result.data?.enrollments[0]).toMatchObject({ id: ENROLLMENT_ID, status: 'pending' });
+    expect(result.data?.transactions).toHaveLength(1);
+    expect(result.data?.transactions[0]).toMatchObject({ merchant_order_id: ORDER_ID });
+    expect(calls.map((call) => call.url)).toEqual([
+      'http://gateway.test/api/v1/enrollments?page=1&page_size=100',
+      'http://gateway.test/api/v1/billing/transactions?page=1&page_size=100',
+    ]);
+    for (const call of calls) {
+      expect(new Headers(call.init?.headers).get('authorization')).toBe('Bearer session-token');
+      expect(call.init?.cache).toBe('no-store');
+    }
+  });
+
+  it('accepts the legacy bare-array list shape for both services', async () => {
+    stubHistory({
+      enrollments: list(200, { status: 'success', data: [enrollmentRow()] }),
+      transactions: list(200, { status: 'success', data: [tx()] }),
+    });
+
+    const result = await getEnrollmentHistory();
+
+    expect(result.error).toBeNull();
+    expect(result.data?.enrollments).toHaveLength(1);
+    expect(result.data?.transactions).toHaveLength(1);
+  });
+
+  it('treats one empty list plus one filled list as valid, not an error', async () => {
+    stubHistory({ enrollments: successList([]), transactions: successList([tx()]) });
+
+    const result = await getEnrollmentHistory();
+
+    expect(result.error).toBeNull();
+    expect(result.data?.enrollments).toEqual([]);
+    expect(result.data?.transactions).toHaveLength(1);
+  });
+
+  it.each([401, 403])('maps a %s from either list to forbidden', async (status) => {
+    stubHistory({ enrollments: list(status, { status: 'error', message: 'nope', data: null }), transactions: successList([tx()]) });
+    expect((await getEnrollmentHistory()).error).toBe('forbidden');
+
+    stubHistory({ enrollments: successList([enrollmentRow()]), transactions: list(status, { status: 'error', message: 'nope', data: null }) });
+    expect((await getEnrollmentHistory()).error).toBe('forbidden');
+  });
+
+  it.each([
+    ['an enrollments 5xx', { enrollments: list(500, { status: 'error', message: 'down', data: null }), transactions: successList([tx()]) }],
+    ['a transactions 5xx', { enrollments: successList([enrollmentRow()]), transactions: list(502, { status: 'error', message: 'bad gateway', data: null }) }],
+    ['a non-success enrollments body', { enrollments: list(200, { status: 'error', message: 'nope', data: null }), transactions: successList([tx()]) }],
+    ['a non-success transactions body', { enrollments: successList([enrollmentRow()]), transactions: list(200, { status: 'error', message: 'nope', data: null }) }],
+    ['a null enrollments data payload', { enrollments: list(200, { status: 'success', data: null }), transactions: successList([tx()]) }],
+    ['a null transactions data payload', { enrollments: successList([enrollmentRow()]), transactions: list(200, { status: 'success', data: null }) }],
+    ['an enrollments object without items', { enrollments: list(200, { status: 'success', data: { pagination: {} } }), transactions: successList([tx()]) }],
+    ['a transactions object without items', { enrollments: successList([enrollmentRow()]), transactions: list(200, { status: 'success', data: { pagination: {} } }) }],
+    ['an enrollments items payload that is not an array', { enrollments: list(200, { status: 'success', data: { items: 'oops' } }), transactions: successList([tx()]) }],
+    ['a transactions items payload that is not an array', { enrollments: successList([enrollmentRow()]), transactions: list(200, { status: 'success', data: { items: { id: 'x' } } }) }],
+  ])('reports %s as a retryable api error, never a valid empty list', async (_label, routes) => {
+    stubHistory(routes);
+
+    const result = await getEnrollmentHistory();
+
+    expect(result).toMatchObject({ data: null, error: 'api' });
+  });
+
+  it('reports a missing gateway configuration without calling fetch', async () => {
+    vi.stubEnv('GATEWAY_API_URL', '');
+    const calls = stubHistory({});
+
+    const result = await getEnrollmentHistory();
 
     expect(result.error).toBe('configuration');
     expect(calls).toHaveLength(0);
