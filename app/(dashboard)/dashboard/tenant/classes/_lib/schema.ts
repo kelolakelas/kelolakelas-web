@@ -227,6 +227,149 @@ export const createScheduleSchema = z.object({
     .min(1, 'At least one recurring schedule slot is required'),
 });
 
+/**
+ * Weekly slot generator input validation (KEL-112).
+ *
+ * The generator section of `ScheduleForm` validates its own fields before any
+ * slot is produced, so each tenant mistake surfaces as a per-field message and
+ * no slot is generated from invalid input. Times are wall-clock `HH:MM`, the
+ * same convention the backend stores, and an overnight range is rejected
+ * because the academic service has no midnight-crossing session support.
+ */
+export const weeklySlotGeneratorSchema = z
+  .object({
+    days: z
+      .array(z.number().int().min(1).max(7))
+      .min(1, 'Select at least one day'),
+    start_time: z
+      .string()
+      .trim()
+      .regex(timeFormatRegex, 'Start time must be in HH:MM format'),
+    end_time: z
+      .string()
+      .trim()
+      .regex(timeFormatRegex, 'End time must be in HH:MM format'),
+    session_minutes: z.coerce
+      .number({ message: 'Session length is required' })
+      .int('Session length must be a whole number of minutes')
+      .min(1, 'Session length must be greater than 0'),
+    break_minutes: z.coerce
+      .number({ message: 'Break is required' })
+      .int('Break must be a whole number of minutes')
+      .min(0, 'Break cannot be negative'),
+    capacity: scheduleCapacityField,
+    location: z.string().trim().optional(),
+  })
+  .refine(
+    (data) => {
+      // The format regexes above already report malformed times; only
+      // compare well-formed wall-clock values here so an invalid shape does
+      // not also attract an ordering error on the end-time field.
+      if (
+        !timeFormatRegex.test(data.start_time) ||
+        !timeFormatRegex.test(data.end_time)
+      ) {
+        return true;
+      }
+      return data.start_time < data.end_time;
+    },
+    {
+      message: 'End time must be strictly after start time',
+      path: ['end_time'],
+    }
+  );
+
+/** Validated input for the weekly slot generator. */
+export type WeeklySlotGeneratorInput = z.infer<typeof weeklySlotGeneratorSchema>;
+
+/**
+ * A slot the generator produced, before it joins the form's editable drafts.
+ */
+export interface GeneratedWeeklySlot {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  location?: string;
+}
+
+const generatorTimePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function parseWallClockMinutes(value: string): number | null {
+  const match = generatorTimePattern.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function formatWallClockMinutes(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/**
+ * Generates weekly recurring slots from day, time-window, session-length, and
+ * break choices (KEL-112).
+ *
+ * Sessions run back-to-back from the window start with `session_minutes`
+ * duration separated by `break_minutes`. A session that would end after the
+ * window end is skipped, so a session ending exactly on the boundary is kept.
+ * Days are de-duplicated and sorted, and anything invalid (malformed time,
+ * non-positive session, negative break, an end that is not after the start,
+ * no usable day) yields no slots instead of throwing — the form validates
+ * first and treats an empty result as "nothing fits". An overnight window is
+ * unsupported and also yields no slots. Capacity and the trimmed location are
+ * carried onto every produced slot unchanged.
+ */
+export function generateWeeklySlots(
+  input: WeeklySlotGeneratorInput
+): GeneratedWeeklySlot[] {
+  const start = parseWallClockMinutes(input.start_time);
+  const end = parseWallClockMinutes(input.end_time);
+
+  if (start === null || end === null || end <= start) {
+    return [];
+  }
+
+  if (
+    !Number.isInteger(input.session_minutes) ||
+    input.session_minutes <= 0 ||
+    !Number.isInteger(input.break_minutes) ||
+    input.break_minutes < 0
+  ) {
+    return [];
+  }
+
+  const days = [...new Set(input.days)]
+    .filter((day) => Number.isInteger(day) && day >= 1 && day <= 7)
+    .sort((a, b) => a - b);
+
+  if (days.length === 0) {
+    return [];
+  }
+
+  const location = input.location?.trim() ? input.location.trim() : undefined;
+  const slots: GeneratedWeeklySlot[] = [];
+
+  for (const day of days) {
+    let cursor = start;
+    while (cursor + input.session_minutes <= end) {
+      slots.push({
+        day_of_week: day,
+        start_time: formatWallClockMinutes(cursor),
+        end_time: formatWallClockMinutes(cursor + input.session_minutes),
+        capacity: input.capacity,
+        ...(location ? { location } : {}),
+      });
+      cursor += input.session_minutes + input.break_minutes;
+    }
+  }
+
+  return slots;
+}
+
 // Inferred Form / Input Types
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type CreateClassInput = z.infer<typeof createClassSchema>;
