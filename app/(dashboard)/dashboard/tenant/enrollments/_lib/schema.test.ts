@@ -218,6 +218,7 @@ describe('enrollmentStatusLabel', () => {
   it('translates the statuses the academic service emits', () => {
     expect(enrollmentStatusLabel('pending')).toBe('Menunggu aktivasi');
     expect(enrollmentStatusLabel('active')).toBe('Aktif');
+    expect(enrollmentStatusLabel('suspended')).toBe('Ditangguhkan');
     expect(enrollmentStatusLabel('completed')).toBe('Selesai');
     expect(enrollmentStatusLabel('dropped')).toBe('Dibatalkan');
   });
