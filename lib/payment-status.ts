@@ -53,6 +53,17 @@ export type TransactionRecord = {
 export type PaymentPresentation = { label: string; detail: string; tone: 'neutral' | 'success' | 'danger' | 'warning' };
 
 export function paymentPresentation(enrollment: EnrollmentRecord, transaction?: TransactionRecord): PaymentPresentation {
+  // KEL-149: a suspended enrollment is parked by billing, not by its payment.
+  // The invoice keeps its own state, so this branch runs before the payment
+  // branches — otherwise a paid suspended enrollment would read as an
+  // activation still in progress, which it is not.
+  if (enrollment.status === 'suspended') {
+    return {
+      label: 'Ditangguhkan',
+      detail: 'Enrollment ini sedang ditangguhkan penyelenggara. Riwayat pembayaran tetap tercatat dan status akan diperbarui bila enrollment dilanjutkan.',
+      tone: 'warning',
+    };
+  }
   if (!transaction) return { label: 'Menunggu transaksi', detail: 'Enrollment belum memiliki transaksi pembayaran yang dapat ditampilkan.', tone: 'neutral' };
   if (transaction.reconciliation_status === 'reconciling') return { label: 'Pembayaran diterima, aktivasi diproses', detail: 'Pembayaran sudah diterima. Aktivasi enrollment sedang dicoba ulang oleh sistem.', tone: 'warning' };
   if (transaction.reconciliation_status === 'terminal_failed') return { label: 'Aktivasi perlu tindak lanjut', detail: 'Pembayaran diterima, tetapi aktivasi enrollment belum berhasil. Hubungi penyelenggara.', tone: 'danger' };

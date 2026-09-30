@@ -32,10 +32,15 @@ export const TENANT_ENROLLMENTS_PATH = '/dashboard/tenant/enrollments';
  * academic service rejects anything outside this list with
  * `400 invalid enrollment status`, so the filter form and the request builder
  * share this single vocabulary instead of repeating the strings.
+ *
+ * `suspended` (KEL-149) is set only by the billing service through the internal
+ * suspend/resume endpoints: the enrollment is parked, holds no seat, and can be
+ * resumed or ended later.
  */
 export const enrollmentRecordStatusSchema = z.enum([
   'pending',
   'active',
+  'suspended',
   'completed',
   'dropped',
 ]);
@@ -56,6 +61,7 @@ export const ENROLLMENT_STATUS_OPTIONS: readonly {
 }[] = [
   { value: 'pending', label: 'Menunggu aktivasi' },
   { value: 'active', label: 'Aktif' },
+  { value: 'suspended', label: 'Ditangguhkan' },
   { value: 'completed', label: 'Selesai' },
   { value: 'dropped', label: 'Dibatalkan' },
 ] as const;

@@ -28,6 +28,21 @@ describe('paymentPresentation', () => {
     expect(failedRenewal.detail).not.toContain('belum aktif');
     expect(paymentPresentation(enrollment, { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'failed' }).detail).toContain('belum aktif');
   });
+
+  it('labels a suspended enrollment "Ditangguhkan" before any payment branch (KEL-149)', () => {
+    // A suspended enrollment is parked by billing, not by its payment, so even
+    // a paid one must not read as an activation still in progress.
+    const suspended = paymentPresentation(
+      { ...enrollment, status: 'suspended' },
+      { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'paid', reconciliation_status: 'reconciling' },
+    );
+    expect(suspended.label).toBe('Ditangguhkan');
+    expect(suspended.tone).toBe('warning');
+    expect(suspended.detail).toContain('ditangguhkan');
+
+    // Without a transaction the branch must still win over "Menunggu transaksi".
+    expect(paymentPresentation({ ...enrollment, status: 'suspended' }).label).toBe('Ditangguhkan');
+  });
 });
 
 describe('paymentIsSettling (KEL-44)', () => {

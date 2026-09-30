@@ -53,6 +53,9 @@ const TONES: Record<'neutral' | 'success' | 'warning' | 'danger', string> = {
 const ENROLLMENT_STATUS_TONES: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
   pending: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
+  // KEL-149: amber like the `warning` tone `paymentPresentation` uses for a
+  // suspended enrollment, so both surfaces read the parked state the same way.
+  suspended: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
   completed: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
   dropped: 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300',
 };
