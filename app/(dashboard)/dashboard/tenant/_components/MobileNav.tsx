@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
-import { TENANT_NAV_ITEMS } from '../_constants/constants';
+import type { NavItem } from '../_constants/constants';
+import { TENANT_NAV_ERROR_MESSAGE } from '../_lib/nav';
 
 function NavIcon({ href }: { href: string }) {
   if (href === '/dashboard/tenant') {
@@ -64,15 +65,33 @@ function NavIcon({ href }: { href: string }) {
   );
 }
 
-export function MobileNav() {
+export function MobileNav({
+  items,
+  roleName,
+  hasNavError,
+}: {
+  items: readonly NavItem[];
+  roleName: string | null;
+  hasNavError: boolean;
+}) {
   const pathname = usePathname();
 
   // Remount the stateful drawer when the route changes so navigation always
   // closes it without synchronously updating state from an effect.
-  return <MobileNavContent key={pathname} pathname={pathname} />;
+  return <MobileNavContent key={pathname} pathname={pathname} items={items} roleName={roleName} hasNavError={hasNavError} />;
 }
 
-function MobileNavContent({ pathname }: { pathname: string }) {
+function MobileNavContent({
+  pathname,
+  items,
+  roleName,
+  hasNavError,
+}: {
+  pathname: string;
+  items: readonly NavItem[];
+  roleName: string | null;
+  hasNavError: boolean;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -133,8 +152,8 @@ function MobileNavContent({ pathname }: { pathname: string }) {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1.5 p-4 overflow-y-auto">
-              {TENANT_NAV_ITEMS.map((item) => {
+            <nav className="flex-1 space-y-1.5 p-4 overflow-y-auto" aria-label="Tenant navigation">
+              {items.map((item) => {
                 const isActive =
                   item.href === '/dashboard/tenant'
                     ? pathname === '/dashboard/tenant'
@@ -158,16 +177,21 @@ function MobileNavContent({ pathname }: { pathname: string }) {
             </nav>
 
             <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+              {hasNavError && (
+                <p role="alert" className="mb-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  {TENANT_NAV_ERROR_MESSAGE}
+                </p>
+              )}
               <div className="flex items-center gap-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 p-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-semibold text-xs">
-                  TN
+                  {roleName ? roleName.slice(0, 2).toUpperCase() : 'TN'}
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
-                    Tenant Admin
+                    {roleName ?? 'Tenant'}
                   </span>
                   <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                    Organization Owner
+                    Tenant Member
                   </span>
                 </div>
               </div>

@@ -4,6 +4,26 @@ export interface NavItem {
   readonly description?: string;
 }
 
+/**
+ * The single source of truth for which permission a tenant navigation item needs
+ * (KEL-136). The backend stays the access authority; this map only decides what
+ * the dashboard offers. `null` marks an item every member of a tenant sees
+ * (Overview), so a caller cannot turn it off by passing an empty list.
+ *
+ * Permission names come from the identity seeder
+ * (`seeders/000001_default_permissions_and_roles.sql`); do not invent new ones.
+ */
+export const NAV_ITEM_PERMISSIONS: Readonly<Record<string, string | null>> = {
+  '/dashboard/tenant': null,
+  '/dashboard/tenant/classes': 'class:read',
+  '/dashboard/tenant/enrollments': 'enrollment:read',
+  '/dashboard/tenant/schedule-requests': 'enrollment:read',
+  '/dashboard/tenant/chat': 'chat:manage',
+  '/dashboard/tenant/members': 'member:read',
+  '/dashboard/tenant/roles': 'role:read',
+  '/dashboard/tenant/settings': 'tenant:read',
+};
+
 export const TENANT_NAV_ITEMS: readonly NavItem[] = [
   {
     label: 'Overview',
