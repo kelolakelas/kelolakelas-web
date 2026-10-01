@@ -16,6 +16,7 @@ export interface NavItem {
 export const NAV_ITEM_PERMISSIONS: Readonly<Record<string, string | null>> = {
   '/dashboard/tenant': null,
   '/dashboard/tenant/classes': 'class:read',
+  '/dashboard/tenant/sessions': 'schedule:read',
   '/dashboard/tenant/enrollments': 'enrollment:read',
   '/dashboard/tenant/schedule-requests': 'enrollment:read',
   '/dashboard/tenant/chat': 'chat:manage',
@@ -34,6 +35,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     label: 'Classes',
     href: '/dashboard/tenant/classes',
     description: 'Manage subject categories, classes & schedules',
+  },
+  {
+    label: 'Sesi Saya',
+    href: '/dashboard/tenant/sessions',
+    description: 'Lihat sesi mengajar Anda dan catat kehadiran',
   },
   {
     label: 'Enrollments',
