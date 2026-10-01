@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { normalizeListEnvelope } from '@/lib/list-envelope';
 import { qrDataUrl } from '@/lib/pay-qr';
-import { paymentInstructionsView, type PaymentInstructions, type TransactionRecord } from '@/lib/payment-status';
+import { paymentInstructionsView, pickLatestTransaction, type PaymentInstructions, type TransactionRecord } from '@/lib/payment-status';
 
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
@@ -88,7 +88,10 @@ export async function getCheckoutInstructions(input: { enrollmentId?: string; me
     if (!match.length) {
       return { data: { channel: '', merchantOrderId: merchantOrderId ?? null, instructions: null, qrImage: null }, error: null };
     }
-    const newest = [...match].sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0];
+    const newest = pickLatestTransaction(match);
+    if (!newest) {
+      return { data: { channel: '', merchantOrderId: merchantOrderId ?? null, instructions: null, qrImage: null }, error: null };
+    }
     const instructions = paymentInstructionsView(newest);
     return {
       data: {

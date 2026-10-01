@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paymentChannelLabel, paymentInstructionsView, paymentIsSettling, paymentPresentation, resumePayment } from './payment-status';
+import { isRenewalTransaction, latestTransactionPerEnrollment, parentEnrollmentStatusLabel, paymentChannelLabel, paymentInstructionsView, paymentIsSettling, paymentPresentation, pickLatestTransaction, renewalExpirySuffix, resumePayment } from './payment-status';
 
 const enrollment = { id: 'enrollment-1', status: 'pending' };
 
@@ -163,5 +163,82 @@ describe('paymentInstructionsView (KEL-127)', () => {
 
   it('refuses a script URL in app_url but keeps the QR payload', () => {
     expect(paymentInstructionsView(transaction({ payment_method: 'NQ', qr_string: 'QR', app_url: 'javascript:alert(1)' }), now)).toMatchObject({ kind: 'qris', qrString: 'QR', appUrl: null });
+  });
+});
+
+describe('pickLatestTransaction / latestTransactionPerEnrollment (KEL-151)', () => {
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    id: 'tx-1',
+    enrollment_id: 'enrollment-1',
+    status: 'pending',
+    ...overrides,
+  });
+
+  it('ignores API order: an older row first still loses to the newer row', () => {
+    const older = row({ id: 'tx-old', status: 'paid', updated_at: '2026-09-20T10:00:00Z' });
+    const newer = row({ id: 'tx-new', status: 'pending', updated_at: '2026-09-26T10:00:00Z' });
+    expect(pickLatestTransaction([older, newer])?.id).toBe('tx-new');
+    expect(pickLatestTransaction([newer, older])?.id).toBe('tx-new');
+  });
+
+  it('shows a paid initial invoice plus a pending renewal as the pending renewal', () => {
+    const initial = row({ id: 'tx-initial', status: 'paid', merchant_order_id: 'tx-initial', updated_at: '2026-09-20T10:00:00Z' });
+    const renewal = row({ id: 'tx-renewal', status: 'pending', merchant_order_id: 'renewal-tx-renewal', updated_at: '2026-09-26T10:00:00Z' });
+    const picked = pickLatestTransaction([initial, renewal]);
+    expect(picked?.status).toBe('pending');
+    expect(isRenewalTransaction(picked)).toBe(true);
+    expect(isRenewalTransaction(initial)).toBe(false);
+  });
+
+  it('groups per enrollment so each enrollment shows its own newest row', () => {
+    const rows = [
+      row({ id: 'tx-a-old', enrollment_id: 'enrollment-a', updated_at: '2026-09-20T10:00:00Z' }),
+      row({ id: 'tx-a-new', enrollment_id: 'enrollment-a', updated_at: '2026-09-26T10:00:00Z' }),
+      row({ id: 'tx-b-only', enrollment_id: 'enrollment-b', updated_at: '2026-09-21T10:00:00Z' }),
+    ];
+    const grouped = latestTransactionPerEnrollment(rows);
+    expect(grouped.get('enrollment-a')?.id).toBe('tx-a-new');
+    expect(grouped.get('enrollment-b')?.id).toBe('tx-b-only');
+  });
+
+  it('breaks equal timestamps deterministically instead of depending on API order', () => {
+    const left = row({ id: 'tx-aaa', updated_at: '2026-09-26T10:00:00Z' });
+    const right = row({ id: 'tx-zzz', updated_at: '2026-09-26T10:00:00Z' });
+    expect(pickLatestTransaction([left, right])?.id).toBe(pickLatestTransaction([right, left])?.id);
+  });
+
+  it('returns undefined for an empty list and sorts malformed timestamps last', () => {
+    expect(pickLatestTransaction([])).toBeUndefined();
+    const malformed = row({ id: 'tx-bad', updated_at: 'not-a-date' });
+    const missing = row({ id: 'tx-missing' });
+    const valid = row({ id: 'tx-valid', updated_at: '2026-09-26T10:00:00Z' });
+    expect(pickLatestTransaction([malformed, missing, valid])?.id).toBe('tx-valid');
+    expect(pickLatestTransaction([malformed, missing])?.id).toBeDefined();
+  });
+
+  it('keeps an enrollment without a transaction on the waiting state', () => {
+    expect(latestTransactionPerEnrollment([]).size).toBe(0);
+    expect(paymentPresentation(enrollment, undefined).label).toBe('Menunggu transaksi');
+  });
+});
+
+describe('parentEnrollmentStatusLabel (KEL-151)', () => {
+  it.each(['pending', 'active', 'suspended', 'completed', 'dropped'] as const)('keeps the raw known status %s', (status) => {
+    expect(parentEnrollmentStatusLabel(status)).toBe(`Enrollment ${status}`);
+  });
+
+  it('labels an unknown backend status neutrally instead of hiding it', () => {
+    expect(parentEnrollmentStatusLabel('grace_period')).toBe('Status enrollment: grace_period');
+    expect(parentEnrollmentStatusLabel('')).toBe('Status enrollment: tidak diketahui');
+  });
+});
+
+describe('renewalExpirySuffix (KEL-151)', () => {
+  it('appends a formatted deadline for a usable expiry', () => {
+    expect(renewalExpirySuffix(FUTURE_EXPIRY)).toContain('bayar sebelum');
+  });
+
+  it.each([undefined, '', 'broken-date'])('returns an empty suffix for %s', (value) => {
+    expect(renewalExpirySuffix(value)).toBe('');
   });
 });

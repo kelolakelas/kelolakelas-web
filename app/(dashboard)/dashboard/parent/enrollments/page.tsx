@@ -6,7 +6,7 @@ import { canCancelEnrollment } from '@/lib/enrollment-cancellation';
 import { enrollmentScheduleLabel, SCHEDULE_UNAVAILABLE_LABEL } from '@/lib/enrollment-schedule';
 import { qrDataUrl } from '@/lib/pay-qr';
 import { parseMerchantOrderId, PAYMENT_RETURN_PATH } from '@/lib/payment-return';
-import { formatCurrency, paymentChannelLabel, paymentInstructionsView, paymentPresentation, resumePayment } from '@/lib/payment-status';
+import { formatCurrency, isRenewalTransaction, latestTransactionPerEnrollment, parentEnrollmentStatusLabel, paymentChannelLabel, paymentInstructionsView, paymentPresentation, renewalExpirySuffix, resumePayment } from '@/lib/payment-status';
 import { CancelEnrollmentButton } from './_components/CancelEnrollmentButton';
 import { getEnrollmentHistory } from './_queries/queries';
 
@@ -18,7 +18,7 @@ export default async function ParentEnrollmentHistoryPage() {
   const result = await getEnrollmentHistory();
   if (result.error) return <main className="min-h-screen bg-[#f8f7f3] px-5 py-10 text-[#17231f]"><section className="mx-auto max-w-4xl rounded-3xl border border-[#f2c6c3] bg-white p-8" role="alert"><p className="text-sm font-bold text-[#b42318]">{result.error === 'forbidden' ? 'Akses ditolak' : 'Riwayat tidak tersedia'}</p><h1 className="mt-2 text-3xl font-black">Status enrollment belum dapat dimuat.</h1><p className="mt-3 text-[#52615b]">{result.message}</p></section></main>;
 
-  const transactions = new Map(result.data.transactions.map((transaction) => [transaction.enrollment_id, transaction]));
+  const transactions = latestTransactionPerEnrollment(result.data.transactions);
   const rows = await Promise.all(result.data.enrollments.map(async (enrollment) => {
     const transaction = transactions.get(enrollment.id);
     const instructions = paymentInstructionsView(transaction);
@@ -54,7 +54,8 @@ export default async function ParentEnrollmentHistoryPage() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <h2 className="text-xl font-black">{enrollment.class?.name || 'Kelas'}</h2>
-                      <p className="mt-1 text-sm text-[#52615b]">{enrollment.student?.first_name || 'Student'} · Enrollment {enrollment.status}</p>
+                      <p className="mt-1 text-sm text-[#52615b]">{enrollment.student?.first_name || 'Student'} · {parentEnrollmentStatusLabel(enrollment.status)}</p>
+                      {transaction && isRenewalTransaction(transaction) && <p className="mt-1 inline-block rounded-full bg-[#eef3f1] px-3 py-1 text-sm font-bold text-[#365047]">Tagihan perpanjangan{renewalExpirySuffix(transaction.invoice_expires_at)}</p>}
                       {schedule && <p className="mt-1 text-sm font-semibold text-[#365047]">{schedule === SCHEDULE_UNAVAILABLE_LABEL ? schedule : `Jadwal: ${schedule}`}</p>}
                     </div>
                     <span className={`rounded-full px-3 py-1 text-sm font-bold ${tones[status.tone]}`}>{status.label}</span>
