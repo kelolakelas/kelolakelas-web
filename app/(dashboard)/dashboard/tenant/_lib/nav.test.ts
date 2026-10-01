@@ -99,6 +99,7 @@ describe('filterTenantNavItems (KEL-136)', () => {
       'Sesi Saya',
       'Enrollments',
       'Schedule Requests',
+      'Vouchers',
       'Chat',
       'Members',
       'Roles & Permissions',

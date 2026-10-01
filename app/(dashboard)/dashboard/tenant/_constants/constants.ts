@@ -19,6 +19,7 @@ export const NAV_ITEM_PERMISSIONS: Readonly<Record<string, string | null>> = {
   '/dashboard/tenant/sessions': 'schedule:read',
   '/dashboard/tenant/enrollments': 'enrollment:read',
   '/dashboard/tenant/schedule-requests': 'enrollment:read',
+  '/dashboard/tenant/vouchers': 'voucher:read',
   '/dashboard/tenant/chat': 'chat:manage',
   '/dashboard/tenant/members': 'member:read',
   '/dashboard/tenant/roles': 'role:read',
@@ -50,6 +51,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     label: 'Schedule Requests',
     href: '/dashboard/tenant/schedule-requests',
     description: 'Review private schedule requests from parents',
+  },
+  {
+    label: 'Vouchers',
+    href: '/dashboard/tenant/vouchers',
+    description: 'Manage discounts and voucher usage',
   },
   {
     label: 'Chat',
