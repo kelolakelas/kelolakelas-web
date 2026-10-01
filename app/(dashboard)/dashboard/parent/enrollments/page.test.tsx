@@ -211,6 +211,43 @@ describe('parent enrollment screen resume-payment link (KEL-53)', () => {
   });
 });
 
+/**
+ * KEL-151: a parent sees each enrollment's newest transaction, and a renewal
+ * invoice is labelled as a renewal bill with its pay action. Both rows below
+ * carry the fixture timestamps billing really sends (`updated_at`), because an
+ * implementation that reads only the API order or a wrong field passes one
+ * order and fails the other.
+ */
+describe('parent enrollment screen latest transaction and renewal bill (KEL-151)', () => {
+  const RENEWAL_ID = '2d8f7a0c-7a0a-4aa8-8e54-000000000001';
+  const future = new Date(Date.now() + 3_600_000).toISOString();
+  const CHECKOUT_URL = 'https://checkout.example.com/pay/renewal-1';
+
+  it('shows a pending renewal over a paid initial invoice regardless of API order, with a pay action', async () => {
+    const initial = { id: 'tx-initial', enrollment_id: PENDING_ID, merchant_order_id: 'tx-initial', status: 'paid', updated_at: '2026-09-20T10:00:00Z' };
+    const renewal = { id: 'tx-renewal', enrollment_id: PENDING_ID, merchant_order_id: `renewal-${RENEWAL_ID}`, status: 'pending', checkout_session_url: CHECKOUT_URL, invoice_expires_at: future, gross_amount: 150000, currency: 'IDR', updated_at: '2026-09-26T10:00:00Z' };
+
+    for (const order of [[initial, renewal], [renewal, initial]]) {
+      setRows([{ id: PENDING_ID, status: 'active', class: { name: 'Matematika Dasar' } }], order);
+
+      const html = await render();
+
+      expect(html).toContain('Tagihan perpanjangan');
+      expect(html).toContain('pending');
+      expect(html).toContain('Lanjutkan pembayaran');
+      expect(html).toContain(`href="${CHECKOUT_URL}"`);
+    }
+  });
+
+  it('labels an unknown enrollment status neutrally instead of hiding it', async () => {
+    setRows([{ id: PENDING_ID, status: 'grace_period', class: { name: 'Matematika Dasar' } }]);
+
+    const html = await render();
+
+    expect(html).toContain('Status enrollment: grace_period');
+  });
+});
+
 describe('parent enrollment card schedule summary (KEL-70)', () => {
   const SCHEDULE_ID = 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f';
 

@@ -52,6 +52,53 @@ export type TransactionRecord = {
 
 export type PaymentPresentation = { label: string; detail: string; tone: 'neutral' | 'success' | 'danger' | 'warning' };
 
+/**
+ * Selects the newest billing row without relying on the order returned by the
+ * API. Billing exposes `updated_at` on transaction rows; malformed or missing
+ * timestamps sort before valid ones. The id/order-id tie-break keeps equal
+ * timestamps deterministic while preserving the latest row's full payload.
+ */
+export function pickLatestTransaction(transactions: readonly TransactionRecord[]): TransactionRecord | undefined {
+  return [...transactions].sort((a, b) => {
+    const aTime = Date.parse(a.updated_at || '');
+    const bTime = Date.parse(b.updated_at || '');
+    const aValid = Number.isNaN(aTime) ? Number.NEGATIVE_INFINITY : aTime;
+    const bValid = Number.isNaN(bTime) ? Number.NEGATIVE_INFINITY : bTime;
+    return bValid - aValid || b.id.localeCompare(a.id) || String(b.merchant_order_id || '').localeCompare(String(a.merchant_order_id || ''));
+  })[0];
+}
+
+/** Groups all transactions by enrollment, choosing each enrollment's newest row. */
+export function latestTransactionPerEnrollment(transactions: readonly TransactionRecord[]): Map<string, TransactionRecord> {
+  const latest = new Map<string, TransactionRecord>();
+  for (const transaction of transactions) {
+    const current = latest.get(transaction.enrollment_id);
+    const candidate = current ? pickLatestTransaction([current, transaction]) : transaction;
+    if (candidate) latest.set(transaction.enrollment_id, candidate);
+  }
+  return latest;
+}
+
+/** Renewal invoices use a stable prefix in the Duitku merchant order id. */
+export function isRenewalTransaction(transaction?: TransactionRecord): boolean {
+  return transaction?.merchant_order_id?.startsWith('renewal-') === true;
+}
+
+/** Keeps unknown backend enrollment states visible without presenting a false known label. */
+export function parentEnrollmentStatusLabel(status: string): string {
+  const known = ['pending', 'active', 'suspended', 'completed', 'dropped'];
+  if (known.includes(status)) return `Enrollment ${status}`;
+  return `Status enrollment: ${status || 'tidak diketahui'}`;
+}
+
+/** Suffix for the renewal badge; empty when no usable expiry is present. */
+export function renewalExpirySuffix(invoiceExpiresAt?: string): string {
+  if (!invoiceExpiresAt) return '';
+  const expiresAt = new Date(invoiceExpiresAt);
+  if (Number.isNaN(expiresAt.getTime())) return '';
+  return ` · bayar sebelum ${formatExpiry(expiresAt)}`;
+}
+
 export function paymentPresentation(enrollment: EnrollmentRecord, transaction?: TransactionRecord): PaymentPresentation {
   // KEL-149: a suspended enrollment is parked by billing, not by its payment.
   // The invoice keeps its own state, so this branch runs before the payment
