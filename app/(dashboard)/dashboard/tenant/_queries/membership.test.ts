@@ -57,7 +57,7 @@ describe('readTenantNav (KEL-136)', () => {
           member_id: 'member',
           role_id: 'role',
           role_name: 'Creator',
-          permissions: ['class:read', 'enrollment:read', 'chat:manage', 'member:read', 'role:read', 'tenant:read'],
+          permissions: ['class:read', 'schedule:read', 'enrollment:read', 'chat:manage', 'member:read', 'role:read', 'tenant:read'],
         },
       })
     );
@@ -70,6 +70,7 @@ describe('readTenantNav (KEL-136)', () => {
     expect(result.items.map((item) => item.label)).toEqual([
       'Overview',
       'Classes',
+      'Sesi Saya',
       'Enrollments',
       'Schedule Requests',
       'Chat',
@@ -81,8 +82,9 @@ describe('readTenantNav (KEL-136)', () => {
   });
 
   it('returns the filtered menu and Teacher role name for Teacher data', async () => {
-    // Seeder Teacher permissions gate no sidebar item, so a Teacher sees
-    // Overview only (see the nav filter test); the footer still names the role.
+    // KEL-137 offers the tutor session screen behind `schedule:read`, so a
+    // Teacher sees it alongside Overview (see the nav filter test); the
+    // footer still names the role.
     mocks.fetch.mockResolvedValue(
       jsonResponse(200, {
         status: 'success',
@@ -101,7 +103,7 @@ describe('readTenantNav (KEL-136)', () => {
     if (result.state !== 'ok') return;
     expect(result.roleName).toBe('Teacher');
     const visible = result.items.map((item) => item.label);
-    expect(visible).toEqual(['Overview']);
+    expect(visible).toEqual(['Overview', 'Sesi Saya']);
     expect(visible).not.toContain('Members');
     expect(visible).not.toContain('Roles & Permissions');
     expect(visible).not.toContain('Settings');

@@ -96,6 +96,7 @@ describe('filterTenantNavItems (KEL-136)', () => {
     expect(labels(filterTenantNavItems(CREATOR_PERMISSIONS))).toEqual([
       'Overview',
       'Classes',
+      'Sesi Saya',
       'Enrollments',
       'Schedule Requests',
       'Chat',
@@ -105,14 +106,15 @@ describe('filterTenantNavItems (KEL-136)', () => {
     ]);
   });
 
-  it('hides Members, Roles & Permissions, and Settings from Teacher', () => {
+  it('shows Overview and Sesi Saya to Teacher', () => {
     // The seeder grants the Teacher system role only schedule/attendance/
-    // student_note/report permissions, none of which gate a sidebar item, so a
-    // Teacher sees Overview only. No new sesi/laporan menus are added here
-    // (contract out-of-scope); the backend still enforces every area.
+    // student_note/report permissions. KEL-137 offers the tutor session
+    // screen behind `schedule:read`, so a Teacher sees it alongside
+    // Overview — but still not Members, Roles & Permissions, or Settings.
+    // The backend still enforces every area.
     const visible = labels(filterTenantNavItems(TEACHER_PERMISSIONS));
 
-    expect(visible).toEqual(['Overview']);
+    expect(visible).toEqual(['Overview', 'Sesi Saya']);
     expect(visible).not.toContain('Members');
     expect(visible).not.toContain('Roles & Permissions');
     expect(visible).not.toContain('Settings');
