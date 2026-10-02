@@ -137,3 +137,70 @@ describe('chat deep-link (KEL-124)', () => {
     expect(screen.getByRole('heading', { name: 'Pilih percakapan' })).toBeTruthy();
   });
 });
+
+describe('system notifications (KEL-157)', () => {
+  const notificationId = 'c4321b1a-63b2-4d3a-8b56-acc739170973';
+  const notification: ChatConversation = {
+    id: notificationId,
+    kind: 'notification',
+    context: { tenant_name: 'Sekolah Pelita' },
+    last_message: null,
+    last_message_at: null,
+    unread_count: 2,
+  };
+
+  it('renders the notification row with tenant label and unread count', () => {
+    render(<ChatInbox initial={[notification]} userId="me" tenant={false} />);
+    // Active defaults to the first row, so the title appears in the row and
+    // the detail heading.
+    expect(screen.getAllByText('Notifikasi sistem')).toHaveLength(2);
+    expect(screen.getByText('Sekolah Pelita')).toBeTruthy();
+    expect(screen.getByText('2 belum dibaca')).toBeTruthy();
+  });
+
+  it('renders system messages distinctly, clears unread on read, and hides the reply form', async () => {
+    const systemMessage: ChatMessage = {
+      id: 'd5321b1a-63b2-4d3a-8b56-acc739170974',
+      conversation_id: notificationId,
+      sender_user_id: null,
+      sender_kind: 'system',
+      body: 'Jadwal kelas berubah menjadi jam 10.',
+      client_message_id: 'system-key-1',
+      created_at: '2026-09-29T02:20:40+07:00',
+    };
+    vi.mocked(listChatMessages).mockResolvedValue({ data: [systemMessage], error: null });
+    render(<ChatInbox initial={[notification]} userId="me" tenant={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Notifikasi sistem/ }));
+    await waitFor(() => expect(markChatRead).toHaveBeenCalledWith(notificationId));
+    await screen.findByText('Jadwal kelas berubah menjadi jam 10.');
+    expect(screen.getByText('Sistem')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('2 belum dibaca')).toBeNull());
+    expect(screen.queryByRole('textbox', { name: 'Pesan' })).toBeNull();
+    expect(screen.getByText(/satu arah/)).toBeTruthy();
+  });
+
+  it('renders unknown conversation kinds and senders without throwing', async () => {
+    const alien = { ...room, id: 'e6321b1a-63b2-4d3a-8b56-acc739170975', kind: 'reminder', context: {} };
+    const alienMessage: ChatMessage = {
+      id: 'f7321b1a-63b2-4d3a-8b56-acc739170976',
+      conversation_id: alien.id,
+      sender_user_id: 'someone-else',
+      sender_kind: 'robot',
+      body: 'Pesan asing',
+      client_message_id: 'alien-key',
+      created_at: '2026-09-29T02:20:40+07:00',
+    };
+    vi.mocked(listChatMessages).mockResolvedValue({ data: [alienMessage], error: null });
+    render(<ChatInbox initial={[alien]} userId="me" tenant={false} />);
+
+    // List header ("Percakapan"), row button, and detail heading all share
+    // the fallback text when the kind is unknown.
+    expect(screen.getAllByText('Percakapan')).toHaveLength(3);
+    expect(screen.getAllByRole('heading', { name: 'Percakapan' })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /Percakapan/ }));
+    await screen.findByText('Pesan asing');
+    expect(screen.getByText('Pengirim tidak dikenal')).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Pesan' })).toBeTruthy();
+  });
+});
