@@ -100,6 +100,7 @@ describe('filterTenantNavItems (KEL-136)', () => {
       'Enrollments',
       'Schedule Requests',
       'Vouchers',
+      'Keuangan',
       'Chat',
       'Members',
       'Roles & Permissions',
@@ -132,7 +133,8 @@ describe('filterTenantNavItems (KEL-136)', () => {
   });
 
   it('keeps Overview visible even for an unknown permission set', () => {
-    expect(labels(filterTenantNavItems(['billing:read']))).toEqual(['Overview']);
+    expect(labels(filterTenantNavItems(['billing:read']))).toEqual(['Overview', 'Keuangan']);
+    expect(labels(filterTenantNavItems(['billing:withdraw']))).toEqual(['Overview']);
   });
 });
 
