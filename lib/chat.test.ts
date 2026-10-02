@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyChatEvent, chatWebSocketUrl, mergeMessages, updateDelivery, type ChatConversation, type ChatMessage } from './chat';
+import { applyChatEvent, chatTitle, chatWebSocketUrl, conversationTenantLabel, isNotificationConversation, isSystemMessage, mergeMessages, senderLabel, updateDelivery, type ChatConversation, type ChatMessage } from './chat';
 
 const message: ChatMessage = { id: 'server', conversation_id: 'room', sender_user_id: 'me', sender_kind: 'tenant', body: '<b>literal</b>', client_message_id: 'client', created_at: '2026-01-01T00:00:00Z' };
 const room: ChatConversation = { id: 'room', kind: 'staff', context: {}, last_message: null, last_message_at: null, unread_count: 0 };
@@ -47,5 +47,50 @@ describe('chat state', () => {
     expect(chatWebSocketUrl('wss://example.com', 'a+b')).toBe('wss://example.com/api/v1/chat/ws?ticket=a%2Bb');
     expect(chatWebSocketUrl('https://example.com', 'ticket')).toBeNull();
     expect(chatWebSocketUrl('wss://example.com/other', 'ticket')).toBeNull();
+  });
+});
+
+describe('system notifications (KEL-157)', () => {
+  const notification: ChatConversation = { id: 'notif', kind: 'notification', context: { tenant_name: 'Sekolah Pelita' }, last_message: null, last_message_at: null, unread_count: 2 };
+  const systemMessage: ChatMessage = { id: 'sys', conversation_id: 'notif', sender_user_id: null, sender_kind: 'system', body: 'Jadwal berubah', client_message_id: 'sys-key', created_at: '2026-09-29T02:20:40+07:00' };
+
+  it('labels a notification conversation with its tenant and a distinct title', () => {
+    expect(isNotificationConversation(notification)).toBe(true);
+    expect(isNotificationConversation(room)).toBe(false);
+    expect(chatTitle(notification)).toBe('Notifikasi sistem');
+    expect(conversationTenantLabel(notification)).toBe('Sekolah Pelita');
+    expect(conversationTenantLabel(room)).toBeNull();
+  });
+
+  it('falls back safely for notification rows without tenant context', () => {
+    expect(conversationTenantLabel({ ...notification, context: null })).toBe('Tenant');
+    expect(chatTitle({ ...notification, context: null })).toBe('Notifikasi sistem');
+  });
+
+  it('renders system senders distinctly even with a null sender id', () => {
+    expect(isSystemMessage(systemMessage)).toBe(true);
+    expect(isSystemMessage(message)).toBe(false);
+    expect(senderLabel(systemMessage, 'me')).toBe('Sistem');
+    expect(senderLabel({ ...systemMessage, sender_user_id: 'me', sender_kind: 'system' }, 'me')).toBe('Anda');
+  });
+
+  it('counts realtime system messages as unread and clears them on read', () => {
+    const event = { type: 'message.created' as const, conversation_id: 'notif', message: { ...systemMessage, sender_user_id: null } };
+    const updated = applyChatEvent([notification], event, 'me', null);
+    expect(updated[0].unread_count).toBe(3);
+    expect(updated[0].last_message?.body).toBe('Jadwal berubah');
+    expect(applyChatEvent(updated, { type: 'conversation.read', conversation_id: 'notif', user_id: 'me', read_at: '' }, 'me', null)[0].unread_count).toBe(0);
+  });
+
+  it('falls back for unknown conversation kinds and senders without throwing', () => {
+    const unknown: ChatConversation = { ...room, kind: 'reminder', context: {} };
+    expect(isNotificationConversation(unknown)).toBe(false);
+    expect(() => chatTitle(unknown)).not.toThrow();
+    expect(chatTitle(unknown)).toBe('Percakapan');
+    expect(chatTitle({ ...room, kind: 'schedule_request', context: {} })).toBe('Permintaan jadwal');
+    const alien: ChatMessage = { ...message, sender_user_id: 'them', sender_kind: 'robot' };
+    expect(isSystemMessage(alien)).toBe(false);
+    expect(senderLabel(alien, 'me')).toBe('Pengirim tidak dikenal');
+    expect(senderLabel({ ...message, sender_kind: 'member' }, 'other')).toBe('Tenant');
   });
 });

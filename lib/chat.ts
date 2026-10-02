@@ -1,7 +1,9 @@
 export interface ChatMessage {
   id: string;
   conversation_id: string;
-  sender_user_id: string;
+  // Null for system messages (KEL-154 writes sender_kind=system with
+  // sender_user_id NULL); non-null for parent/member rows.
+  sender_user_id: string | null;
   sender_kind: string;
   body: string;
   client_message_id: string;
@@ -11,7 +13,9 @@ export interface ChatMessage {
 
 export interface ChatConversation {
   id: string;
-  kind: 'staff' | 'schedule_request' | 'report';
+  // Keep the wire type open: the service may add a kind before the web app
+  // learns its presentation, and unknown kinds must remain safe to render.
+  kind: string;
   context: { tenant_name?: string; class_name?: string; student_first_name?: string; report_title?: string } | null;
   last_message: ChatMessage | null;
   last_message_at: string | null;
@@ -63,16 +67,33 @@ export function applyChatEvent(conversations: ChatConversation[], event: ChatEve
   });
 }
 
+export function isNotificationConversation(conversation: ChatConversation): boolean {
+  return conversation.kind === 'notification';
+}
+
 export function chatTitle(conversation: ChatConversation): string {
+  if (isNotificationConversation(conversation)) return 'Notifikasi sistem';
   if (conversation.kind === 'staff') return 'Tim tenant';
-  return conversation.context?.class_name || conversation.context?.report_title || (conversation.kind === 'report' ? 'Laporan' : 'Permintaan jadwal');
+  if (conversation.kind === 'report') return conversation.context?.report_title || 'Laporan';
+  if (conversation.kind === 'schedule_request') return conversation.context?.class_name || 'Permintaan jadwal';
+  return conversation.context?.class_name || conversation.context?.report_title || 'Percakapan';
+}
+
+export function conversationTenantLabel(conversation: ChatConversation): string | null {
+  return isNotificationConversation(conversation) ? conversation.context?.tenant_name || 'Tenant' : null;
+}
+
+export function isSystemMessage(message: ChatMessage): boolean {
+  return message.sender_kind === 'system' || message.sender_user_id === null;
 }
 
 export function senderLabel(message: ChatMessage, userId: string): string {
   if (message.sender_user_id === userId) return 'Anda';
+  if (message.sender_kind === 'system' || message.sender_user_id === null) return 'Sistem';
   if (message.sender_kind === 'parent') return 'Parent';
   if (message.sender_kind === 'teacher') return 'Pengajar';
-  return 'Tenant';
+  if (message.sender_kind === 'member' || message.sender_kind === 'tenant') return 'Tenant';
+  return 'Pengirim tidak dikenal';
 }
 
 export function chatWebSocketUrl(base: string | undefined, ticket: string): string | null {
