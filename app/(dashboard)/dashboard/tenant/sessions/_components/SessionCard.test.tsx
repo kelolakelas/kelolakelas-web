@@ -45,9 +45,19 @@ function row(overrides: Partial<TutorSessionRow> = {}): TutorSessionRow {
   };
 }
 
-function render(target: TutorSessionRow, canRecordAttendance = true): string {
+function render(
+  target: TutorSessionRow,
+  canRecordAttendance = true,
+  canManageSessions = true,
+): string {
   return renderToStaticMarkup(
-    <SessionCard row={target} canRecordAttendance={canRecordAttendance} idPrefix="test" />
+    <SessionCard
+      row={target}
+      canRecordAttendance={canRecordAttendance}
+      canManageSessions={canManageSessions}
+      tutors={[]}
+      idPrefix="test"
+    />
   );
 }
 
@@ -102,6 +112,33 @@ describe('SessionCard', () => {
     expect(html).not.toContain('Catat kehadiran');
     expect(html).toContain('role="alert"');
     expect(html).toContain('attendance:create');
+  });
+
+  it('renders the forbidden panel instead of the schedule dialogs without schedule:update', () => {
+    const html = render(row(), true, false);
+
+    expect(html).not.toContain('Reschedule');
+    expect(html).not.toContain('Tutor pengganti');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('schedule:update');
+  });
+
+  it('hides both mutations on a cancelled session even with schedule:update', () => {
+    const html = render(
+      row({
+        session: {
+          ...row().session,
+          status: 'cancelled',
+        },
+      }),
+      true,
+      true
+    );
+
+    expect(html).toContain('Dibatalkan');
+    expect(html).toContain('dibatalkan sehingga tidak dapat di-reschedule');
+    expect(html).not.toContain('Reschedule');
+    expect(html).not.toContain('Tutor pengganti');
   });
 
   it('explains the empty session instead of reporting an error', () => {

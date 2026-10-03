@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { readTenantNav } from '../_queries/membership';
 import {
+  canManageTenantSessions,
   EMPTY_SESSION_FILTERS,
   parseSessionFilters,
   sessionCountLabel,
@@ -123,6 +124,9 @@ async function SessionsContent({ searchParams }: Props) {
   const nav = await readTenantNav();
   const canRecordAttendance =
     nav.state !== 'ok' || nav.membership.permissions.includes('attendance:create');
+  // Fail-closed: offered only on a confirmed membership with the
+  // permission; an unreadable membership hides the mutations.
+  const canManageSessions = canManageTenantSessions(nav);
 
   const isFiltered = filters.range !== 'today' || filters.class_id !== '';
 
@@ -175,6 +179,8 @@ async function SessionsContent({ searchParams }: Props) {
                 key={row.session.id}
                 row={row}
                 canRecordAttendance={canRecordAttendance}
+                canManageSessions={canManageSessions}
+                tutors={result.data.tutors}
                 idPrefix={`session-${index}`}
               />
             ))}

@@ -5,9 +5,12 @@ import {
   sessionDateLabel,
   sessionStatusLabel,
   sessionTimeLabel,
+  type TutorOption,
 } from '../_lib/schema';
 import type { TutorSessionRow } from '../_queries/queries';
 import { AttendanceDialog } from './AttendanceDialog';
+import { RescheduleDialog } from './RescheduleDialog';
+import { SubstituteTutorDialog } from './SubstituteTutorDialog';
 
 /** Badge colours for the session lifecycle status. */
 const SESSION_STATUS_TONES: Record<string, string> = {
@@ -68,26 +71,59 @@ function AttendanceForbiddenPanel() {
 }
 
 /**
+ * Fallback shown instead of the schedule dialogs when the member lacks
+ * `schedule:update` (KEL-138).
+ *
+ * The backend stays the access authority — the actions refuse the mutation
+ * with the same permission — this panel only decides what the dashboard
+ * offers, so the member is told about the missing permission instead of
+ * meeting a technical error after submitting.
+ */
+function ScheduleForbiddenPanel() {
+  return (
+    <section
+      role="alert"
+      aria-label="Akses mengubah sesi ditolak"
+      className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+    >
+      Anda tidak memiliki izin mengubah sesi. Hubungi administrator tenant untuk mendapatkan
+      permission schedule:update.
+    </section>
+  );
+}
+
+/**
  * One tutor session with its attendees and the mass attendance dialog
  * (KEL-137).
  *
- * The card is a Server Component: the dialog it embeds is the only
- * interactive part. The recorded states come from the read-back, so what
+ * The card is a Server Component: the dialogs it embeds are the only
+ * interactive parts. The recorded states come from the read-back, so what
  * the tutor sees after a refresh is what the backend stored — including the
  * replacement rows of rescheduled sessions, which the session_id-addressed
  * write reaches (KEL-134).
+ *
+ * The reschedule and substitute-tutor dialogs (KEL-138) are offered only to
+ * members with `schedule:update`: the backend stays the access authority and
+ * refuses the mutation with the same permission. Cancelled sessions offer
+ * neither dialog — the backend answers the mutation with a conflict — but
+ * explain why inline instead of failing silently.
  */
 export function SessionCard({
   row,
   canRecordAttendance,
+  canManageSessions,
+  tutors,
   idPrefix,
 }: {
   row: TutorSessionRow;
   canRecordAttendance: boolean;
+  canManageSessions: boolean;
+  tutors: TutorOption[];
   idPrefix: string;
 }) {
   const { session, attendees, attendance, attendanceForbidden } = row;
   const sessionLabel = `${sessionDateLabel(session.session_date)} · ${sessionTimeLabel(session.start_time, session.end_time)}`;
+  const isCancelled = session.status === 'cancelled';
 
   return (
     <article className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-xs">
@@ -148,7 +184,7 @@ export function SessionCard({
         </p>
       )}
 
-      <div className="mt-4">
+      <div className="mt-4 space-y-3">
         {attendees.length > 0 &&
           (canRecordAttendance ? (
             <AttendanceDialog
@@ -161,6 +197,24 @@ export function SessionCard({
           ) : (
             <AttendanceForbiddenPanel />
           ))}
+
+        {isCancelled ? (
+          <p className="rounded-xl border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            Sesi ini dibatalkan sehingga tidak dapat di-reschedule atau diberi tutor pengganti.
+          </p>
+        ) : canManageSessions ? (
+          <div className="flex flex-wrap gap-3">
+            <RescheduleDialog sessionId={session.id} sessionLabel={sessionLabel} idPrefix={idPrefix} />
+            <SubstituteTutorDialog
+              sessionId={session.id}
+              sessionLabel={sessionLabel}
+              tutors={tutors}
+              idPrefix={idPrefix}
+            />
+          </div>
+        ) : (
+          <ScheduleForbiddenPanel />
+        )}
       </div>
     </article>
   );

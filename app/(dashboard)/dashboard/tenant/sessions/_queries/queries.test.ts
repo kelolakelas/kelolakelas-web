@@ -104,7 +104,7 @@ function headersOf(path: string): Record<string, string> {
   return (call?.[1] as RequestInit | undefined)?.headers as Record<string, string>;
 }
 
-function sessionsRoute(sessions: unknown[]) {
+function sessionsRoute(sessions: unknown[], tutors: unknown[] = []) {
   return (url: string) => {
     if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
       return success({ items: sessions, pagination: pagination({ total_items: sessions.length }) });
@@ -117,6 +117,9 @@ function sessionsRoute(sessions: unknown[]) {
     }
     if (url.startsWith(`${GATEWAY_URL}/api/v1/classes`)) {
       return success({ items: [], pagination: pagination({ total_items: 0 }) });
+    }
+    if (url.startsWith(`${GATEWAY_URL}/api/v1/tutors`)) {
+      return success({ items: tutors, pagination: pagination({ total_items: tutors.length }) });
     }
     return undefined;
   };
@@ -467,6 +470,66 @@ describe('getTutorSessions', () => {
     expect(result.error).toBeNull();
     if (result.error === null) {
       expect(result.data.classes).toEqual([{ id: 'class-1', name: 'Matematika Dasar' }]);
+    }
+  });
+
+  it('reads the tutor list for the substitute-tutor select', async () => {
+    const tutorId = 'aaaaaaaa-1111-4222-8333-444455556666';
+    installFetch(
+      sessionsRoute([], [
+        { id: tutorId, first_name: 'Budi', last_name: 'Hartono', email: 'budi@example.com' },
+      ])
+    );
+
+    const result = await getTutorSessions({});
+
+    expect(result.error).toBeNull();
+    if (result.error === null) {
+      expect(result.data.tutors).toEqual([
+        { id: tutorId, name: 'Budi Hartono', email: 'budi@example.com' },
+      ]);
+    }
+
+    const tutorCall = requestedPaths().find((path) =>
+      path.startsWith(`${GATEWAY_URL}/api/v1/tutors`)
+    ) as string;
+    const tutorQuery = new URLSearchParams(tutorCall.split('?')[1]);
+
+    expect(tutorQuery.get('page_size')).toBe('100');
+    expect(headersOf(tutorCall)).toMatchObject({
+      Authorization: 'Bearer session-token',
+      'X-Tenant-ID': 'tenant-1',
+    });
+  });
+
+  it('degrades to an empty tutor list when the tutor read fails', async () => {
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
+        return success({ items: [sessionRow()], pagination: pagination() });
+      }
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions/`) && url.endsWith('/attendees')) {
+        return success([]);
+      }
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/attendance`)) {
+        return success({ items: [], pagination: pagination({ total_items: 0 }) });
+      }
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/classes`)) {
+        return success({ items: [], pagination: pagination({ total_items: 0 }) });
+      }
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/tutors`)) {
+        return failure(500, 'tutor list unavailable');
+      }
+      return undefined;
+    });
+
+    const result = await getTutorSessions({});
+
+    // The session list is the primary content: an unreadable tutor list
+    // degrades to the dialog's own empty state instead of failing the page.
+    expect(result.error).toBeNull();
+    if (result.error === null) {
+      expect(result.data.rows).toHaveLength(1);
+      expect(result.data.tutors).toEqual([]);
     }
   });
 });

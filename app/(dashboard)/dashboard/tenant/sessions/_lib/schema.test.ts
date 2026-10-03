@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   attendanceByEnrollment,
   attendanceStatusLabel,
+  canManageTenantSessions,
+  isValidCalendarDate,
   normalizeSessionAttendance,
   normalizeSessionAttendees,
+  normalizeTenantTutors,
   parseSessionFilters,
+  rescheduleScheduleIssues,
+  rescheduleSchema,
   sessionAttendanceQueryString,
   sessionClassName,
   sessionCountLabel,
@@ -15,7 +20,9 @@ import {
   sessionQueryString,
   sessionStatusLabel,
   sessionTimeLabel,
+  substituteTutorSchema,
   sessionAttendeeName,
+  tutorDisplayName,
 } from './schema';
 
 /**
@@ -325,5 +332,226 @@ describe('session presentation labels', () => {
     expect(sessionCountLabel({ page: 1, page_size: 100, total_items: 3, total_pages: 1 })).toBe(
       '3 sesi'
     );
+  });
+});
+
+describe('rescheduleSchema', () => {
+  const valid = {
+    session_id: SESSION_ID,
+    new_session_date: '2999-10-05',
+    new_start_time: '15:30',
+    new_end_time: '17:00',
+  };
+
+  it('accepts a future date with end after start', () => {
+    expect(rescheduleSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('accepts a seconds-precision time window', () => {
+    const parsed = rescheduleSchema.safeParse({
+      ...valid,
+      new_start_time: '15:30:00',
+      new_end_time: '17:00:00',
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects an invalid session id, a malformed date, or a malformed time', () => {
+    expect(
+      rescheduleSchema.safeParse({ ...valid, session_id: 'not-a-uuid' }).success
+    ).toBe(false);
+    expect(
+      rescheduleSchema.safeParse({ ...valid, new_session_date: '05-10-2999' }).success
+    ).toBe(false);
+    expect(
+      rescheduleSchema.safeParse({ ...valid, new_start_time: '25:00' }).success
+    ).toBe(false);
+  });
+
+  it('rejects an end time that is not after the start time', () => {
+    const parsed = rescheduleSchema.safeParse({
+      ...valid,
+      new_start_time: '17:00',
+      new_end_time: '15:30',
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['new_end_time']);
+    }
+  });
+
+  it('rejects an end time equal to the start time across precisions', () => {
+    expect(
+      rescheduleSchema.safeParse({ ...valid, new_start_time: '15:30', new_end_time: '15:30:00' })
+        .success
+    ).toBe(false);
+  });
+
+  it('rejects a past date', () => {
+    const parsed = rescheduleSchema.safeParse({ ...valid, new_session_date: '2000-01-01' });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['new_session_date']);
+    }
+  });
+
+  it('rejects a shape-correct date that names no calendar day', () => {
+    for (const date of ['2026-02-30', '2026-13-01', '2026-04-31']) {
+      const parsed = rescheduleSchema.safeParse({ ...valid, new_session_date: date });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.map((issue) => issue.path)).toContainEqual(['new_session_date']);
+      }
+    }
+  });
+});
+
+describe('canManageTenantSessions', () => {
+  it('offers the mutations only on a confirmed membership with schedule:update', () => {
+    expect(
+      canManageTenantSessions({ state: 'ok', membership: { permissions: ['schedule:update'] } })
+    ).toBe(true);
+  });
+
+  it('treats an unreadable membership as lacking the permission (fail-closed)', () => {
+    // Regression: the page previously used `nav.state !== 'ok' || ...`,
+    // offering mutations exactly when the membership read failed.
+    for (const nav of [
+      { state: 'forbidden', membership: null },
+      { state: 'api', membership: null },
+      { state: 'configuration', membership: null },
+    ]) {
+      expect(canManageTenantSessions(nav)).toBe(false);
+    }
+  });
+
+  it('hides the mutations from a member without schedule:update', () => {
+    expect(
+      canManageTenantSessions({ state: 'ok', membership: { permissions: ['schedule:read'] } })
+    ).toBe(false);
+  });
+});
+
+describe('isValidCalendarDate', () => {
+  it('accepts a real day and rejects impossible ones', () => {
+    expect(isValidCalendarDate('2026-09-30')).toBe(true);
+    expect(isValidCalendarDate('2024-02-29')).toBe(true);
+    expect(isValidCalendarDate('2026-02-30')).toBe(false);
+    expect(isValidCalendarDate('2026-13-01')).toBe(false);
+    expect(isValidCalendarDate('2026-04-31')).toBe(false);
+    expect(isValidCalendarDate('30-09-2026')).toBe(false);
+  });
+});
+
+describe('rescheduleScheduleIssues', () => {
+  // 2026-09-30T03:00:00Z is 10:00 in Asia/Jakarta on 2026-09-30.
+  const morningNow = new Date('2026-09-30T03:00:00Z');
+
+  const base = {
+    new_session_date: '2026-09-30',
+    new_start_time: '15:30',
+    new_end_time: '17:00',
+  };
+
+  it('rejects a start time that already passed on the Jakarta today', () => {
+    const issues = rescheduleScheduleIssues(
+      { ...base, new_start_time: '09:00', new_end_time: '10:30' },
+      morningNow
+    );
+
+    expect(issues.map((issue) => issue.path)).toContain('new_start_time');
+  });
+
+  it('accepts a later time on the Jakarta today', () => {
+    expect(rescheduleScheduleIssues(base, morningNow)).toEqual([]);
+  });
+
+  it('rejects a date before the Jakarta today even when it is still UTC today', () => {
+    // 2026-09-29T18:00:00Z is already 2026-09-30 01:00 in Jakarta, so
+    // 2026-09-29 is past for the member even though it equals the UTC date.
+    const afterMidnightJakarta = new Date('2026-09-29T18:00:00Z');
+    const issues = rescheduleScheduleIssues(
+      { ...base, new_session_date: '2026-09-29', new_start_time: '15:30', new_end_time: '17:00' },
+      afterMidnightJakarta
+    );
+
+    expect(issues.map((issue) => issue.path)).toContain('new_session_date');
+  });
+
+  it('rejects an impossible calendar date with an invalid-date message', () => {
+    const issues = rescheduleScheduleIssues(
+      { ...base, new_session_date: '2026-02-30' },
+      morningNow
+    );
+
+    expect(issues).toEqual([
+      { path: 'new_session_date', message: 'Tanggal sesi tidak valid.' },
+    ]);
+  });
+});
+
+describe('substituteTutorSchema', () => {
+  const TUTOR_ID = 'aaaaaaaa-1111-4222-8333-444455556666';
+
+  it('accepts a session and tutor UUID pair', () => {
+    expect(
+      substituteTutorSchema.safeParse({ session_id: SESSION_ID, substitute_tutor_id: TUTOR_ID })
+        .success
+    ).toBe(true);
+  });
+
+  it('rejects a non-UUID tutor id', () => {
+    const parsed = substituteTutorSchema.safeParse({
+      session_id: SESSION_ID,
+      substitute_tutor_id: 'guru-1',
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.path).toEqual(['substitute_tutor_id']);
+    }
+  });
+
+  it('rejects a non-UUID session id', () => {
+    expect(
+      substituteTutorSchema.safeParse({ session_id: 'sesi-1', substitute_tutor_id: TUTOR_ID })
+        .success
+    ).toBe(false);
+  });
+});
+
+describe('normalizeTenantTutors', () => {
+  const TUTOR_ID = 'aaaaaaaa-1111-4222-8333-444455556666';
+
+  it('reads the tutor rows with display names', () => {
+    expect(
+      normalizeTenantTutors([
+        { id: TUTOR_ID, first_name: 'Budi', last_name: 'Hartono', email: 'budi@example.com' },
+      ])
+    ).toEqual([{ id: TUTOR_ID, name: 'Budi Hartono', email: 'budi@example.com' }]);
+  });
+
+  it('drops rows that cannot be assigned', () => {
+    expect(
+      normalizeTenantTutors([{ id: 'guru-1', first_name: 'X' }, { id: '', first_name: 'Y' }, null])
+    ).toEqual([]);
+  });
+
+  it('reads nothing from a non-array payload instead of throwing', () => {
+    expect(normalizeTenantTutors(null)).toEqual([]);
+  });
+});
+
+describe('tutorDisplayName', () => {
+  it('joins the first and last name, then falls back to email', () => {
+    expect(tutorDisplayName({ first_name: 'Budi', last_name: 'Hartono' })).toBe('Budi Hartono');
+    expect(tutorDisplayName({ first_name: '  ', last_name: ' ', email: 'budi@example.com' })).toBe(
+      'budi@example.com'
+    );
+    expect(tutorDisplayName(null)).toBe('Tutor');
   });
 });

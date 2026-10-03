@@ -6,6 +6,7 @@ import {
   isSessionUuid,
   normalizeSessionAttendance,
   normalizeSessionAttendees,
+  normalizeTenantTutors,
   parseSessionFilters,
   sessionAttendanceQueryString,
   sessionDateRange,
@@ -13,6 +14,7 @@ import {
   type SessionAttendee,
   type SessionAttendanceRecord,
   type SessionFilters,
+  type TutorOption,
   type TutorSession,
 } from '../_lib/schema';
 
@@ -37,6 +39,14 @@ export interface TutorSessionOverview {
   pagination: ListPagination;
   /** Classes of the tenant, used to label the class filter options. */
   classes: { id: string; name: string }[];
+  /**
+   * Assignable tutors for the substitute-tutor dialog (KEL-138).
+   *
+   * Read from `GET /api/v1/tutors` (identity, proxied by the gateway). A
+   * failed read degrades to an empty list with the dialog offering its own
+   * empty state, mirroring how `readClasses` degrades.
+   */
+  tutors: TutorOption[];
 }
 
 /**
@@ -258,6 +268,34 @@ async function readClasses(headers: HeadersInit): Promise<{ id: string; name: st
 }
 
 /**
+ * Reads the assignable tutors for the substitute-tutor select (KEL-138).
+ *
+ * `GET /api/v1/tutors` (identity, proxied by the gateway at router.go:160)
+ * answers the paginated `{ items, pagination }` envelope. A failed read
+ * degrades to an empty list with the dialog offering its own empty state, so
+ * an unreadable tutor list cannot hide the session list it accompanies.
+ */
+async function readTutors(headers: HeadersInit): Promise<TutorOption[]> {
+  try {
+    const response = await fetch(`${getGatewayBaseUrl()}/api/v1/tutors?page=1&page_size=100`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+
+    const body = await readJson(response);
+
+    if (!response.ok || !isSuccessEnvelope(body)) {
+      return [];
+    }
+
+    return normalizeTenantTutors(normalizeListEnvelope(body.data).items);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Reads the tutor session overview for one filter state.
  *
  * The page makes one academic request for the sessions, then one attendee
@@ -288,7 +326,7 @@ export async function getTutorSessions(
       return { data: null, error: 'api', message: API_ERROR_MESSAGE };
     }
 
-    const [rows, classes] = await Promise.all([
+    const [rows, classes, tutors] = await Promise.all([
       Promise.all(
         sessionRead.items.map(async (session): Promise<TutorSessionRow> => {
           const attendees = isSessionUuid(session.id) ? await readAttendees(headers, session.id) : [];
@@ -309,9 +347,10 @@ export async function getTutorSessions(
         })
       ),
       readClasses(headers),
+      readTutors(headers),
     ]);
 
-    return { data: { rows, pagination: sessionRead.pagination, classes }, error: null };
+    return { data: { rows, pagination: sessionRead.pagination, classes, tutors }, error: null };
   } catch (error) {
     return {
       data: null,
