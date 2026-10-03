@@ -103,7 +103,7 @@ describe('rescheduleSession', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({
       session_id: SESSION_ID,
-      new_session_date: '2999-10-05',
+      new_session_date: '2999-10-05T00:00:00Z',
       new_start_time: '15:30',
       new_end_time: '17:00',
     });
