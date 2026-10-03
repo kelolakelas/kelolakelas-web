@@ -6,14 +6,17 @@ import {
   isSessionUuid,
   normalizeSessionAttendance,
   normalizeSessionAttendees,
+  normalizeTenantMembers,
   normalizeTenantTutors,
   parseSessionFilters,
+  resolveSubstituteTutorOptions,
   sessionAttendanceQueryString,
   sessionDateRange,
   sessionQueryString,
   type SessionAttendee,
   type SessionAttendanceRecord,
   type SessionFilters,
+  type TenantMemberReference,
   type TutorOption,
   type TutorSession,
 } from '../_lib/schema';
@@ -42,9 +45,11 @@ export interface TutorSessionOverview {
   /**
    * Assignable tutors for the substitute-tutor dialog (KEL-138).
    *
-   * Read from `GET /api/v1/tutors` (identity, proxied by the gateway). A
-   * failed read degrades to an empty list with the dialog offering its own
-   * empty state, mirroring how `readClasses` degrades.
+   * Read from `GET /api/v1/tutors` (identity, proxied by the gateway) joined
+   * against `GET /api/v1/members`, so each option value is the tenant member
+   * id the substitute-tutor write requires. A failed read degrades to an
+   * empty list with the dialog offering its own empty state, mirroring how
+   * `readClasses` degrades.
    */
   tutors: TutorOption[];
 }
@@ -271,9 +276,8 @@ async function readClasses(headers: HeadersInit): Promise<{ id: string; name: st
  * Reads the assignable tutors for the substitute-tutor select (KEL-138).
  *
  * `GET /api/v1/tutors` (identity, proxied by the gateway at router.go:160)
- * answers the paginated `{ items, pagination }` envelope. A failed read
- * degrades to an empty list with the dialog offering its own empty state, so
- * an unreadable tutor list cannot hide the session list it accompanies.
+ * answers user ids. The substitute-tutor write requires tenant member ids, so
+ * this read is paired with `readMembers` before options are returned.
  */
 async function readTutors(headers: HeadersInit): Promise<TutorOption[]> {
   try {
@@ -290,6 +294,31 @@ async function readTutors(headers: HeadersInit): Promise<TutorOption[]> {
     }
 
     return normalizeTenantTutors(normalizeListEnvelope(body.data).items);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Reads active tenant members for tutor user-id to member-id translation.
+ *
+ * The `sort=joined_at` parameter is required: identity's default member sort
+ * references a missing column and returns 500. A failed read deliberately
+ * returns no members, so the caller cannot fall back to sending user ids.
+ */
+async function readMembers(headers: HeadersInit): Promise<TenantMemberReference[]> {
+  try {
+    const response = await fetch(
+      `${getGatewayBaseUrl()}/api/v1/members?page=1&page_size=100&sort=joined_at`,
+      { method: 'GET', headers, cache: 'no-store' }
+    );
+    const body = await readJson(response);
+
+    if (!response.ok || !isSuccessEnvelope(body)) {
+      return [];
+    }
+
+    return normalizeTenantMembers(normalizeListEnvelope(body.data).items);
   } catch {
     return [];
   }
@@ -347,7 +376,14 @@ export async function getTutorSessions(
         })
       ),
       readClasses(headers),
-      readTutors(headers),
+      readTutors(headers).then(async (rawTutors) => {
+        if (rawTutors.length === 0) {
+          return [];
+        }
+
+        const members = await readMembers(headers);
+        return resolveSubstituteTutorOptions(rawTutors, members);
+      }),
     ]);
 
     return { data: { rows, pagination: sessionRead.pagination, classes, tutors }, error: null };

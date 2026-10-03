@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import {
   rescheduleSchema,
+  rescheduleDatePayload,
   substituteTutorSchema,
   TENANT_SESSIONS_PATH,
 } from '../_lib/schema';
@@ -73,7 +74,10 @@ export async function rescheduleSession(
   return sendScheduleRequest(
     `/api/v1/sessions/${encodeURIComponent(parsed.data.session_id)}/reschedule`,
     'POST',
-    parsed.data,
+    {
+      ...parsed.data,
+      new_session_date: rescheduleDatePayload(parsed.data.new_session_date),
+    },
     false,
   );
 }
