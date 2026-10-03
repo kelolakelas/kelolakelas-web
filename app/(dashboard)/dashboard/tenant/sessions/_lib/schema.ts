@@ -47,6 +47,224 @@ export const attendanceStatusSchema = z.enum(['present', 'late', 'excused', 'abs
 
 export type AttendanceStatus = z.infer<typeof attendanceStatusSchema>;
 
+const SESSION_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+const RESCHEDULE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function sessionTimeToMinutes(value: string): number {
+  const [hours, minutes, seconds] = value.split(':').map(Number);
+  return hours * 60 + minutes + (seconds ? seconds / 60 : 0);
+}
+
+/**
+ * Whether `YYYY-MM-DD` names a real calendar day (KEL-138).
+ *
+ * The reschedule date pattern only checks the shape, so `2026-02-30`
+ * would pass it while naming no day. The backend would refuse the write;
+ * rejecting it up front keeps the member from submitting a date that
+ * cannot be saved.
+ */
+export function isValidCalendarDate(value: string): boolean {
+  if (!RESCHEDULE_DATE_PATTERN.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+
+  const utc = new Date(Date.UTC(year, month - 1, day));
+
+  return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+}
+
+/**
+ * Minutes since midnight in Asia/Jakarta for one instant (KEL-138).
+ *
+ * The reschedule form takes a plain calendar date plus a wall-clock time,
+ * so "already past" is judged in the Jakarta day the member reads — not in
+ * UTC, where the same instant can fall on a different date.
+ */
+export function jakartaTimeMinutes(now: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+
+  const lookup = new Map(parts.map((part) => [part.type, part.value]));
+
+  return Number(lookup.get('hour')) * 60 + Number(lookup.get('minute'));
+}
+
+export type RescheduleScheduleIssue = {
+  path: 'new_session_date' | 'new_start_time' | 'new_end_time';
+  message: string;
+};
+
+/**
+ * Date and time issues of a reschedule payload against one instant
+ * (KEL-138).
+ *
+ * Extracted from `rescheduleSchema` so the Jakarta-day boundary can be
+ * pinned with a fixed `now` in tests: a date before the Jakarta today is
+ * past, a start time that already passed on the Jakarta today is past, and
+ * a shape-correct date that names no calendar day is invalid. The schema
+ * itself calls this with the current instant.
+ */
+export function rescheduleScheduleIssues(
+  value: { new_session_date: string; new_start_time: string; new_end_time: string },
+  now: Date = new Date()
+): RescheduleScheduleIssue[] {
+  const issues: RescheduleScheduleIssue[] = [];
+
+  if (sessionTimeToMinutes(value.new_end_time) <= sessionTimeToMinutes(value.new_start_time)) {
+    issues.push({ path: 'new_end_time', message: 'Waktu selesai harus setelah waktu mulai.' });
+  }
+
+  if (!isValidCalendarDate(value.new_session_date)) {
+    issues.push({ path: 'new_session_date', message: 'Tanggal sesi tidak valid.' });
+    return issues;
+  }
+
+  const today = jakartaDateString(now);
+
+  if (value.new_session_date < today) {
+    issues.push({ path: 'new_session_date', message: 'Tanggal sesi tidak boleh sudah lewat.' });
+  } else if (
+    value.new_session_date === today &&
+    sessionTimeToMinutes(value.new_start_time) <= jakartaTimeMinutes(now)
+  ) {
+    issues.push({ path: 'new_start_time', message: 'Waktu mulai sudah lewat untuk hari ini.' });
+  }
+
+  return issues;
+}
+
+/**
+ * Whether the session screen offers the reschedule and substitute-tutor
+ * dialogs for one membership read (KEL-138).
+ *
+ * Fail-closed: only a confirmed membership carrying `schedule:update` is
+ * offered the mutations ("Aksi disembunyikan bagi anggota tanpa
+ * schedule:update"). When the membership cannot be read the member is
+ * treated as lacking the permission. The backend stays the access
+ * authority and refuses the mutation with the same permission.
+ */
+export function canManageTenantSessions(nav: {
+  state: string;
+  membership: { permissions: readonly string[] } | null;
+}): boolean {
+  return (
+    nav.state === 'ok' &&
+    nav.membership !== null &&
+    nav.membership.permissions.includes('schedule:update')
+  );
+}
+
+export const rescheduleSchema = z
+  .object({
+    session_id: z.string().refine(isSessionUuid, 'ID sesi tidak valid.'),
+    new_session_date: z.string().regex(RESCHEDULE_DATE_PATTERN, 'Tanggal harus berformat YYYY-MM-DD.'),
+    new_start_time: z.string().regex(SESSION_TIME_PATTERN, 'Waktu mulai tidak valid.'),
+    new_end_time: z.string().regex(SESSION_TIME_PATTERN, 'Waktu selesai tidak valid.'),
+  })
+  .superRefine((value, context) => {
+    for (const issue of rescheduleScheduleIssues(value)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: [issue.path], message: issue.message });
+    }
+  });
+
+export type RescheduleInput = z.infer<typeof rescheduleSchema>;
+
+export const substituteTutorSchema = z.object({
+  session_id: z.string().refine(isSessionUuid, 'ID sesi tidak valid.'),
+  substitute_tutor_id: z.string().refine(isSessionUuid, 'ID tutor tidak valid.'),
+});
+
+export type SubstituteTutorInput = z.infer<typeof substituteTutorSchema>;
+
+/**
+ * One tutor option for the substitute-tutor select (KEL-138).
+ *
+ * `GET /api/v1/tutors` (identity, proxied by the gateway) answers the
+ * paginated `{ items, pagination }` envelope of `{ id, first_name,
+ * last_name, email, status }` rows. Only the fields the select renders are
+ * kept; `name` is the display string so the dialog never assembles it from
+ * parts itself.
+ */
+export interface TutorOption {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/** Display name of a tutor row, falling back to email then a neutral label. */
+export function tutorDisplayName(
+  tutor: { first_name?: string | null; last_name?: string | null; email?: string | null } | null | undefined
+): string {
+  if (!tutor) {
+    return 'Tutor';
+  }
+
+  const first = typeof tutor.first_name === 'string' ? tutor.first_name.trim() : '';
+  const last = typeof tutor.last_name === 'string' ? tutor.last_name.trim() : '';
+  const name = [first, last].filter(Boolean).join(' ');
+
+  if (name) {
+    return name;
+  }
+
+  const email = typeof tutor.email === 'string' ? tutor.email.trim() : '';
+
+  return email || 'Tutor';
+}
+
+/**
+ * Normalises the tutor list of `GET /api/v1/tutors`.
+ *
+ * Rows without a usable `id` cannot be assigned, so they are dropped instead
+ * of rendered half-broken. The identity service answers UUIDs here and the
+ * substitute-tutor write validates them with `isSessionUuid`, so only UUID
+ * ids are kept — anything else would fail the write anyway.
+ */
+export function normalizeTenantTutors(value: unknown): TutorOption[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const tutors: TutorOption[] = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    const candidate = entry as { id?: unknown; first_name?: unknown; last_name?: unknown; email?: unknown };
+
+    if (typeof candidate.id !== 'string' || !isSessionUuid(candidate.id)) {
+      continue;
+    }
+
+    const email = typeof candidate.email === 'string' ? candidate.email.trim() : '';
+
+    tutors.push({
+      id: candidate.id,
+      name: tutorDisplayName({
+        first_name: typeof candidate.first_name === 'string' ? candidate.first_name : null,
+        last_name: typeof candidate.last_name === 'string' ? candidate.last_name : null,
+        email,
+      }),
+      email,
+    });
+  }
+
+  return tutors;
+}
+
 /**
  * Attendance status options in the order the form presents them, with the
  * Indonesian labels the member reads.
