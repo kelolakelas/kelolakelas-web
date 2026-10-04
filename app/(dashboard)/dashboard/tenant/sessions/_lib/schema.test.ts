@@ -7,10 +7,13 @@ import {
   isValidCalendarDate,
   normalizeSessionAttendance,
   normalizeSessionAttendees,
+  normalizeTenantMembers,
   normalizeTenantTutors,
   parseSessionFilters,
+  rescheduleDatePayload,
   rescheduleScheduleIssues,
   rescheduleSchema,
+  resolveSubstituteTutorOptions,
   sessionAttendanceQueryString,
   sessionClassName,
   sessionCountLabel,
@@ -543,6 +546,78 @@ describe('normalizeTenantTutors', () => {
 
   it('reads nothing from a non-array payload instead of throwing', () => {
     expect(normalizeTenantTutors(null)).toEqual([]);
+  });
+});
+
+describe('rescheduleDatePayload', () => {
+  it('serialises the calendar date as midnight-UTC RFC3339 without a Jakarta shift', () => {
+    // Academic parses NewSessionDate as time.Time (RFC3339); a bare
+    // YYYY-MM-DD is refused with 400. session_date is a DATE column, so
+    // midnight UTC names the calendar date itself.
+    expect(rescheduleDatePayload('2026-10-07')).toBe('2026-10-07T00:00:00Z');
+  });
+});
+
+describe('normalizeTenantMembers', () => {
+  const MEMBER_ID = 'cccccccc-1111-4222-8333-444455556666';
+  const USER_ID = 'aaaaaaaa-1111-4222-8333-444455556666';
+
+  it('reads the member id and user id pairs', () => {
+    expect(
+      normalizeTenantMembers([{ id: MEMBER_ID, user_id: USER_ID, status: 'active' }])
+    ).toEqual([{ id: MEMBER_ID, user_id: USER_ID }]);
+  });
+
+  it('drops rows that cannot be matched or assigned', () => {
+    expect(
+      normalizeTenantMembers([
+        { id: 'not-a-uuid', user_id: USER_ID },
+        { id: MEMBER_ID, user_id: 'bukan-uuid' },
+        { id: MEMBER_ID, user_id: USER_ID, status: 'inactive' },
+        { id: MEMBER_ID, user_id: USER_ID, status: 'pending' },
+        null,
+      ])
+    ).toEqual([]);
+  });
+
+  it('reads nothing from a non-array payload instead of throwing', () => {
+    expect(normalizeTenantMembers(null)).toEqual([]);
+  });
+});
+
+describe('resolveSubstituteTutorOptions', () => {
+  const USER_ID = 'aaaaaaaa-1111-4222-8333-444455556666';
+  const MEMBER_ID = 'cccccccc-1111-4222-8333-444455556666';
+  const ORPHAN_ID = 'dddddddd-1111-4222-8333-444455556666';
+
+  it('maps each tutor user id to its member id, keeping name and email', () => {
+    expect(
+      resolveSubstituteTutorOptions(
+        [{ id: USER_ID, name: 'Budi Hartono', email: 'budi@example.com' }],
+        [{ id: MEMBER_ID, user_id: USER_ID }]
+      )
+    ).toEqual([{ id: MEMBER_ID, name: 'Budi Hartono', email: 'budi@example.com' }]);
+  });
+
+  it('drops a tutor with no matching member instead of sending a user id', () => {
+    expect(
+      resolveSubstituteTutorOptions(
+        [
+          { id: USER_ID, name: 'Budi Hartono', email: 'budi@example.com' },
+          { id: ORPHAN_ID, name: 'Siti Rahayu', email: 'siti@example.com' },
+        ],
+        [{ id: MEMBER_ID, user_id: USER_ID }]
+      )
+    ).toEqual([{ id: MEMBER_ID, name: 'Budi Hartono', email: 'budi@example.com' }]);
+  });
+
+  it('resolves to nothing when there are no members', () => {
+    expect(
+      resolveSubstituteTutorOptions(
+        [{ id: USER_ID, name: 'Budi Hartono', email: 'budi@example.com' }],
+        []
+      )
+    ).toEqual([]);
   });
 });
 

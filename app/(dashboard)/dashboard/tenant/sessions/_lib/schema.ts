@@ -180,6 +180,20 @@ export const rescheduleSchema = z
 
 export type RescheduleInput = z.infer<typeof rescheduleSchema>;
 
+/**
+ * Serialises a validated `YYYY-MM-DD` reschedule date for the academic
+ * write (KEL-138 fix r2).
+ *
+ * Academic `RescheduleSessionRequest.NewSessionDate` is a `time.Time`, so
+ * the JSON value must parse as RFC3339 (`2006-01-02T15:04:05Z07:00`): a bare
+ * calendar date is refused with `400 parsing time ... cannot parse "" as
+ * "T"`. `session_date` is a DATE column, so midnight UTC names the calendar
+ * date itself — never shift it by +07:00.
+ */
+export function rescheduleDatePayload(value: string): string {
+  return `${value}T00:00:00Z`;
+}
+
 export const substituteTutorSchema = z.object({
   session_id: z.string().refine(isSessionUuid, 'ID sesi tidak valid.'),
   substitute_tutor_id: z.string().refine(isSessionUuid, 'ID tutor tidak valid.'),
@@ -197,9 +211,96 @@ export type SubstituteTutorInput = z.infer<typeof substituteTutorSchema>;
  * parts itself.
  */
 export interface TutorOption {
+  /** Tenant member id required by the substitute-tutor API. */
   id: string;
   name: string;
   email: string;
+}
+
+/** The identity ids needed to translate a tutor user id to a tenant member id. */
+export interface TenantMemberReference {
+  /** Tenant member id — the value the substitute-tutor write requires. */
+  id: string;
+  /** Identity account id, matched against the tutor row's user id. */
+  user_id: string;
+}
+
+/**
+ * Normalises the member rows of `GET /api/v1/members`.
+ *
+ * Only the ids the tutor mapping needs are kept. Rows without usable UUID
+ * `id`/`user_id` cannot be matched, so they are dropped. A row carrying a
+ * non-`active` status is dropped as well: the academic service only accepts
+ * an active member of the tenant as the substitute tutor.
+ */
+export function normalizeTenantMembers(value: unknown): TenantMemberReference[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const members: TenantMemberReference[] = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    const candidate = entry as { id?: unknown; user_id?: unknown; status?: unknown };
+
+    if (typeof candidate.id !== 'string' || !isSessionUuid(candidate.id)) {
+      continue;
+    }
+
+    if (typeof candidate.user_id !== 'string' || !isSessionUuid(candidate.user_id)) {
+      continue;
+    }
+
+    if (typeof candidate.status === 'string' && candidate.status !== 'active') {
+      continue;
+    }
+
+    members.push({ id: candidate.id, user_id: candidate.user_id });
+  }
+
+  return members;
+}
+
+/**
+ * Resolves substitute-tutor select options from tutor rows and member rows
+ * (KEL-138 fix r2).
+ *
+ * `GET /api/v1/tutors` answers the identity USER id, but the academic
+ * substitute-tutor write requires the tenant MEMBER id, so each tutor row
+ * is translated through the member row with the same `user_id`. A tutor with
+ * no matching active member is dropped instead of sending a user id the
+ * backend would refuse. The option keeps the tutor's display name and email;
+ * only the value becomes the member id.
+ */
+export function resolveSubstituteTutorOptions(
+  tutors: readonly TutorOption[],
+  members: readonly TenantMemberReference[]
+): TutorOption[] {
+  const memberIdByUserId = new Map<string, string>();
+
+  for (const member of members) {
+    if (!memberIdByUserId.has(member.user_id)) {
+      memberIdByUserId.set(member.user_id, member.id);
+    }
+  }
+
+  const options: TutorOption[] = [];
+
+  for (const tutor of tutors) {
+    const memberId = memberIdByUserId.get(tutor.id);
+
+    if (!memberId) {
+      continue;
+    }
+
+    options.push({ id: memberId, name: tutor.name, email: tutor.email });
+  }
+
+  return options;
 }
 
 /** Display name of a tutor row, falling back to email then a neutral label. */
@@ -225,6 +326,11 @@ export function tutorDisplayName(
 
 /**
  * Normalises the tutor list of `GET /api/v1/tutors`.
+ *
+ * The `id` answered here is the identity USER id (identity
+ * `member_repository.go` ListTutors selects `u.id`), not the tenant member
+ * id the substitute-tutor write requires. Callers must translate these rows
+ * with `resolveSubstituteTutorOptions` before rendering the select.
  *
  * Rows without a usable `id` cannot be assigned, so they are dropped instead
  * of rendered half-broken. The identity service answers UUIDs here and the

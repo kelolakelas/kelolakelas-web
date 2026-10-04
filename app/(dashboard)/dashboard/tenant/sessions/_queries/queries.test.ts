@@ -104,7 +104,7 @@ function headersOf(path: string): Record<string, string> {
   return (call?.[1] as RequestInit | undefined)?.headers as Record<string, string>;
 }
 
-function sessionsRoute(sessions: unknown[], tutors: unknown[] = []) {
+function sessionsRoute(sessions: unknown[], tutors: unknown[] = [], members: unknown[] | null = null) {
   return (url: string) => {
     if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
       return success({ items: sessions, pagination: pagination({ total_items: sessions.length }) });
@@ -120,6 +120,12 @@ function sessionsRoute(sessions: unknown[], tutors: unknown[] = []) {
     }
     if (url.startsWith(`${GATEWAY_URL}/api/v1/tutors`)) {
       return success({ items: tutors, pagination: pagination({ total_items: tutors.length }) });
+    }
+    if (url.startsWith(`${GATEWAY_URL}/api/v1/members`)) {
+      if (members === null) {
+        return failure(500, 'member list unavailable');
+      }
+      return success({ items: members, pagination: pagination({ total_items: members.length }) });
     }
     return undefined;
   };
@@ -473,20 +479,25 @@ describe('getTutorSessions', () => {
     }
   });
 
-  it('reads the tutor list for the substitute-tutor select', async () => {
-    const tutorId = 'aaaaaaaa-1111-4222-8333-444455556666';
+  it('resolves the tutor select values to tenant member ids', async () => {
+    const tutorUserId = 'aaaaaaaa-1111-4222-8333-444455556666';
+    const tutorMemberId = 'cccccccc-1111-4222-8333-444455556666';
     installFetch(
-      sessionsRoute([], [
-        { id: tutorId, first_name: 'Budi', last_name: 'Hartono', email: 'budi@example.com' },
-      ])
+      sessionsRoute(
+        [],
+        [{ id: tutorUserId, first_name: 'Budi', last_name: 'Hartono', email: 'budi@example.com' }],
+        [{ id: tutorMemberId, user_id: tutorUserId, status: 'active' }]
+      )
     );
 
     const result = await getTutorSessions({});
 
     expect(result.error).toBeNull();
     if (result.error === null) {
+      // The select value must be the member id the backend requires, never
+      // the user id answered by GET /api/v1/tutors.
       expect(result.data.tutors).toEqual([
-        { id: tutorId, name: 'Budi Hartono', email: 'budi@example.com' },
+        { id: tutorMemberId, name: 'Budi Hartono', email: 'budi@example.com' },
       ]);
     }
 
@@ -500,6 +511,61 @@ describe('getTutorSessions', () => {
       Authorization: 'Bearer session-token',
       'X-Tenant-ID': 'tenant-1',
     });
+
+    // The members read always carries sort=joined_at: identity answers 500
+    // for the default sort (missing tm.created_at column).
+    const memberCall = requestedPaths().find((path) =>
+      path.startsWith(`${GATEWAY_URL}/api/v1/members`)
+    ) as string;
+    const memberQuery = new URLSearchParams(memberCall.split('?')[1]);
+
+    expect(memberQuery.get('sort')).toBe('joined_at');
+  });
+
+  it('drops a tutor with no matching active member instead of sending a user id', async () => {
+    const matchedUserId = 'aaaaaaaa-1111-4222-8333-444455556666';
+    const matchedMemberId = 'cccccccc-1111-4222-8333-444455556666';
+    const orphanUserId = 'dddddddd-1111-4222-8333-444455556666';
+    installFetch(
+      sessionsRoute(
+        [],
+        [
+          { id: matchedUserId, first_name: 'Budi', last_name: 'Hartono', email: 'budi@example.com' },
+          { id: orphanUserId, first_name: 'Siti', last_name: 'Rahayu', email: 'siti@example.com' },
+        ],
+        [{ id: matchedMemberId, user_id: matchedUserId, status: 'active' }]
+      )
+    );
+
+    const result = await getTutorSessions({});
+
+    expect(result.error).toBeNull();
+    if (result.error === null) {
+      expect(result.data.tutors).toEqual([
+        { id: matchedMemberId, name: 'Budi Hartono', email: 'budi@example.com' },
+      ]);
+    }
+  });
+
+  it('degrades to an empty tutor list when the members read fails, never falling back to user ids', async () => {
+    const tutorUserId = 'aaaaaaaa-1111-4222-8333-444455556666';
+    installFetch(
+      sessionsRoute(
+        [sessionRow()],
+        [{ id: tutorUserId, first_name: 'Budi', last_name: 'Hartono', email: 'budi@example.com' }],
+        null
+      )
+    );
+
+    const result = await getTutorSessions({});
+
+    // Fail closed: without the member mapping the user ids would be refused
+    // by the backend, so the dialog gets its empty state instead.
+    expect(result.error).toBeNull();
+    if (result.error === null) {
+      expect(result.data.rows).toHaveLength(1);
+      expect(result.data.tutors).toEqual([]);
+    }
   });
 
   it('degrades to an empty tutor list when the tutor read fails', async () => {
