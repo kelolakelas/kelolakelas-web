@@ -18,7 +18,7 @@ const item: CatalogItem = {
 describe('CatalogCard tenant link', () => {
   it('links the accessible tenant name to its filtered public class list', () => {
     const html = renderToStaticMarkup(<CatalogCard item={item} />);
-    expect(html).toContain('href="/kelas?tenant_id=tenant%201">Bimbel Cerdas</a>');
+    expect(html).toContain('href="/tenant/tenant%201">Bimbel Cerdas</a>');
     expect(html).toContain('<h2');
     expect(html).toContain('href="/kelas/class-1"');
   });
