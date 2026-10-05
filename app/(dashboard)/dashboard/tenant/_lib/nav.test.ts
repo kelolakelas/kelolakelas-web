@@ -97,6 +97,7 @@ describe('filterTenantNavItems (KEL-136)', () => {
       'Overview',
       'Classes',
       'Sesi Saya',
+      'Laporan',
       'Enrollments',
       'Schedule Requests',
       'Vouchers',
@@ -116,7 +117,7 @@ describe('filterTenantNavItems (KEL-136)', () => {
     // The backend still enforces every area.
     const visible = labels(filterTenantNavItems(TEACHER_PERMISSIONS));
 
-    expect(visible).toEqual(['Overview', 'Sesi Saya']);
+    expect(visible).toEqual(['Overview', 'Sesi Saya', 'Laporan']);
     expect(visible).not.toContain('Members');
     expect(visible).not.toContain('Roles & Permissions');
     expect(visible).not.toContain('Settings');

@@ -17,6 +17,7 @@ export const NAV_ITEM_PERMISSIONS: Readonly<Record<string, string | null>> = {
   '/dashboard/tenant': null,
   '/dashboard/tenant/classes': 'class:read',
   '/dashboard/tenant/sessions': 'schedule:read',
+  '/dashboard/tenant/reports': 'report:read',
   '/dashboard/tenant/enrollments': 'enrollment:read',
   '/dashboard/tenant/schedule-requests': 'enrollment:read',
   '/dashboard/tenant/vouchers': 'voucher:read',
@@ -42,6 +43,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     label: 'Sesi Saya',
     href: '/dashboard/tenant/sessions',
     description: 'Lihat sesi mengajar Anda dan catat kehadiran',
+  },
+  {
+    label: 'Laporan',
+    href: '/dashboard/tenant/reports',
+    description: 'Tulis dan kelola laporan evaluasi siswa',
   },
   {
     label: 'Enrollments',
