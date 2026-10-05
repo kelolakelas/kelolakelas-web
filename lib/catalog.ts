@@ -12,6 +12,15 @@ export type CatalogItem = {
   price: number;
   schedules: unknown;
   is_enrollable: boolean;
+  /**
+   * Class-review aggregate (KEL-160).
+   *
+   * The academic detail endpoint selects `rating_average`/`rating_count`;
+   * the list endpoint does not, so list items always carry `null`/`0` and
+   * callers must render the badge only when an average is present.
+   */
+  rating_average?: number | null;
+  rating_count?: number;
 };
 
 export type CatalogScheduleOption = {
