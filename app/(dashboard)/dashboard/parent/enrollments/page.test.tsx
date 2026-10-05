@@ -290,3 +290,54 @@ describe('parent enrollment card schedule summary (KEL-70)', () => {
     expect(html).toContain('Batalkan pendaftaran');
   });
 });
+
+/**
+ * KEL-160: the review form appears only where the backend would accept the
+ * save (`active`/`completed`), and never changes the existing presentation.
+ * The form itself is a client component exercised in `ReviewForm.test.tsx`;
+ * what is pinned here is the offer rule at the rendered-markup level.
+ */
+describe('parent enrollment screen review form offer (KEL-160)', () => {
+  it('offers the review form for active and completed enrollments', async () => {
+    setRows([
+      { id: PENDING_ID, status: 'active', class: { name: 'Matematika Dasar' } },
+      { id: ACTIVE_ID, status: 'completed', class: { name: 'Fisika Dasar' } },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain('Rating Anda');
+    expect(html).toContain('Simpan ulasan');
+  });
+
+  it('offers no review form for pending, dropped, or suspended enrollments', async () => {
+    setRows([
+      { id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } },
+      { id: ACTIVE_ID, status: 'dropped', class: { name: 'Fisika Dasar' } },
+      { id: '9a1c3e5f-2b4d-4e6f-8a0b-1c2d3e4f5a6b', status: 'suspended' },
+    ]);
+
+    const html = await render();
+
+    expect(html).not.toContain('Rating Anda');
+    expect(html).not.toContain('Simpan ulasan');
+    // The existing presentation is untouched.
+    expect(html).toContain('Matematika Dasar');
+    expect(html).toContain('Batalkan pendaftaran');
+  });
+
+  it('shows the cancel action and the review form side by side where both apply', async () => {
+    // A pending enrollment is neither cancellable-with-settlement nor
+    // reviewable, so use a row where cancellation applies and assert the
+    // review form stays absent while cancellation stays present.
+    setRows(
+      [{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } }],
+      [{ id: 'tx-1', enrollment_id: PENDING_ID, status: 'pending' }]
+    );
+
+    const html = await render();
+
+    expect(html).toContain('Batalkan pendaftaran');
+    expect(html).not.toContain('Simpan ulasan');
+  });
+});

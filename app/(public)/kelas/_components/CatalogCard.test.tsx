@@ -23,3 +23,23 @@ describe('CatalogCard tenant link', () => {
     expect(html).toContain('href="/kelas/class-1"');
   });
 });
+
+describe('CatalogCard rating badge (KEL-160)', () => {
+  it('renders the accessible average badge when an average is present', () => {
+    const html = renderToStaticMarkup(<CatalogCard item={{ ...item, rating_average: 4.5, rating_count: 12 }} />);
+    expect(html).toContain('aria-label="Rating rata-rata 4,5 dari 5"');
+    expect(html).toContain('4,5');
+  });
+
+  it('omits the badge when the average is absent', () => {
+    const html = renderToStaticMarkup(<CatalogCard item={item} />);
+    expect(html).not.toContain('Rating rata-rata');
+  });
+
+  it('omits the badge when the average is null or non-finite', () => {
+    for (const rating_average of [null, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const html = renderToStaticMarkup(<CatalogCard item={{ ...item, rating_average }} />);
+      expect(html).not.toContain('Rating rata-rata');
+    }
+  });
+});

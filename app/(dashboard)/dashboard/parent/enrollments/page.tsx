@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
 import { PaymentInstructionsPanel } from '@/app/_components/PaymentInstructionsPanel';
 import { canCancelEnrollment } from '@/lib/enrollment-cancellation';
+import { canReviewEnrollment } from '@/lib/reviews';
 import { enrollmentScheduleLabel, SCHEDULE_UNAVAILABLE_LABEL } from '@/lib/enrollment-schedule';
 import { qrDataUrl } from '@/lib/pay-qr';
 import { parseMerchantOrderId, PAYMENT_RETURN_PATH } from '@/lib/payment-return';
 import { formatCurrency, isRenewalTransaction, latestTransactionPerEnrollment, parentEnrollmentStatusLabel, paymentChannelLabel, paymentInstructionsView, paymentPresentation, renewalExpirySuffix, resumePayment } from '@/lib/payment-status';
 import { CancelEnrollmentButton } from './_components/CancelEnrollmentButton';
+import { ReviewForm } from './_components/ReviewForm';
 import { getEnrollmentHistory } from './_queries/queries';
 
 export const metadata: Metadata = { title: 'Status enrollment - KelolaKelas', description: 'Status enrollment dan pembayaran parent.' };
@@ -70,6 +72,7 @@ export default async function ParentEnrollmentHistoryPage() {
                     </dl>
                   )}
                   {canCancelEnrollment(enrollment, transaction) && <div className="mt-5 border-t border-[#edf0e9] pt-4"><CancelEnrollmentButton enrollmentId={enrollment.id} /></div>}
+                  {canReviewEnrollment(enrollment) && <ReviewForm enrollmentId={enrollment.id} className={enrollment.class?.name || undefined} />}
                   {instructionChannel ? (
                     <div className="mt-5 border-t border-[#edf0e9] pt-4">
                       <PaymentInstructionsPanel
