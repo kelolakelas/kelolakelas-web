@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-const { transactions, parse } = vi.hoisted(() => ({ transactions: vi.fn(), parse: vi.fn() }));
+const { transactions, parse, nav } = vi.hoisted(() => ({ transactions: vi.fn(), parse: vi.fn(), nav: vi.fn() }));
 vi.mock('./_queries/transactions', () => ({ getTenantTransactions: transactions }));
+vi.mock('../_queries/membership', () => ({ readTenantNav: nav }));
+vi.mock('./_components/RefundTransactionButton', () => ({
+  RefundTransactionButton: ({ transaction }: { transaction: { merchant_order_id: string } }) => (
+    <div>Catat refund {transaction.merchant_order_id}</div>
+  ),
+}));
 vi.mock('./_lib/transactions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./_lib/transactions')>();
   return { ...actual, parseTransactionFilters: parse };
@@ -41,13 +47,14 @@ function ok(rows: unknown[] = [ROW]) {
   return { data: { filters: FILTERS, rows, pagination: PAGINATION }, error: null };
 }
 
-function view(result: ReturnType<typeof ok> | { data: null; error: string; message?: string }, parsed = { filters: FILTERS, error: null }) {
+function view(result: ReturnType<typeof ok> | { data: null; error: string; message?: string }, parsed = { filters: FILTERS, error: null }, canRefund = false) {
   return renderToStaticMarkup(
     <TransactionsView
       filters={FILTERS}
       defaults={defaultTransactionFilters(new Date('2026-09-27T10:00:00Z'))}
       parsed={parsed as never}
       result={result as never}
+      canRefund={canRefund}
     />,
   );
 }
@@ -63,6 +70,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   transactions.mockResolvedValue(ok());
   parse.mockReturnValue({ filters: FILTERS, error: null });
+  nav.mockResolvedValue({ state: 'ok', membership: { permissions: ['billing:read', 'billing:refund'] } });
 });
 
 describe('tenant transactions page (KEL-148)', () => {
@@ -100,5 +108,29 @@ describe('tenant transactions page (KEL-148)', () => {
     const failed = view({ data: null, error: 'api', message: 'gagal' });
     expect(failed).toContain('belum dapat dimuat');
     expect(failed).not.toContain('tidak memiliki akses');
+  });
+});
+
+describe('tenant transaction refund action (KEL-153)', () => {
+  it('offers "Catat refund" only on the paid row to members with billing:refund', async () => {
+    const output = await page();
+
+    expect(output).toContain('Catat refund order-1');
+  });
+
+  it('hides the refund action entirely from members without billing:refund', async () => {
+    nav.mockResolvedValue({ state: 'ok', membership: { permissions: ['billing:read'] } });
+    const output = await page();
+
+    expect(output).not.toContain('Catat refund');
+    expect(output).toContain('order-1');
+  });
+
+  it('offers no refund action on refunded or non-paid rows', () => {
+    const refunded = view(ok([{ ...ROW, id: 'tx-2', merchant_order_id: 'order-2', status: 'refunded' }]), undefined, true);
+    expect(refunded).not.toContain('Catat refund');
+
+    const pending = view(ok([{ ...ROW, id: 'tx-3', merchant_order_id: 'order-3', status: 'pending' }]), undefined, true);
+    expect(pending).not.toContain('Catat refund');
   });
 });

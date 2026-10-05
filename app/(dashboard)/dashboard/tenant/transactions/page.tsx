@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { formatCurrency } from '@/lib/payment-status';
+import { canRefundTransaction, hasRefundPermission } from '@/lib/transaction-refund';
 import { TransactionFilterBar } from './_components/TransactionFilterBar';
+import { RefundTransactionButton } from './_components/RefundTransactionButton';
+import { readTenantNav } from '../_queries/membership';
 import {
   defaultTransactionFilters,
   parseTransactionFilters,
@@ -110,7 +113,7 @@ function formatUtcDateTime(value: string | null): string {
   }).format(instant);
 }
 
-function TransactionTable({ rows }: { rows: TenantTransaction[] }) {
+function TransactionTable({ rows, canRefund }: { rows: TenantTransaction[]; canRefund: boolean }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xs">
       <table className="w-full min-w-[720px] text-left text-sm">
@@ -122,6 +125,11 @@ function TransactionTable({ rows }: { rows: TenantTransaction[] }) {
             <th scope="col" className="px-4 py-3 text-right">Fee</th>
             <th scope="col" className="px-4 py-3 text-right">Net</th>
             <th scope="col" className="px-4 py-3">Tanggal bayar (UTC)</th>
+            {canRefund && (
+              <th scope="col" className="px-4 py-3">
+                <span className="sr-only">Aksi</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -133,6 +141,13 @@ function TransactionTable({ rows }: { rows: TenantTransaction[] }) {
               <td className="px-4 py-3 text-right">{formatCurrency(transactionFeeTotal(row), row.currency)}</td>
               <td className="px-4 py-3 text-right">{formatCurrency(row.net_amount, row.currency)}</td>
               <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{formatUtcDateTime(row.paid_at)}</td>
+              {canRefund && (
+                <td className="px-4 py-3">
+                  {canRefundTransaction(row.status) && (
+                    <RefundTransactionButton transaction={{ id: row.id, merchant_order_id: row.merchant_order_id }} />
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -209,11 +224,13 @@ export default async function TenantTransactionsPage({ searchParams }: Props) {
     date_from: defaults.date_from,
     date_to: defaults.date_to,
   };
-  const result = await getTenantTransactions(params);
+  const [result, membership] = await Promise.all([getTenantTransactions(params), readTenantNav()]);
+  const canRefund =
+    membership.state === 'ok' && hasRefundPermission(membership.membership.permissions);
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <TransactionsView filters={filters} defaults={defaults} parsed={parsed} result={result} />
+      <TransactionsView filters={filters} defaults={defaults} parsed={parsed} result={result} canRefund={canRefund} />
     </main>
   );
 }
@@ -224,11 +241,13 @@ export function TransactionsView({
   defaults,
   parsed,
   result,
+  canRefund = false,
 }: {
   filters: TransactionFilters;
   defaults: TransactionFilters;
   parsed: ReturnType<typeof parseTransactionFilters>;
   result: Awaited<ReturnType<typeof getTenantTransactions>>;
+  canRefund?: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -284,7 +303,7 @@ export function TransactionsView({
             {filters.search ? ` · “${filters.search}”` : ''} (tanggal bayar, UTC)
           </p>
 
-          <TransactionTable rows={result.data.rows} />
+          <TransactionTable rows={result.data.rows} canRefund={canRefund} />
 
           <TransactionPagination filters={filters} totalPages={result.data.pagination.total_pages} />
         </>
