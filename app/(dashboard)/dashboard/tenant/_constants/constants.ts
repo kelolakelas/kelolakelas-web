@@ -21,6 +21,7 @@ export const NAV_ITEM_PERMISSIONS: Readonly<Record<string, string | null>> = {
   '/dashboard/tenant/enrollments': 'enrollment:read',
   '/dashboard/tenant/schedule-requests': 'enrollment:read',
   '/dashboard/tenant/vouchers': 'voucher:read',
+  '/dashboard/tenant/transactions': 'billing:read',
   '/dashboard/tenant/finance': 'billing:read',
   '/dashboard/tenant/chat': 'chat:manage',
   '/dashboard/tenant/members': 'member:read',
@@ -63,6 +64,11 @@ export const TENANT_NAV_ITEMS: readonly NavItem[] = [
     label: 'Vouchers',
     href: '/dashboard/tenant/vouchers',
     description: 'Manage discounts and voucher usage',
+  },
+  {
+    label: 'Transaksi',
+    href: '/dashboard/tenant/transactions',
+    description: 'Filter transaksi dan unduh CSV',
   },
   {
     label: 'Keuangan',
