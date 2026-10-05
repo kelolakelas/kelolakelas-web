@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
-import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, INSTRUCTION_PAYMENT_CHANNELS, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState } from '@/lib/enrollment';
+import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, INSTRUCTION_PAYMENT_CHANNELS, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState, type VoucherPreviewState, isVoucherRejectedResponse, voucherRejectedState } from '@/lib/enrollment';
 import { getCheckoutInstructions } from '@/lib/payment-instructions';
 import {
   normalizeApprovePayment,
@@ -54,6 +54,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     student_id: formData.get('student_id')?.toString() || '',
     billing_cycle: formData.get('billing_cycle')?.toString() || '',
     schedule_id: formData.get('schedule_id')?.toString() || '',
+    voucher_code: formData.get('voucher_code')?.toString() || undefined,
     payment_method: formData.get('payment_method')?.toString() || undefined,
     idempotency_key: formData.get('idempotency_key')?.toString() || '',
   });
@@ -84,6 +85,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     });
     const result = await response.json().catch(() => ({}));
     if (isDuplicateEnrollmentResponse(response.status, result)) return duplicateEnrollmentState;
+    if (isVoucherRejectedResponse(response.status, result)) return voucherRejectedState;
     if (isPlatformFeeRejectedResponse(response.status, result)) return platformFeeRejectedState;
     if (!response.ok || result.status !== 'success') return { success: false, message: responseMessage(response, result) };
 
@@ -121,6 +123,33 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     return { success: true, message: 'Enrollment tersimpan. Selesaikan pembayaran di bawah sebelum batas waktu.', payment: instructions.data };
   }
   redirect(destination);
+}
+
+export async function previewClassVoucher(classId: string, voucherCode: string): Promise<VoucherPreviewState> {
+  const code = enrollmentFormSchema.shape.voucher_code.safeParse(voucherCode);
+  if (!UUID_PATTERN.test(classId) || !code.success || !code.data) {
+    return { success: false, message: 'Masukkan kode voucher yang valid.' };
+  }
+  try {
+    const token = (await cookies()).get(AUTH_COOKIE)?.value;
+    if (!getSessionIdentityFromToken(token)?.isParent) return { success: false, message: 'Hanya parent yang login dapat memeriksa voucher.' };
+    const response = await fetch(`${getGatewayBaseUrl()}/api/v1/catalog/classes/${encodeURIComponent(classId)}/voucher-preview`, {
+      method: 'POST',
+      headers: await withGatewayClientIp({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }),
+      body: JSON.stringify({ voucher_code: code.data }),
+      cache: 'no-store',
+    });
+    const result = await response.json().catch(() => ({}));
+    if (isVoucherRejectedResponse(response.status, result)) return voucherRejectedState;
+    if (!response.ok || result.status !== 'success') return { success: false, message: 'Voucher belum dapat diperiksa. Coba lagi atau checkout tanpa voucher.' };
+    const { discount_amount, gross_amount } = result.data || {};
+    if (![discount_amount, gross_amount].every((value) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
+      return { success: false, message: 'Nominal preview voucher tidak tersedia. Coba lagi nanti.' };
+    }
+    return { success: true, message: 'Preview voucher tersedia. Voucher dan total akhir divalidasi ulang saat checkout.', data: { discount_amount, gross_amount } };
+  } catch (error) {
+    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan voucher sedang tidak tersedia. Coba lagi nanti.' };
+  }
 }
 
 type ScheduleSlotFormValue = { day_of_week: unknown; start_time: unknown; end_time: unknown };

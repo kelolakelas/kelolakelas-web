@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
+import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { enrollInClass } from '../_actions/actions';
+import { enrollInClass, previewClassVoucher } from '../_actions/actions';
 import { StudentForm } from '@/app/(dashboard)/dashboard/parent/students/_components/StudentForm';
 import type { CatalogScheduleOption } from '@/lib/catalog';
-import { PAYMENT_CHANNEL_OPTIONS, type EnrollmentActionState } from '@/lib/enrollment';
+import { PAYMENT_CHANNEL_OPTIONS, type EnrollmentActionState, type VoucherPreviewState } from '@/lib/enrollment';
 import { PaymentInstructionsPanel } from '@/app/_components/PaymentInstructionsPanel';
 import { PAYMENT_RETURN_PATH } from '@/lib/payment-return';
 import { parseMerchantOrderId } from '@/lib/payment-return';
@@ -54,6 +54,19 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   enrollments?: EnrollmentLinkCandidate[];
 }) {
   const [state, formAction] = useActionState(enrollInClass.bind(null, classId), initialState);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [preview, setPreview] = useState<VoucherPreviewState | null>(null);
+  const [previewPending, startPreview] = useTransition();
+  const previewVersion = useRef(0);
+  const [checkoutKey, setCheckoutKey] = useState(idempotencyKey);
+  const checkVoucher = () => {
+    const version = ++previewVersion.current;
+    setPreview(null);
+    startPreview(async () => {
+      const result = await previewClassVoucher(classId, voucherCode);
+      if (version === previewVersion.current) setPreview(result);
+    });
+  };
   const [studentOptions, setStudentOptions] = useState(students);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -167,7 +180,23 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
           </div>
           <FieldError errors={state.errors} name="payment_method" />
         </fieldset>
-        <input type="hidden" name="idempotency_key" value={idempotencyKey} />
+        <div>
+          <label htmlFor="enrollment-voucher" className="text-sm font-bold">Kode voucher (opsional)</label>
+          <input id="enrollment-voucher" name="voucher_code" value={voucherCode} maxLength={100} onChange={(event) => {
+            setVoucherCode(event.target.value);
+            ++previewVersion.current;
+            setPreview(null);
+            setCheckoutKey(crypto.randomUUID());
+          }} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3" />
+          <FieldError errors={state.errors} name="voucher_code" />
+          <button type="button" disabled={previewPending || !voucherCode.trim()} onClick={checkVoucher} className="mt-2 min-h-11 rounded-xl border border-[#617c35] px-4 font-bold disabled:opacity-50">{previewPending ? 'Memeriksa voucher…' : 'Periksa voucher'}</button>
+          {preview && <div role={preview.success ? 'status' : 'alert'} className="mt-2 text-sm">
+            <p>{preview.message}</p>
+            {preview.data && <dl><dt>Diskon voucher</dt><dd>{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(preview.data.discount_amount)}</dd><dt>Total preview</dt><dd>{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(preview.data.gross_amount)}</dd></dl>}
+          </div>}
+          <p className="mt-2 text-sm text-[#52615b]">Preview bukan jaminan kuota. Total akhir ditentukan server saat checkout; perubahan voucher tidak mengubah invoice sebelumnya.</p>
+        </div>
+        <input type="hidden" name="idempotency_key" value={checkoutKey} />
         <p className="text-sm text-[#52615b]">Jika provider belum merespons, kirim ulang form ini untuk melanjutkan intent yang sama.</p>
         <SubmitButton disabled={!availableSchedules.length && schedules.length > 0} />
       </form>

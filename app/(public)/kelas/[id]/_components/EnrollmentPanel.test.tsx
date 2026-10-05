@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   enrollmentState: { current: { success: false, message: '' } as Record<string, unknown> },
   studentState: { current: { success: false, message: '' } as Record<string, unknown> },
   enrollInClass: vi.fn(),
+  previewClassVoucher: vi.fn(async (): Promise<{ success: boolean; message: string; data?: { discount_amount: number; gross_amount: number } }> => ({ success: true, message: 'Preview voucher tersedia.', data: { discount_amount: 25000, gross_amount: 175000 } })),
   createScheduleRequest: vi.fn(),
   cancelScheduleRequest: vi.fn(),
   createStudent: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('next/link', () => ({
 }));
 vi.mock('../_actions/actions', () => ({
   enrollInClass: mocks.enrollInClass,
+  previewClassVoucher: mocks.previewClassVoucher,
   createScheduleRequest: mocks.createScheduleRequest,
   cancelScheduleRequest: mocks.cancelScheduleRequest,
 }));
@@ -175,6 +177,47 @@ describe('EnrollmentPanel', () => {
     renderGroup();
     expect(screen.getByText(/Instruksi pembayaran belum tersedia/)).toBeTruthy();
     expect(screen.queryByTestId('qris-image')).toBeNull();
+  });
+
+  it('shows the optional voucher field only on the group checkout and previews discount and total', async () => {
+    const view = renderGroup();
+    const field = screen.getByLabelText('Kode voucher (opsional)') as HTMLInputElement;
+    expect(field.value).toBe('');
+    fireEvent.change(field, { target: { value: 'HEMAT' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Periksa voucher' }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Preview voucher tersedia.'));
+    expect(screen.getByText('Diskon voucher')).toBeTruthy();
+    expect(screen.getByText('Rp 25.000')).toBeTruthy();
+    expect(screen.getByText('Total preview')).toBeTruthy();
+    expect(screen.getByText('Rp 175.000')).toBeTruthy();
+    expect(mocks.previewClassVoucher).toHaveBeenCalledWith(classId, 'HEMAT');
+    view.rerender(<EnrollmentPanel classId={classId} classType="private" isParent students={[existingStudent]} schedules={[]} idempotencyKey={classId} />);
+    expect(screen.queryByLabelText('Kode voucher (opsional)')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Periksa voucher' })).toBeNull();
+  });
+
+  it('invalidates the preview when the voucher code changes and refreshes the checkout key', async () => {
+    renderGroup();
+    const field = screen.getByLabelText('Kode voucher (opsional)') as HTMLInputElement;
+    const initialKey = (document.querySelector('input[name="idempotency_key"]') as HTMLInputElement).value;
+    fireEvent.change(field, { target: { value: 'HEMAT' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Periksa voucher' }));
+    await waitFor(() => expect(screen.getByText('Rp 25.000')).toBeTruthy());
+    fireEvent.change(field, { target: { value: 'HEMAT10' } });
+    expect(screen.queryByText('Rp 25.000')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    const rotatedKey = (document.querySelector('input[name="idempotency_key"]') as HTMLInputElement).value;
+    expect(rotatedKey).not.toBe(initialKey);
+  });
+
+  it('renders a clear Indonesian refusal when the preview is rejected', async () => {
+    vi.mocked(mocks.previewClassVoucher).mockResolvedValueOnce({ success: false, message: 'Voucher ditolak atau kuotanya sudah habis. Hapus kode voucher lalu checkout ulang tanpa voucher untuk membuat invoice pengganti. Invoice sebelumnya tidak berubah.' });
+    renderGroup();
+    fireEvent.change(screen.getByLabelText('Kode voucher (opsional)'), { target: { value: 'HABIS' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Periksa voucher' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('checkout ulang tanpa voucher');
+    expect(alert.textContent).toContain('invoice pengganti');
   });
 });
 

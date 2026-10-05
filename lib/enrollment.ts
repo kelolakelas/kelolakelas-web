@@ -37,6 +37,7 @@ export const enrollmentFormSchema = z.object({
   student_id: z.string().uuid('Pilih student yang valid.'),
   billing_cycle: z.enum(['monthly', 'quarterly', 'yearly'], { message: 'Pilih periode pembayaran.' }),
   schedule_id: z.union([z.string().uuid('Pilih jadwal yang valid.'), z.literal('')]),
+  voucher_code: z.string().trim().max(100, 'Kode voucher terlalu panjang.').optional(),
   payment_method: z.enum(PAYMENT_CHANNELS, { message: 'Pilih metode pembayaran.' }).default('VC'),
   idempotency_key: z.string().uuid('Sesi checkout tidak valid. Muat ulang halaman lalu coba lagi.'),
 });
@@ -92,11 +93,27 @@ export function isPlatformFeeRejectedResponse(status: number, result: unknown) {
   return status === 422 && typeof result === 'object' && result !== null && (result as { code?: unknown }).code === PLATFORM_FEE_EXCEEDS_GROSS_CODE;
 }
 
+export type VoucherPreviewState = {
+  success: boolean;
+  message: string;
+  data?: { discount_amount: number; gross_amount: number };
+};
+
+export const voucherRejectedState: EnrollmentActionState = {
+  success: false,
+  message: 'Voucher ditolak atau kuotanya sudah habis. Hapus kode voucher lalu checkout ulang tanpa voucher untuk membuat invoice pengganti. Invoice sebelumnya tidak berubah.',
+};
+
+export function isVoucherRejectedResponse(status: number, result: unknown) {
+  return status === 422 && typeof result === 'object' && result !== null && (result as { code?: unknown }).code === 'voucher_rejected';
+}
+
 export function enrollmentPayload(input: z.infer<typeof enrollmentFormSchema>) {
   return {
     student_id: input.student_id,
     billing_cycle: input.billing_cycle,
     ...(input.schedule_id ? { schedule_id: input.schedule_id } : {}),
     payment_method: input.payment_method,
+    ...(input.voucher_code ? { voucher_code: input.voucher_code } : {}),
   };
 }
