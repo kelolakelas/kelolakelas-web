@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { Student } from '@/lib/students';
+import { studentToday, type Student } from '@/lib/students';
 import { StudentForm } from './StudentForm';
 import { StudentsManager } from './StudentsManager';
 
@@ -62,6 +62,13 @@ describe('StudentsManager', () => {
 });
 
 describe('StudentForm', () => {
+  it('limits the birth date to today in both create and edit forms', () => {
+    for (const profile of [undefined, student({})]) {
+      const html = renderToStaticMarkup(<StudentForm student={profile} onCancel={() => {}} />);
+      const input = html.match(/<input[^>]*id="date_of_birth"[^>]*>/)?.[0];
+      expect(input).toContain(`max="${studentToday()}"`);
+    }
+  });
   it('prefills the surname from last_name when editing', () => {
     const html = renderToStaticMarkup(<StudentForm student={student({ last_name: 'Zamani' })} onCancel={() => {}} />);
 

@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   dateInputValue,
   normalizeStudentList,
   studentFormSchema,
   studentLastName,
   studentPayload,
+  studentToday,
   type Student,
 } from './students';
 import { getSessionIdentityFromToken, getUserIdFromToken } from './auth-session';
@@ -12,6 +13,30 @@ import { getSessionIdentityFromToken, getUserIdFromToken } from './auth-session'
 const parentId = '123e4567-e89b-12d3-a456-426614174000';
 
 describe('student helpers', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it.each(['2026-10-08T17:00:00Z', '2026-10-09T16:59:59Z'])('uses the WIB calendar at %s', (instant) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(instant));
+    expect(studentToday()).toBe('2026-10-09');
+    for (const date of ['2026-10-09', '2018-02-03']) {
+      expect(studentFormSchema.safeParse({ first_name: 'Alya', date_of_birth: date }).success).toBe(true);
+    }
+    const future = studentFormSchema.safeParse({ first_name: 'Alya', date_of_birth: '2026-10-10' });
+    expect(future.success).toBe(false);
+    if (!future.success) {
+      expect(future.error.flatten().fieldErrors.date_of_birth).toEqual(['Tanggal lahir tidak boleh di masa depan']);
+    }
+  });
+
+  it('recomputes today at validation time across midnight WIB', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T16:59:59Z'));
+    const input = { first_name: 'Alya', date_of_birth: '2026-10-09' };
+    expect(studentFormSchema.safeParse(input).success).toBe(false);
+    vi.setSystemTime(new Date('2026-10-08T17:00:00Z'));
+    expect(studentFormSchema.safeParse(input).success).toBe(true);
+  });
   it('validates the API-compatible parent form', () => {
     expect(studentFormSchema.safeParse({
       first_name: 'Alya',

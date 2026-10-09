@@ -8,6 +8,14 @@ const validDate = (value: string) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 
+export function studentToday(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
 export const studentFormSchema = z.object({
   first_name: z.string().trim().min(1, 'Nama depan wajib diisi').max(255, 'Nama depan maksimal 255 karakter'),
   last_name: z.string().trim().max(255, 'Nama belakang maksimal 255 karakter').optional(),
@@ -16,7 +24,8 @@ export const studentFormSchema = z.object({
   date_of_birth: z
     .string()
     .trim()
-    .refine(validDate, 'Tanggal lahir harus berupa tanggal yang valid dengan format YYYY-MM-DD'),
+    .refine(validDate, 'Tanggal lahir harus berupa tanggal yang valid dengan format YYYY-MM-DD')
+    .refine((value) => !validDate(value) || value <= studentToday(), 'Tanggal lahir tidak boleh di masa depan'),
 });
 
 export type StudentFormInput = z.infer<typeof studentFormSchema>;
