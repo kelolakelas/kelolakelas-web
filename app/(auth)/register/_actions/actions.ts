@@ -9,6 +9,20 @@ export interface ActionResponse {
   message: string;
   errors?: Record<string, string[]>;
   redirectTo?: string;
+  values?: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    tenant_name?: string;
+    tenant_address?: string;
+    tenant_phone?: string;
+  };
+}
+
+function textField(formData: FormData, name: string): string {
+  const value = formData.get(name);
+  return typeof value === 'string' ? value : '';
 }
 
 const DEFAULT_COOKIE_NAME = 'auth_token';
@@ -30,11 +44,18 @@ export async function registerParent(
     is_parent: true,
   };
 
+  const values = {
+    first_name: textField(formData, 'first_name'),
+    last_name: textField(formData, 'last_name'),
+    email: textField(formData, 'email'),
+    phone: textField(formData, 'phone'),
+  };
   const validatedFields = parentRegisterSchema.safeParse(rawData);
 
   if (!validatedFields.success) {
     return {
       success: false,
+      values,
       message: 'Validation failed. Please check the form errors.',
       errors: validatedFields.error.flatten().fieldErrors,
     };
@@ -57,6 +78,7 @@ export async function registerParent(
     if (!response.ok || result.status !== 'success') {
       return {
         success: false,
+        values,
         message: result.message || 'Registration failed. Please try again.',
       };
     }
@@ -70,6 +92,7 @@ export async function registerParent(
     console.error('[registerParent Error]:', error);
     return {
       success: false,
+      values,
       message:
         getGatewayConfigurationErrorMessage(error) ||
         'An unexpected connection error occurred. Please try again later.',
@@ -96,11 +119,21 @@ export async function registerTenant(
     tenant_phone: formData.get('tenant_phone') || undefined,
   };
 
+  const values = {
+    first_name: textField(formData, 'first_name'),
+    last_name: textField(formData, 'last_name'),
+    email: textField(formData, 'email'),
+    phone: textField(formData, 'phone'),
+    tenant_name: textField(formData, 'tenant_name'),
+    tenant_address: textField(formData, 'tenant_address'),
+    tenant_phone: textField(formData, 'tenant_phone'),
+  };
   const validatedFields = tenantRegisterSchema.safeParse(rawData);
 
   if (!validatedFields.success) {
     return {
       success: false,
+      values,
       message: 'Validation failed. Please check the form errors.',
       errors: validatedFields.error.flatten().fieldErrors,
     };
@@ -123,6 +156,7 @@ export async function registerTenant(
     if (!response.ok || result.status !== 'success') {
       return {
         success: false,
+        values,
         message: result.message || 'Tenant registration failed. Please try again.',
       };
     }
@@ -157,6 +191,7 @@ export async function registerTenant(
     console.error('[registerTenant Error]:', error);
     return {
       success: false,
+      values,
       message:
         getGatewayConfigurationErrorMessage(error) ||
         'An unexpected connection error occurred. Please try again later.',

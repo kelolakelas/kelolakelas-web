@@ -93,6 +93,7 @@ export function TenantRegisterForm() {
               <input
                 id="tenant_name"
                 name="tenant_name"
+                defaultValue={state.values?.tenant_name ?? ''}
                 type="text"
                 required
                 aria-invalid={Boolean(state.errors?.tenant_name)}
@@ -119,6 +120,7 @@ export function TenantRegisterForm() {
                 <input
                   id="tenant_phone"
                   name="tenant_phone"
+                  defaultValue={state.values?.tenant_phone ?? ''}
                   type="tel"
                   className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"
                   placeholder="+1 (555) 123-4567"
@@ -132,6 +134,7 @@ export function TenantRegisterForm() {
                 <input
                   id="tenant_address"
                   name="tenant_address"
+                  defaultValue={state.values?.tenant_address ?? ''}
                   type="text"
                   className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"
                   placeholder="123 Education St"
@@ -152,6 +155,7 @@ export function TenantRegisterForm() {
                 <input
                   id="first_name"
                   name="first_name"
+                  defaultValue={state.values?.first_name ?? ''}
                   type="text"
                   required
                   aria-invalid={Boolean(state.errors?.first_name)}
@@ -177,6 +181,7 @@ export function TenantRegisterForm() {
                 <input
                   id="last_name"
                   name="last_name"
+                  defaultValue={state.values?.last_name ?? ''}
                   type="text"
                   required
                   aria-invalid={Boolean(state.errors?.last_name)}
@@ -203,6 +208,7 @@ export function TenantRegisterForm() {
               <input
                 id="email"
                 name="email"
+                defaultValue={state.values?.email ?? ''}
                 type="email"
                 autoComplete="email"
                 required
@@ -255,6 +261,7 @@ export function TenantRegisterForm() {
               <input
                 id="phone"
                 name="phone"
+                defaultValue={state.values?.phone ?? ''}
                 type="tel"
                 autoComplete="tel"
                 className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm font-normal text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 transition-colors"

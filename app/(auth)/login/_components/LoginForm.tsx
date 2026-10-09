@@ -61,7 +61,7 @@ export function LoginForm({ registered = false, reset = false, redirectTo }: { r
         <p className="mt-1 text-sm text-gray-500">Sign in to your KelolaKelas account</p>
       </div>
 
-      {registered && (
+      {registered && !state.message && (
         <div
           role="status"
           className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
@@ -90,6 +90,7 @@ export function LoginForm({ registered = false, reset = false, redirectTo }: { r
           <input
             id="email"
             name="email"
+            defaultValue={state.values?.email ?? ''}
             type="email"
             autoComplete="email"
             required
