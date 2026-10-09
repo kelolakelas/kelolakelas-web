@@ -10,6 +10,7 @@ export interface ActionResponse {
   success: boolean;
   message: string;
   errors?: Record<string, string[]>;
+  values?: { email: string };
 }
 
 const DEFAULT_COOKIE_NAME = 'auth_token';
@@ -29,12 +30,15 @@ export async function loginAction(
     password: formData.get('password'),
   };
 
+  const values = { email: typeof rawData.email === 'string' ? rawData.email : '' };
+
   // 1. Validate Form Input with Zod Schema
   const validatedFields = loginSchema.safeParse(rawData);
 
   if (!validatedFields.success) {
     return {
       success: false,
+      values,
       message: 'Validation failed. Please correct the errors in the form.',
       errors: validatedFields.error.flatten().fieldErrors,
     };
@@ -64,6 +68,7 @@ export async function loginAction(
     if (!response.ok || result.status !== 'success' || !result.data?.token) {
       return {
         success: false,
+        values,
         message: result.message || 'Invalid email or password. Please try again.',
       };
     }
@@ -94,6 +99,7 @@ export async function loginAction(
     console.error('[loginAction Error]:', error);
     return {
       success: false,
+      values,
       message:
         getGatewayConfigurationErrorMessage(error) ||
         'An unexpected connection error occurred. Please try again later.',

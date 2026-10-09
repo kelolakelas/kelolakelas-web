@@ -91,6 +91,7 @@ export function ParentRegisterForm() {
             <input
               id="first_name"
               name="first_name"
+              defaultValue={state.values?.first_name ?? ''}
               type="text"
               required
               aria-invalid={Boolean(state.errors?.first_name)}
@@ -116,6 +117,7 @@ export function ParentRegisterForm() {
             <input
               id="last_name"
               name="last_name"
+              defaultValue={state.values?.last_name ?? ''}
               type="text"
               required
               aria-invalid={Boolean(state.errors?.last_name)}
@@ -142,6 +144,7 @@ export function ParentRegisterForm() {
           <input
             id="email"
             name="email"
+            defaultValue={state.values?.email ?? ''}
             type="email"
             autoComplete="email"
             required
@@ -194,6 +197,7 @@ export function ParentRegisterForm() {
           <input
             id="phone"
             name="phone"
+            defaultValue={state.values?.phone ?? ''}
             type="tel"
             autoComplete="tel"
             aria-invalid={Boolean(state.errors?.phone)}
