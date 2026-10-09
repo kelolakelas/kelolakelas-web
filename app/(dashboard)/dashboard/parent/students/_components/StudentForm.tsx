@@ -6,6 +6,7 @@ import { createStudent, updateStudent } from '../_actions/actions';
 import {
   dateInputValue,
   studentLastName,
+  studentToday,
   type Student,
   type StudentActionState,
 } from '@/lib/students';
@@ -90,7 +91,7 @@ export function StudentForm({ student, onCancel, onSuccess, autoFocus = false }:
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="date_of_birth" className="text-sm font-bold">Tanggal lahir <span aria-hidden="true">*</span></label>
-          <input id="date_of_birth" name="date_of_birth" type="date" required defaultValue={dateInputValue(student?.date_of_birth)} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3 sm:max-w-xs" />
+          <input id="date_of_birth" name="date_of_birth" type="date" required max={studentToday()} onFocus={(event) => { event.currentTarget.max = studentToday(); }} defaultValue={dateInputValue(student?.date_of_birth)} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3 sm:max-w-xs" />
           <FieldError errors={state.errors} name="date_of_birth" />
         </div>
       </div>
