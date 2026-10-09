@@ -4,24 +4,38 @@ import { Suspense } from 'react';
 import { OverviewMetrics } from './_components/OverviewMetrics';
 import { OverviewMetricsSkeleton } from './_components/OverviewSkeleton';
 import { SalesSummaryCard, SalesSummarySkeleton } from './_components/SalesSummaryCard';
+import { readTenantNav } from './_queries/membership';
 
 export const metadata: Metadata = {
   title: 'Overview - Tenant Dashboard',
   description:
-    'Tenant organization portal overview, system metrics, active members, and quick administration actions.',
+    'Tenant organization portal overview, active members, and quick administration actions.',
   alternates: {
     canonical: '/dashboard/tenant',
   },
 };
 
-export default function TenantOverviewPage() {
+/**
+ * Tenant overview screen (KEL-171).
+ *
+ * The greeting follows the caller's own membership role instead of a static
+ * "Tenant Admin" label: there is no person name in the JWT or the membership
+ * response, so the role name is the only honest identity available. When the
+ * membership cannot be read the greeting stays neutral rather than claiming
+ * a role. No service health is shown here — real health checks are out of
+ * scope — so nothing on this screen implies a status that was never measured.
+ */
+export default async function TenantOverviewPage() {
+  const nav = await readTenantNav();
+  const greeting = nav.roleName ? `Welcome back, ${nav.roleName}` : 'Welcome back';
+
   return (
     <div className="space-y-8">
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-gray-200 dark:border-gray-800">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
-            Welcome back, Tenant Admin
+            {greeting}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Here is what is happening across your organization today.
@@ -52,9 +66,9 @@ export default function TenantOverviewPage() {
       </Suspense>
 
       {/* Quick Action & System Shortcuts Section */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6">
         {/* Quick Management Actions */}
-        <div className="lg:col-span-2 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 p-6 shadow-xs space-y-4">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 p-6 shadow-xs space-y-4">
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
             Organization Management
           </h2>
@@ -112,7 +126,7 @@ export default function TenantOverviewPage() {
                     Tenant Settings
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Organization details & API keys
+                    Organization profile & location
                   </div>
                 </div>
               </div>
@@ -120,35 +134,6 @@ export default function TenantOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
-          </div>
-        </div>
-
-        {/* System Status Panel */}
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 p-6 shadow-xs space-y-4">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-            Platform Architecture
-          </h2>
-          <div className="space-y-3 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-              <span className="font-medium text-gray-700 dark:text-gray-300">Identity Service</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Active
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-              <span className="font-medium text-gray-700 dark:text-gray-300">Academic Service</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Active
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
-              <span className="font-medium text-gray-700 dark:text-gray-300">Next.js PPR Engine</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold text-blue-600 dark:text-blue-400">
-                Enabled
-              </span>
-            </div>
           </div>
         </div>
       </div>

@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  * - KEL-83: the Active Roles card must open the roles page, not the members page.
  * - KEL-84: Pending Invites counts the active invitations from the invitation
  *   list (expired ones excluded) instead of members with `status: 'pending'`.
+ * - KEL-171: the hardcoded "System Status" / "Operational" card is gone —
+ *   service health is never measured here, so only real counts stay.
  */
 
 const queries = vi.hoisted(() => ({
@@ -117,5 +119,17 @@ describe('OverviewMetrics', () => {
 
     queries.getTenantInvitations.mockResolvedValue({ state: 'error' });
     expect(cardValue(pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics())))).toBe('—');
+  });
+
+  it('renders only the three real count cards, never a hardcoded system status', async () => {
+    setDefaults();
+    const html = renderToStaticMarkup(await OverviewMetrics());
+
+    expect(html).toContain('Total Members');
+    expect(html).toContain('Active Roles');
+    expect(html).toContain('Pending Invites');
+    expect(html).not.toContain('System Status');
+    expect(html).not.toContain('Operational');
+    expect(html).not.toContain('Services online');
   });
 });
