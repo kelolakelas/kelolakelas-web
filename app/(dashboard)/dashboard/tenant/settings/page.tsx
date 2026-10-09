@@ -57,9 +57,13 @@ function SettingsErrorPanel({
  * read refused case is rendered as a permission panel because a tenant whose
  * settings cannot be read cannot be given a meaningful editable form either.
  *
- * The forms are keyed on the stored values so a successful save re-mounts them
- * from the persisted state, which is what makes the backend's geocoded address
- * appear after submitting an address without coordinates.
+ * The profile form is keyed on the tenant id. The location form is keyed the
+ * same way on purpose: keying it on `location_updated_at` re-mounted it after
+ * every successful save (the update action revalidates this screen, which
+ * changes the timestamp), and the re-mount discarded the `useActionState`
+ * success message before the tenant could read it. The stored summary above
+ * the inputs still reflects the latest server values through props, so the
+ * backend's geocoded address appears without a re-mount.
  */
 export default async function TenantSettingsPage() {
   const result = await getTenantSettings();
@@ -116,11 +120,7 @@ export default async function TenantSettingsPage() {
             radius.
           </p>
         </div>
-        <TenantLocationForm
-          key={`${profile.id}-${location?.location_updated_at ?? 'unset'}`}
-          location={location}
-          readOnly={false}
-        />
+        <TenantLocationForm key={profile.id} location={location} readOnly={false} />
       </section>
     </div>
   );
