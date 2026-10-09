@@ -1,9 +1,10 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createSchedule, type ActionResponse } from '../_actions/classActions';
 import {
+  findOverlappingSlotPairs,
   generateWeeklySlots,
   weeklySlotGeneratorSchema,
   type ClassEntity,
@@ -236,6 +237,30 @@ export function ScheduleForm({
       return updated;
     });
   };
+
+  /**
+   * Same-day overlap warnings (KEL-176).
+   *
+   * Recomputed from the editable drafts on every render, so an overlap warns
+   * as soon as it is typed, generated, or edited in, and disappears as soon
+   * as one side is moved or removed. This is advisory only: generation,
+   * duplicate prevention, and the hidden submission payload are unchanged,
+   * and the warning never blocks saving.
+   */
+  const overlappingPairs = useMemo(() => findOverlappingSlotPairs(schedules), [schedules]);
+
+  const overlapBySlot = useMemo(() => {
+    const bySlot = new Map<number, number[]>();
+    for (const pair of overlappingPairs) {
+      const first = bySlot.get(pair.first) ?? [];
+      first.push(pair.second);
+      bySlot.set(pair.first, first);
+      const second = bySlot.get(pair.second) ?? [];
+      second.push(pair.first);
+      bySlot.set(pair.second, second);
+    }
+    return bySlot;
+  }, [overlappingPairs]);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -586,6 +611,19 @@ export function ScheduleForm({
                   />
                 </div>
               </div>
+
+              {overlapBySlot.has(idx) && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+                >
+                  Overlaps with slot{' '}
+                  {(overlapBySlot.get(idx) ?? [])
+                    .map((other) => `#${other + 1}`)
+                    .join(', ')}
+                  . Slots on the same day should not overlap.
+                </p>
+              )}
             </div>
           ))}
         </div>
