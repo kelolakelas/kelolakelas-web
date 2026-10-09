@@ -370,6 +370,88 @@ export function generateWeeklySlots(
   return slots;
 }
 
+/**
+ * A slot time range the overlap detector reads. Only the day and the wall-clock
+ * bounds matter; capacity, location, and every other draft field are ignored.
+ */
+export interface SlotTimeRange {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+/**
+ * One pair of indexes into the input array whose slots overlap.
+ */
+export interface OverlappingSlotPair {
+  first: number;
+  second: number;
+}
+
+const slotTimePattern = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+
+function parseSlotTimeSeconds(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const match = slotTimePattern.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  return (
+    Number(match[1]) * 3600 + Number(match[2]) * 60 + (match[3] ? Number(match[3]) : 0)
+  );
+}
+
+/**
+ * Finds every pair of slots that overlap on the same day (KEL-176).
+ *
+ * Two slots overlap when they share `day_of_week` and their half-open
+ * intervals intersect (`[start, end)`): a slot ending exactly when another
+ * starts only touches and is not an overlap. Pairs with an unparseable or
+ * half-typed time (an empty or malformed bound) and intervals whose end is
+ * not after their start are skipped instead of throwing, because the form
+ * re-runs this on every keystroke while the tenant is still typing.
+ */
+export function findOverlappingSlotPairs(
+  slots: readonly SlotTimeRange[]
+): OverlappingSlotPair[] {
+  const pairs: OverlappingSlotPair[] = [];
+
+  for (let first = 0; first < slots.length; first += 1) {
+    for (let second = first + 1; second < slots.length; second += 1) {
+      const a = slots[first];
+      const b = slots[second];
+
+      if (a.day_of_week !== b.day_of_week) {
+        continue;
+      }
+
+      const aStart = parseSlotTimeSeconds(a.start_time);
+      const aEnd = parseSlotTimeSeconds(a.end_time);
+      const bStart = parseSlotTimeSeconds(b.start_time);
+      const bEnd = parseSlotTimeSeconds(b.end_time);
+
+      if (
+        aStart === null ||
+        aEnd === null ||
+        bStart === null ||
+        bEnd === null ||
+        aEnd <= aStart ||
+        bEnd <= bStart
+      ) {
+        continue;
+      }
+
+      if (aStart < bEnd && bStart < aEnd) {
+        pairs.push({ first, second });
+      }
+    }
+  }
+
+  return pairs;
+}
+
 // Inferred Form / Input Types
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type CreateClassInput = z.infer<typeof createClassSchema>;

@@ -205,3 +205,87 @@ describe('ScheduleForm weekly slot generator', () => {
     expect(slotCount()).toBe(1);
   });
 });
+
+describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
+  /**
+   * The default slot is Monday 09:00-10:30. Adding a slot and typing
+   * 08:00-09:30 on the same day creates the AC overlap Monday
+   * 08:00-09:30 vs 09:00-10:30; touching at 09:30 must stay silent, and
+   * removing one side must clear the warning. Time inputs are located by
+   * their DOM order per slot card (start, then end) because the visible
+   * labels repeat across cards.
+   */
+  function slotTimeInputs(slotIndex: number): {
+    start: HTMLInputElement;
+    end: HTMLInputElement;
+  } {
+    const cards = screen.getAllByText(/Slot #\d+/);
+    const card = cards[slotIndex].closest('div')?.parentElement as HTMLElement;
+    const inputs = Array.from(
+      card.querySelectorAll('input[type="time"]')
+    ) as HTMLInputElement[];
+    return { start: inputs[0], end: inputs[1] };
+  }
+
+  /**
+   * Added slots default to Wednesday; the AC scenarios need both slots on
+   * Monday, so the day select (the only select in the card) is switched.
+   */
+  function setSlotDay(slotIndex: number, day: string) {
+    const cards = screen.getAllByText(/Slot #\d+/);
+    const card = cards[slotIndex].closest('div')?.parentElement as HTMLElement;
+    const select = card.querySelector('select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: day } });
+  }
+
+  it('warns when two Monday slots overlap and the warning never blocks saving', () => {
+    renderForm();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Slot' }));
+    setSlotDay(1, '1');
+    const second = slotTimeInputs(1);
+    fireEvent.change(second.start, { target: { value: '08:00' } });
+    fireEvent.change(second.end, { target: { value: '09:30' } });
+
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts).toHaveLength(2);
+    expect(alerts[0].textContent).toContain('Overlaps with slot #2');
+    expect(alerts[1].textContent).toContain('Overlaps with slot #1');
+    // Advisory only: the hidden payload and the submit button are untouched.
+    expect(
+      screen.getByRole('button', { name: 'Complete Class Setup ✓' })
+    ).toBeTruthy();
+  });
+
+  it('stays silent when slots only touch at the boundary', () => {
+    renderForm();
+
+    // Mirror AC2 verbatim: Monday 08:00-09:30 vs Monday 09:30-11:00.
+    const first = slotTimeInputs(0);
+    fireEvent.change(first.start, { target: { value: '08:00' } });
+    fireEvent.change(first.end, { target: { value: '09:30' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Slot' }));
+    setSlotDay(1, '1');
+    const second = slotTimeInputs(1);
+    fireEvent.change(second.start, { target: { value: '09:30' } });
+    fireEvent.change(second.end, { target: { value: '11:00' } });
+
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('clears the warning after one of the conflicting slots is removed', () => {
+    renderForm();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Slot' }));
+    setSlotDay(1, '1');
+    const second = slotTimeInputs(1);
+    fireEvent.change(second.start, { target: { value: '08:00' } });
+    fireEvent.change(second.end, { target: { value: '09:30' } });
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText('Remove slot 2'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(slotCount()).toBe(1);
+  });
+});
