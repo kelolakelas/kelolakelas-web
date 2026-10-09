@@ -59,7 +59,10 @@ export function CancelEnrollmentButton({ enrollmentId }: { enrollmentId: string 
     <div>
       <button
         type="button"
-        onClick={() => dialogRef.current?.showModal()}
+        onClick={() => {
+          dialogRef.current?.showModal();
+          setDialogOpen(true);
+        }}
         className="min-h-11 rounded-xl border border-[#f2c6c3] bg-white px-4 text-sm font-bold text-[#b42318] hover:bg-[#fde9e7]"
       >
         Batalkan pendaftaran
