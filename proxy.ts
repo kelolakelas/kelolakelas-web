@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { hasTenantContext } from './lib/auth-routing';
+import { hasTenantContext, PARENT_DESTINATION, UNKNOWN_DESTINATION } from './lib/auth-routing';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
@@ -59,6 +59,7 @@ export function proxy(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
   const isParentRoute = pathname === '/dashboard/parent' || pathname.startsWith('/dashboard/parent/');
+  const isTenantRoute = pathname === '/dashboard/tenant' || pathname.startsWith('/dashboard/tenant/');
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
@@ -68,6 +69,16 @@ export function proxy(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', `${pathname}${request.nextUrl.search}`);
     return clearInvalidCookie(NextResponse.redirect(loginUrl));
+  }
+
+  // Optimistic routing only; backend authorization remains authoritative.
+  if (isTenantRoute && isAuthenticated) {
+    if (tokenPayload?.is_parent) {
+      return NextResponse.redirect(new URL(PARENT_DESTINATION, request.url));
+    }
+    if (!hasTenantContext(tokenPayload?.tenant_id)) {
+      return NextResponse.redirect(new URL(UNKNOWN_DESTINATION, request.url));
+    }
   }
 
   // Parent student management must not be reachable with a tenant session.

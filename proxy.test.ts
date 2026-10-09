@@ -35,6 +35,66 @@ describe('authentication proxy', () => {
     );
   });
 
+  describe('tenant dashboard guard', () => {
+    const tenantId = '123e4567-e89b-12d3-a456-426614174000';
+    const paths = ['/dashboard/tenant', '/dashboard/tenant/members', '/dashboard/tenant/members?sort=name'];
+
+    it.each(paths)('redirects parent sessions from %s to the catalog', (path) => {
+      const response = proxy(makeRequest(path, makeToken({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        is_parent: true,
+        tenant_id: tenantId,
+      })));
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get('location')).toBe('http://localhost/kelas');
+    });
+
+    it.each([undefined, '', '   ', '00000000-0000-0000-0000-000000000000', null, 123])(
+      'redirects a session with unusable tenant context %s to the public home', (tenant_id) => {
+        const response = proxy(makeRequest('/dashboard/tenant/members', makeToken({
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          is_parent: false,
+          tenant_id,
+        })));
+
+        expect(response.status).toBe(307);
+        expect(response.headers.get('location')).toBe('http://localhost/');
+      }
+    );
+
+    it.each(paths)('serves %s to a tenant owner session', (path) => {
+      const response = proxy(makeRequest(path, makeToken({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        is_parent: false,
+        tenant_id: tenantId,
+      })));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+    });
+
+    it.each([undefined, 'malformed', makeToken({ is_parent: true }), makeToken({ exp: 0, is_parent: true })])(
+      'sends missing or invalid sessions to login before applying the tenant guard', (token) => {
+        const path = '/dashboard/tenant/members?sort=name';
+        const response = proxy(makeRequest(path, token));
+
+        expect(response.status).toBe(307);
+        const location = new URL(response.headers.get('location') || '');
+        expect(location.pathname).toBe('/login');
+        expect(location.searchParams.get('redirectTo')).toBe(path);
+        if (token) expect(response.headers.get('set-cookie')).toContain('auth_token=;');
+      }
+    );
+
+    it.each(['/dashboard/tenants', '/platform/login', '/platform'])('does not broaden the tenant guard to %s', (path) => {
+      expect(proxy(makeRequest(path, makeToken({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        is_parent: true,
+      }))).status).toBe(200);
+    });
+  });
+
   it('clears an expired cookie while redirecting to login', () => {
     const response = proxy(
       makeRequest('/dashboard/tenant', makeToken({ exp: Math.floor(Date.now() / 1000) - 1 }))
