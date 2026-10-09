@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { getGatewayBaseUrl } from '@/lib/gateway';
 import { normalizeListEnvelope, type ListPagination } from '@/lib/list-envelope';
 import { membersQueryString } from '../_lib/schema';
-import type { InvitationListItem, Member, Permission, Role } from '../_schemas/schema';
+import type { InvitationListItem, Member, Role } from '../_schemas/schema';
 
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
@@ -206,38 +206,6 @@ export async function getTenantRoles(): Promise<Role[]> {
     return [];
   } catch (error) {
     console.error('[getTenantRoles Error]:', error);
-    return [];
-  }
-}
-
-/**
- * Fetches all available system permissions.
- * Target Endpoint: GET /api/v1/permissions
- */
-export async function getSystemPermissions(): Promise<Permission[]> {
-  const baseUrl = getGatewayBaseUrl();
-
-  try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${baseUrl}/api/v1/permissions`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.warn('[getSystemPermissions] Non-OK response:', response.status);
-      return [];
-    }
-
-    const result = await response.json();
-    if (result.status === 'success' && Array.isArray(result.data)) {
-      return result.data;
-    }
-
-    return [];
-  } catch (error) {
-    console.error('[getSystemPermissions Error]:', error);
     return [];
   }
 }

@@ -3,11 +3,10 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { inviteTenantMember, type ActionResponse } from '../_actions/actions';
-import type { Permission, Role } from '../_schemas/schema';
+import type { Role } from '../_schemas/schema';
 
 interface InviteMemberFormProps {
   roles: Role[];
-  permissions?: Permission[];
   /**
    * Called once with the settled action state after a successful submission.
    * Receives the state so the caller can react to the delivery outcome
@@ -45,7 +44,7 @@ function SubmitButton() {
   );
 }
 
-export function InviteMemberForm({ roles, permissions = [], onSuccess }: InviteMemberFormProps) {
+export function InviteMemberForm({ roles, onSuccess }: InviteMemberFormProps) {
   const [state, formAction] = useActionState(inviteTenantMember, initialState);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
 
@@ -56,9 +55,10 @@ export function InviteMemberForm({ roles, permissions = [], onSuccess }: InviteM
   }, [state, onSuccess]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
-  const activePermissions = selectedRole?.permissions && selectedRole.permissions.length > 0 
-    ? selectedRole.permissions 
-    : permissions;
+  // Permissions are informational only (KEL-173): the invitation assigns the
+  // whole role, so the list below never becomes form input. No role selected
+  // means no list at all — never fall back to the tenant-wide permission set.
+  const rolePermissions = selectedRole?.permissions ?? [];
 
   return (
     <form action={formAction} className="space-y-5 text-gray-900 dark:text-gray-100">
@@ -126,30 +126,24 @@ export function InviteMemberForm({ roles, permissions = [], onSuccess }: InviteM
         )}
       </div>
 
-      {/* Permissions Section */}
-      {activePermissions.length > 0 && (
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Assigned Permissions
-          </legend>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-            {activePermissions.map((perm) => (
-              <label
+      {/* Permissions Section (read-only, KEL-173) */}
+      {selectedRoleId !== '' && rolePermissions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Permissions included in this role
+          </p>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+            {rolePermissions.map((perm) => (
+              <li
                 key={perm.id}
-                className="inline-flex min-h-[44px] items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer"
+                className="inline-flex min-h-[44px] items-center gap-2 text-xs text-gray-700 dark:text-gray-300"
               >
-                <input
-                  type="checkbox"
-                  name="permissionIds"
-                  value={perm.id}
-                  defaultChecked
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                <span aria-hidden="true" className="text-emerald-600 dark:text-emerald-400">✓</span>
                 <span className="font-medium">{perm.name}</span>
-              </label>
+              </li>
             ))}
-          </div>
-        </fieldset>
+          </ul>
+        </div>
       )}
 
       {/* Form Submission */}

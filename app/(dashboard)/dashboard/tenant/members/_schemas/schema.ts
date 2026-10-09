@@ -69,7 +69,6 @@ export const inviteMemberSchema = z.object({
     .string()
     .trim()
     .min(1, 'Please select a role for the member.'),
-  permissionIds: z.array(z.string()).optional().default([]),
 });
 
 /**
