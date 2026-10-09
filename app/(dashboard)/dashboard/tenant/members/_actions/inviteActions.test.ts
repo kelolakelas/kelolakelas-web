@@ -87,6 +87,53 @@ afterEach(() => {
 });
 
 describe('inviteTenantMember', () => {
+  it('posts exactly email and role_id without any permission payload', async () => {
+    installFetch(
+      success(
+        {
+          email: 'staff@example.com',
+          email_sent: true,
+        },
+        'Invitation created and email sent successfully'
+      )
+    );
+
+    const state = await inviteTenantMember(EMPTY_STATE, formDataOf(VALID_FORM));
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(INVITATIONS_PATH);
+    // KEL-173: the invitation assigns the whole role, so the POST body is
+    // exactly { email, role_id } with those field names.
+    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toEqual({
+      email: 'staff@example.com',
+      role_id: 'role-1',
+    });
+    expect(state.success).toBe(true);
+  });
+
+  it('ignores a stray permissionIds field instead of failing or forwarding it', async () => {
+    installFetch(
+      success(
+        {
+          email: 'staff@example.com',
+          email_sent: true,
+        },
+        'Invitation created and email sent successfully'
+      )
+    );
+
+    const formData = new FormData();
+    formData.set('email', 'staff@example.com');
+    formData.set('roleId', 'role-1');
+    formData.append('permissionIds', 'perm-1');
+    const state = await inviteTenantMember(EMPTY_STATE, formData);
+
+    expect(state.success).toBe(true);
+    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toEqual({
+      email: 'staff@example.com',
+      role_id: 'role-1',
+    });
+  });
+
   it('reports a delivered invitation using the backend message', async () => {
     installFetch(
       success(

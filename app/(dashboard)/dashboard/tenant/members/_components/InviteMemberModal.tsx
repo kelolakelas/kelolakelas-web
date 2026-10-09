@@ -2,15 +2,14 @@
 
 import { useState } from 'react';
 import type { ActionResponse } from '../_actions/actions';
-import type { Permission, Role } from '../_schemas/schema';
+import type { Role } from '../_schemas/schema';
 import { InviteMemberForm } from './InviteMemberForm';
 
 interface InviteMemberModalProps {
   roles: Role[];
-  permissions?: Permission[];
 }
 
-export function InviteMemberModal({ roles, permissions = [] }: InviteMemberModalProps) {
+export function InviteMemberModal({ roles }: InviteMemberModalProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   // The modal closes on a fully delivered invitation only. When the backend
@@ -59,7 +58,6 @@ export function InviteMemberModal({ roles, permissions = [] }: InviteMemberModal
 
             <InviteMemberForm
               roles={roles}
-              permissions={permissions}
               onSuccess={handleInviteSuccess}
             />
           </div>

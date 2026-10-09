@@ -53,12 +53,11 @@ export async function inviteTenantMember(
   _prevState: ActionResponse,
   formData: FormData
 ): Promise<ActionResponse> {
-  const permissionIdsRaw = formData.getAll('permissionIds');
-
+  // KEL-173: invitations assign the whole role; no per-invite permission
+  // input exists, so only email and role are read from the form.
   const rawData = {
     email: formData.get('email'),
     roleId: formData.get('roleId'),
-    permissionIds: permissionIdsRaw.length > 0 ? permissionIdsRaw : [],
   };
 
   // 1. Server-side validation using Zod

@@ -8,7 +8,6 @@ import { MembersSkeleton } from './_components/MembersSkeleton';
 import { MembersTable } from './_components/MembersTable';
 import { PendingInvitations, PendingInvitationsSkeleton } from './_components/PendingInvitations';
 import {
-  getSystemPermissions,
   getTenantInvitations,
   getTenantMembers,
   getTenantRoles,
@@ -40,10 +39,9 @@ async function MembersContent({ searchParams }: Props) {
   // boundary, so a slow, forbidden or failed invitation read never delays or
   // breaks the members table (KEL-84).
   const invitationsRead = getTenantInvitations();
-  const [initialMembersRead, roles, permissions] = await Promise.all([
+  const [initialMembersRead, roles] = await Promise.all([
     getTenantMembers(requestedPage),
     getTenantRoles(),
-    getSystemPermissions(),
   ]);
   const page =
     initialMembersRead.pagination.total_pages > 0 &&
@@ -73,7 +71,7 @@ async function MembersContent({ searchParams }: Props) {
           </p>
         </div>
 
-        <InviteMemberModal roles={roles} permissions={permissions} />
+        <InviteMemberModal roles={roles} />
       </div>
 
       {/* Members Table & Mobile Card View */}
