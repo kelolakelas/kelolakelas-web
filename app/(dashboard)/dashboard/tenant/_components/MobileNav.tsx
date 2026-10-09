@@ -200,11 +200,10 @@ function MobileNavContent({
                   {roleName ? roleName.slice(0, 2).toUpperCase() : 'TN'}
                 </div>
                 <div className="flex flex-col min-w-0">
+                  {/* KEL-171: no static "Tenant Member" subtitle. The role name above
+                      already comes from the caller's own membership. */}
                   <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {roleName ?? 'Tenant'}
-                  </span>
-                  <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                    Tenant Member
                   </span>
                 </div>
               </div>

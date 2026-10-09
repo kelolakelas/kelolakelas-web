@@ -66,8 +66,10 @@ export async function OverviewMetrics() {
     invitationsRead.state === 'ok' ? countActiveInvitations(invitationsRead.invitations) : '—';
   const activeRoles = roles.length;
 
+  // KEL-171: no "System Status" card. Service health is never measured here,
+  // so a hardcoded "Operational" label would mislead. Only real counts stay.
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <MetricCard
         title="Total Members"
         value={totalMembers}
@@ -125,24 +127,6 @@ export async function OverviewMetrics() {
         }
       />
 
-      <MetricCard
-        title="System Status"
-        value="Operational"
-        description="Identity & Academic Services online"
-        href="/dashboard/tenant/settings"
-        iconBg="bg-emerald-50 dark:bg-emerald-950/60"
-        iconColor="text-emerald-600 dark:text-emerald-400"
-        icon={
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-        }
-      />
     </div>
   );
 }
