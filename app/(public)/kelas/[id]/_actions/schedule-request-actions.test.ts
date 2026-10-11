@@ -69,10 +69,35 @@ describe('createScheduleRequest', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       student_id: studentId,
       billing_cycle: 'monthly',
-      slots: [{ day_of_week: 1, start_time: '16:00', end_time: '17:30' }],
+      slots: [{ day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00' }],
       note: 'Lokasi les di rumah.',
     });
     expect(revalidatePath).toHaveBeenCalledWith(`/kelas/${classId}`);
+  });
+
+  it('normalizes every slot to HH:MM:SS and drops a blank note (KEL-166)', async () => {
+    respondWith(201, { status: 'success', data: { id: requestId, status: 'pending' } });
+
+    const state = await createScheduleRequest(
+      { success: false, message: '' },
+      createForm({
+        slots: JSON.stringify([
+          { day_of_week: 1, start_time: '16:00', end_time: '17:00' },
+          { day_of_week: 3, start_time: '09:05', end_time: '10:00' },
+        ]),
+        note: '   ',
+      })
+    );
+
+    expect(state.success).toBe(true);
+    expect(JSON.parse(String(lastRequest().init.body))).toEqual({
+      student_id: studentId,
+      billing_cycle: 'monthly',
+      slots: [
+        { day_of_week: 1, start_time: '16:00:00', end_time: '17:00:00' },
+        { day_of_week: 3, start_time: '09:05:00', end_time: '10:00:00' },
+      ],
+    });
   });
 
   it('reports a duplicate as the still-pending message with a link to the list', async () => {
