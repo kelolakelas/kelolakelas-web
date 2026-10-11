@@ -122,8 +122,8 @@ export function scheduleRequestPayload(input: ScheduleRequestFormInput) {
     billing_cycle: input.billing_cycle,
     slots: input.slots.map((slot) => ({
       day_of_week: slot.day_of_week,
-      start_time: slot.start_time,
-      end_time: slot.end_time,
+      start_time: scheduleRequestTimeForBackend(slot.start_time),
+      end_time: scheduleRequestTimeForBackend(slot.end_time),
     })),
     ...(note ? { note } : {}),
   };

@@ -108,8 +108,34 @@ describe('scheduleRequestFormSchema (KEL-109)', () => {
     expect(payload).toEqual({
       student_id: STUDENT_ID,
       billing_cycle: 'monthly',
-      slots: [{ day_of_week: 1, start_time: '16:00', end_time: '17:30' }],
+      slots: [{ day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00' }],
     });
+  });
+
+  it('normalizes every slot time to the backend HH:MM:SS format (KEL-166)', () => {
+    const payload = scheduleRequestPayload({
+      student_id: STUDENT_ID,
+      billing_cycle: 'monthly',
+      slots: [
+        { day_of_week: 1, start_time: '16:00', end_time: '17:00' },
+        { day_of_week: 3, start_time: '09:05', end_time: '10:00' },
+      ],
+    });
+    expect(payload.slots).toEqual([
+      { day_of_week: 1, start_time: '16:00:00', end_time: '17:00:00' },
+      { day_of_week: 3, start_time: '09:05:00', end_time: '10:00:00' },
+    ]);
+  });
+
+  it('passes already-normalized HH:MM:SS slot times through untouched (KEL-166)', () => {
+    const payload = scheduleRequestPayload({
+      student_id: STUDENT_ID,
+      billing_cycle: 'monthly',
+      slots: [{ day_of_week: 1, start_time: '16:00:00', end_time: '17:00:00' }],
+    });
+    expect(payload.slots).toEqual([
+      { day_of_week: 1, start_time: '16:00:00', end_time: '17:00:00' },
+    ]);
   });
 });
 
