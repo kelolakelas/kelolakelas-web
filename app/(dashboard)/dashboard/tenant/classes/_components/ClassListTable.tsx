@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 import { isClassPublished } from '@/lib/class-publication';
+import { CategoryControl } from './CategoryControl';
 import { AddScheduleModal } from './AddScheduleModal';
 import { ClassCreationWizard } from './ClassCreationWizard';
 import { ClassEditModal } from './ClassEditModal';
@@ -15,6 +16,8 @@ interface ClassListTableProps {
   categories: Category[];
   classes: ClassEntity[];
   schedules: ClassSchedule[];
+  canUpdateCategory?: boolean;
+  canDeleteCategory?: boolean;
 }
 
 const DAY_NAMES: Record<number, string> = {
@@ -79,6 +82,8 @@ export function ClassListTable({
   categories,
   classes,
   schedules,
+  canUpdateCategory = false,
+  canDeleteCategory = false,
 }: ClassListTableProps) {
   const [activeTab, setActiveTab] = useState<'classes' | 'categories' | 'schedules'>('classes');
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,7 +98,7 @@ export function ClassListTable({
 
   const publishedCount = classes.filter((cls) => isClassPublished(cls)).length;
 
-  if (!classes || classes.length === 0) {
+  if (classes.length === 0 && categories.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-900 p-8 sm:p-12 text-center shadow-xs">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 mb-4 shadow-xs">
@@ -339,6 +344,7 @@ export function ClassListTable({
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {cat.description || 'No description provided.'}
               </p>
+              <CategoryControl category={cat} canUpdate={canUpdateCategory} canDelete={canDeleteCategory} />
             </div>
           ))}
         </div>

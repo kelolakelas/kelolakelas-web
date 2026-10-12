@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+export function categoryWritePermissions(nav: {
+  state: string;
+  membership: { permissions: readonly string[] } | null;
+}): { canUpdate: boolean; canDelete: boolean } {
+  const permissions = nav.state === 'ok' && nav.membership
+    ? new Set(nav.membership.permissions) : new Set<string>();
+  return {
+    canUpdate: permissions.has('category:update'),
+    canDelete: permissions.has('category:delete'),
+  };
+}
+
 /**
  * Category validation schema for creating academic subject/course category.
  * API Reference: POST /api/v1/categories
@@ -17,6 +29,12 @@ export const createCategorySchema = z.object({
  * Category a class belongs to. Shared by creation and update so both paths
  * reject an unselected category with the same message.
  */
+export const categoryIdSchema = z.string().uuid('Invalid category identifier');
+export const updateCategorySchema = createCategorySchema.extend({
+  // Omission preserves the stored value; clearing is not supported by the API.
+  description: z.string().trim().min(1, 'Description cannot be cleared. Keep the existing description or enter new text.').optional(),
+});
+
 const classCategoryField = z.string().trim().min(1, 'Please select a valid category');
 
 /**
