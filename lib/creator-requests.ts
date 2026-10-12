@@ -3,6 +3,16 @@ import { getGatewayBaseUrl } from '@/lib/gateway';
 
 type Caller = { tenant_id?: unknown; is_parent?: unknown; is_platform_admin?: unknown; platform_factor_version?: unknown };
 
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
+
+// Identity serializes a zero uuid.UUID as the nonempty zero-UUID string:
+// uuid.UUID is a fixed [16]byte array, so `json:",omitempty"` never drops
+// it. A verified platform token is therefore tenantless when tenant_id is
+// missing OR carries the zero UUID; any nonzero tenant_id stays rejected.
+export function isTenantlessTenantId(tenantId: unknown): boolean {
+  return tenantId === undefined || tenantId === null || tenantId === ZERO_UUID;
+}
+
 export function creatorCaller(token: string): Caller | null {
   try {
     const encoded = token.split('.')[1];
@@ -16,7 +26,7 @@ export function creatorCaller(token: string): Caller | null {
 export function callerMatchesScope(token: string, platform: boolean, tenant?: string): boolean {
   const caller = creatorCaller(token);
   if (!caller) return false;
-  if (platform) return caller.is_platform_admin === true && !caller.tenant_id && typeof caller.platform_factor_version === 'number' && caller.platform_factor_version > 0;
+  if (platform) return caller.is_platform_admin === true && caller.is_parent !== true && isTenantlessTenantId(caller.tenant_id) && typeof caller.platform_factor_version === 'number' && caller.platform_factor_version > 0;
   return caller.is_platform_admin !== true && caller.is_parent !== true && typeof tenant === 'string' && tenant.length > 0 && caller.tenant_id === tenant;
 }
 

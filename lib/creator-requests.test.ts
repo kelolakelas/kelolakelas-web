@@ -3,9 +3,15 @@ const { cookieGet, fetchMock } = vi.hoisted(() => ({ cookieGet: vi.fn(), fetchMo
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: cookieGet }) }));
 vi.mock('@/lib/gateway', () => ({ getGatewayBaseUrl: () => 'http://gateway' }));
 import { readCreatorRequests } from './creator-requests';
+import { callerMatchesScope } from './creator-requests';
 const token = (claims: object) => `header.${btoa(JSON.stringify(claims))}.signature`;
 const tenantToken = token({ tenant_id: 'tenant-a' });
 const platformToken = token({ is_platform_admin: true, platform_factor_version: 1 });
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
+// Identity emits the zero UUID string (not a missing claim) for tenantless
+// verified platform sessions: uuid.UUID is a fixed [16]byte array, so
+// `json:",omitempty"` never drops it.
+const zeroUuidPlatformToken = token({ is_platform_admin: true, platform_factor_version: 1, tenant_id: ZERO_UUID });
 
 describe('Creator request reads', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('fetch', fetchMock); cookieGet.mockImplementation((name: string) => ({ value: name === 'tenant_id' ? 'tenant-a' : tenantToken })); });
@@ -24,6 +30,28 @@ describe('Creator request reads', () => {
     cookieGet.mockImplementation((name: string) => ({ value: name === 'tenant_id' ? 'tenant-a' : tenantToken }));
     expect((await readCreatorRequests(true)).status).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('accepts the identity zero-UUID tenantless platform shape on the platform queue', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: 'success', data: [] }) });
+    cookieGet.mockImplementation((name: string) => name === 'tenant_id' ? undefined : { value: zeroUuidPlatformToken });
+    expect((await readCreatorRequests(true)).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith('http://gateway/api/v1/platform/creator-requests', expect.objectContaining({ headers: { Authorization: `Bearer ${zeroUuidPlatformToken}` } }));
+  });
+  it('accepts missing and zero-UUID tenantless claims but rejects nonzero tenant, parent, and invalid factor', () => {
+    expect(callerMatchesScope(platformToken, true)).toBe(true);
+    expect(callerMatchesScope(zeroUuidPlatformToken, true)).toBe(true);
+    expect(callerMatchesScope(token({ is_platform_admin: true, platform_factor_version: 1, tenant_id: null }), true)).toBe(true);
+    for (const claims of [
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: '11111111-1111-1111-1111-111111111111' },
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: 'not-a-uuid' },
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: ZERO_UUID, is_parent: true },
+      { is_platform_admin: true, tenant_id: ZERO_UUID },
+      { is_platform_admin: true, platform_factor_version: 0, tenant_id: ZERO_UUID },
+      { is_platform_admin: true, platform_factor_version: '1', tenant_id: ZERO_UUID },
+    ]) {
+      expect(callerMatchesScope(token(claims), true)).toBe(false);
+    }
+    expect(callerMatchesScope('not-a-token', true)).toBe(false);
   });
   it('does not render Creator controls on forbidden or unavailable responses', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 403 }).mockRejectedValueOnce(new Error('offline'));

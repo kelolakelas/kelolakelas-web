@@ -24,8 +24,10 @@ describe('requestCreator authorization and validation', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it('rejects a platform token even if a stale tenant cookie remains', async () => {
-    cookieGet.mockImplementation((name: string) => ({ value: name === 'tenant_id' ? 'tenant-a' : token({ is_platform_admin: true, platform_factor_version: 1 }) }));
-    expect((await requestCreator(state, form())).status).toBe(403);
+    for (const platform of [token({ is_platform_admin: true, platform_factor_version: 1 }), token({ is_platform_admin: true, platform_factor_version: 1, tenant_id: '00000000-0000-0000-0000-000000000000' })]) {
+      cookieGet.mockImplementation((name: string) => ({ value: name === 'tenant_id' ? 'tenant-a' : platform }));
+      expect((await requestCreator(state, form())).status).toBe(403);
+    }
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it('propagates live Creator revocation and duplicate conflict', async () => {

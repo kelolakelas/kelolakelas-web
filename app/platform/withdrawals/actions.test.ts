@@ -6,6 +6,10 @@ vi.mock('@/lib/gateway', () => ({ getGatewayBaseUrl: () => 'http://gateway' }));
 import { decideWithdrawal } from './actions';
 const token = (claims: object) => `header.${btoa(JSON.stringify(claims))}.signature`;
 const admin = token({ is_platform_admin: true, platform_factor_version: 1 });
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
+// Identity emits the zero UUID string (not a missing claim) for tenantless
+// verified platform sessions (see lib/creator-requests.ts).
+const zeroUuidAdmin = token({ is_platform_admin: true, platform_factor_version: 1, tenant_id: ZERO_UUID });
 const id = '123e4567-e89b-42d3-a456-426614174000';
 const initial = { status: 0, message: '' };
 function form(decision: string, detail: string, withdrawalId = id) {
@@ -38,11 +42,25 @@ describe('platform withdrawal decisions', () => {
     expect((await decideWithdrawal(initial, form('paid', 'REF'))).message).toContain('already used');
     expect(revalidate).not.toHaveBeenCalled();
   });
+  it('accepts the zero-UUID tenantless platform scope on mutations', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
+    cookieGet.mockReturnValue({ value: zeroUuidAdmin });
+    expect((await decideWithdrawal(initial, form('paid', 'REF'))).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(`http://gateway/api/v1/platform/withdrawals/${id}/paid`, expect.objectContaining({ method: 'POST', headers: { Authorization: `Bearer ${zeroUuidAdmin}`, 'Content-Type': 'application/json' } }));
+    expect(revalidate).toHaveBeenCalledWith('/platform/withdrawals');
+  });
   it('fails closed on missing, tenant, or expired platform credentials and upstream errors', async () => {
     cookieGet.mockReturnValue(undefined);
     expect((await decideWithdrawal(initial, form('paid', 'REF'))).status).toBe(401);
-    cookieGet.mockReturnValue({ value: token({ tenant_id: 'tenant' }) });
-    expect((await decideWithdrawal(initial, form('paid', 'REF'))).status).toBe(403);
+    for (const claims of [
+      { tenant_id: 'tenant' },
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: '11111111-1111-1111-1111-111111111111' },
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: ZERO_UUID, is_parent: true },
+      { is_platform_admin: true, platform_factor_version: 0, tenant_id: ZERO_UUID },
+    ]) {
+      cookieGet.mockReturnValue({ value: token(claims) });
+      expect((await decideWithdrawal(initial, form('paid', 'REF'))).status).toBe(403);
+    }
     expect(fetchMock).not.toHaveBeenCalled();
     cookieGet.mockReturnValue({ value: admin });
     fetchMock.mockResolvedValueOnce({ ok: false, status: 401 }).mockRejectedValueOnce(new Error('offline'));
