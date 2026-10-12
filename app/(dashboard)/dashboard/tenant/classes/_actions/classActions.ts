@@ -6,6 +6,8 @@ import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/ga
 import { classUpdateErrorMessage } from '@/lib/class-edit';
 import {
   createCategorySchema,
+  categoryIdSchema,
+  updateCategorySchema,
   createClassSchema,
   createScheduleSchema,
   updateClassPublicationSchema,
@@ -19,6 +21,49 @@ export interface ActionResponse<T = unknown> {
   message: string;
   errors?: Record<string, string[]>;
   data?: T;
+}
+
+export async function updateCategory(categoryId: string, formData: FormData): Promise<ActionResponse> {
+  const validation = updateCategorySchema.safeParse({
+    name: formData.get('name'),
+    description: formData.has('description') ? formData.get('description') : undefined,
+  });
+  if (!validation.success) {
+    return { success: false, message: 'Please correct the category fields.', errors: validation.error.flatten().fieldErrors };
+  }
+  return mutateCategory(categoryId, 'PATCH', validation.data);
+}
+
+export async function deleteCategory(categoryId: string): Promise<ActionResponse> {
+  return mutateCategory(categoryId, 'DELETE');
+}
+
+async function mutateCategory(categoryId: string, method: 'PATCH' | 'DELETE', body?: { name: string; description?: string }): Promise<ActionResponse> {
+  if (!categoryIdSchema.safeParse(categoryId).success) {
+    return { success: false, message: 'Invalid category identifier. Refresh the list.' };
+  }
+  try {
+    const response = await fetch(`${getGatewayBaseUrl()}/api/v1/categories/${categoryId}`, {
+      method, headers: await getAuthHeaders(), cache: 'no-store',
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.status !== 'success') {
+      const messages: Record<number, string> = {
+        401: 'Your session has expired. Please sign in again.',
+        403: `You do not have permission to ${method === 'PATCH' ? 'update' : 'delete'} categories. Ask a tenant administrator.`,
+        404: 'This category is unavailable. Refresh the list.',
+        409: 'This category has active classes and cannot be deleted. Your input has been kept.',
+        422: 'Category name is required. Please check your input.',
+        503: 'Your permission could not be verified. Please try again shortly.',
+      };
+      return { success: false, message: messages[response.status] || 'Unable to save category changes. Please try again.' };
+    }
+    revalidatePath('/dashboard/tenant/classes');
+    return { success: true, message: method === 'PATCH' ? 'Category renamed.' : 'Category deleted.' };
+  } catch (error) {
+    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Unable to reach the server. Please try again.' };
+  }
 }
 
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';

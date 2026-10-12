@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { readTenantNav } from '../_queries/membership';
+import { categoryWritePermissions } from './_lib/schema';
 import { ClassCreationWizard } from './_components/ClassCreationWizard';
 import { ClassListTable } from './_components/ClassListTable';
 import { ClassSkeleton } from './_components/ClassSkeleton';
@@ -18,6 +20,7 @@ export const metadata: Metadata = {
  * Async content component wrapped in Suspense boundary for Partial Prerendering (PPR).
  */
 async function ClassesContent() {
+  const { canUpdate, canDelete } = categoryWritePermissions(await readTenantNav());
   const [categories, classes, schedules] = await Promise.all([
     getCategories(),
     getClasses(),
@@ -46,6 +49,8 @@ async function ClassesContent() {
         categories={categories}
         classes={classes}
         schedules={schedules}
+        canUpdateCategory={canUpdate}
+        canDeleteCategory={canDelete}
       />
     </div>
   );

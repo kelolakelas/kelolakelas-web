@@ -32,7 +32,7 @@ vi.mock('next/headers', () => ({
 const revalidatePath = vi.fn();
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }));
 
-const { createClass, createSchedule } = await import('./classActions');
+const { createClass, createSchedule, updateCategory, deleteCategory } = await import('./classActions');
 
 const GATEWAY_URL = 'http://gateway.test';
 
@@ -74,6 +74,62 @@ function installFetch(response: Response) {
   fetchMock = vi.fn(async () => response);
   vi.stubGlobal('fetch', fetchMock);
 }
+
+describe('category mutations', () => {
+  it('renames using the exact pointer-field PATCH contract, omitting description and browser tenant', async () => {
+    installFetch(success());
+    const form = new FormData();
+    form.set('name', ' New name ');
+    form.set('tenant_id', 'untrusted');
+    expect((await updateCategory(CLASS_ID, form)).success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(`${GATEWAY_URL}/api/v1/categories/${CLASS_ID}`, expect.objectContaining({ method: 'PATCH', body: '{"name":"New name"}', headers: expect.objectContaining({ Authorization: 'Bearer session-token', 'X-Tenant-ID': 'tenant-1' }) }));
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/tenant/classes');
+  });
+  it.each(['', ' ', 'x'.repeat(101)])('rejects invalid name before network: %s', async (name) => {
+    installFetch(success());
+    const form = new FormData(); form.set('name', name);
+    expect((await updateCategory(CLASS_ID, form)).errors?.name).toBeDefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('sends edited non-empty description using the create string representation', async () => {
+    installFetch(success());
+    const form = new FormData();
+    form.set('name', 'Math');
+    form.set('description', ' Updated description ');
+    expect((await updateCategory(CLASS_ID, form)).success).toBe(true);
+    expect(fetchMock.mock.calls[0][1].body).toBe('{"name":"Math","description":"Updated description"}');
+  });
+  it.each(['', '   '])('rejects clearing description before network: %s', async (description) => {
+    installFetch(success());
+    const form = new FormData();
+    form.set('name', 'Math');
+    form.set('description', description);
+    const result = await updateCategory(CLASS_ID, form);
+    expect(result.success).toBe(false);
+    expect(result.errors?.description?.[0]).toContain('cannot be cleared');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+  it('deletes unused category without a body and revalidates', async () => {
+    installFetch(success());
+    expect((await deleteCategory(CLASS_ID)).success).toBe(true);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'DELETE' });
+    expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+  it.each([401, 403, 404, 409, 422, 503])('keeps failure actionable and does not revalidate: %s', async (status) => {
+    installFetch(failure(status));
+    const result = await deleteCategory(CLASS_ID);
+    expect(result.success).toBe(false);
+    expect(result.message).not.toBe('refused');
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+  it('rejects invalid id before network', async () => {
+    installFetch(success());
+    expect((await deleteCategory('../other')).success).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
 
 const EMPTY_STATE = { success: false, message: '' };
 
