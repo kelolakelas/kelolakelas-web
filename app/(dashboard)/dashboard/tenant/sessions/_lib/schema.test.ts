@@ -284,9 +284,26 @@ describe('session presentation labels', () => {
     expect(sessionDateLabel('2026-09-30')).toContain('2026');
   });
 
+  it('renders an API midnight timestamp as its calendar date without a day shift', () => {
+    expect(sessionDateLabel('2026-10-12T00:00:00Z')).toContain('Oktober');
+    expect(sessionDateLabel('2026-10-12T00:00:00Z')).toContain('12');
+    expect(sessionDateLabel('2026-10-12T00:00:00Z')).toContain('2026');
+    expect(sessionDateLabel('2026-10-13T00:00:00Z')).toContain('13');
+    expect(sessionDateLabel('2026-10-13T00:00:00Z')).toContain('Oktober');
+  });
+
+  it('keeps a midnight-UTC timestamp on the same calendar day', () => {
+    expect(sessionDateLabel('2026-10-12T00:00:00Z')).toBe(sessionDateLabel('2026-10-12'));
+    expect(sessionDateLabel('2026-10-12T00:00:00.000Z')).toBe(sessionDateLabel('2026-10-12'));
+  });
+
   it('renders an em dash for a missing or malformed date', () => {
     expect(sessionDateLabel(null)).toBe('—');
+    expect(sessionDateLabel(undefined)).toBe('—');
+    expect(sessionDateLabel('')).toBe('—');
     expect(sessionDateLabel('30-09-2026')).toBe('—');
+    expect(sessionDateLabel('2026-02-30')).toBe('—');
+    expect(sessionDateLabel('2026-02-30T00:00:00Z')).toBe('—');
   });
 
   it('renders the start-end window from the raw time strings', () => {

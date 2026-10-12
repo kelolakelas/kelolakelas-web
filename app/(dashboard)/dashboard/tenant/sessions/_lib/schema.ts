@@ -801,20 +801,37 @@ export function normalizeSessionAttendance(value: unknown): SessionAttendanceRec
 /**
  * Session date formatted for an Indonesian reader.
  *
- * A missing or malformed value renders as an em dash rather than a guessed
- * date. The time window is rendered from the raw `HH:MM:SS` strings because
- * the session date carries no timezone and parsing it as an instant would
- * shift the day around midnight.
+ * The API answers `session_date` as a full ISO timestamp at actual
+ * midnight (KEL-183), so only the leading `YYYY-MM-DD` calendar part is
+ * read: parsing the value as an instant would shift the day around
+ * midnight. A plain date-only value keeps working. A missing or malformed
+ * value renders as an em dash rather than a guessed date. The time window
+ * is rendered from the raw `HH:MM:SS` strings for the same reason.
  */
 export function sessionDateLabel(sessionDate?: string | null): string {
-  if (typeof sessionDate !== 'string' || !DATE_PATTERN.test(sessionDate)) {
+  if (typeof sessionDate !== 'string') {
     return '—';
   }
 
-  const [year, month, day] = sessionDate.split('-').map(Number);
+  const calendarPart = sessionDate.trim().slice(0, 10);
+
+  if (!DATE_PATTERN.test(calendarPart)) {
+    return '—';
+  }
+
+  const [year, month, day] = calendarPart.split('-').map(Number);
+
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return '—';
+  }
+
   const parsed = new Date(Date.UTC(year, month - 1, day));
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
     return '—';
   }
 
