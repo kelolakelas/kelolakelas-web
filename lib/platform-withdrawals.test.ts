@@ -5,6 +5,10 @@ vi.mock('@/lib/gateway', () => ({ getGatewayBaseUrl: () => 'http://gateway' }));
 import { readPlatformWithdrawalHistory, readPlatformWithdrawals } from './platform-withdrawals';
 const token = (claims: object) => `header.${btoa(JSON.stringify(claims))}.signature`;
 const admin = token({ is_platform_admin: true, platform_factor_version: 1 });
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
+// Identity emits the zero UUID string (not a missing claim) for tenantless
+// verified platform sessions (see lib/creator-requests.ts).
+const zeroUuidAdmin = token({ is_platform_admin: true, platform_factor_version: 1, tenant_id: ZERO_UUID });
 const queue = { items: [], pagination: { page: 1, total_pages: 0, total_items: 0 } };
 describe('platform withdrawal queue', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('fetch', fetchMock); cookieGet.mockReturnValue({ value: admin }); });
@@ -14,10 +18,24 @@ describe('platform withdrawal queue', () => {
     await readPlatformWithdrawals(2);
     expect(fetchMock).toHaveBeenCalledWith('http://gateway/api/v1/platform/withdrawals?page=2', { headers: { Authorization: `Bearer ${admin}` }, cache: 'no-store' });
   });
+  it('accepts the identity zero-UUID tenantless platform shape on queue and history', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: 'success', data: queue }) });
+    cookieGet.mockReturnValue({ value: zeroUuidAdmin });
+    expect((await readPlatformWithdrawals(1)).status).toBe(200);
+    expect((await readPlatformWithdrawalHistory(1)).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith('http://gateway/api/v1/platform/withdrawals?page=1', { headers: { Authorization: `Bearer ${zeroUuidAdmin}` }, cache: 'no-store' });
+    expect(fetchMock).toHaveBeenCalledWith('http://gateway/api/v1/platform/withdrawals?status=decided&page=1', { headers: { Authorization: `Bearer ${zeroUuidAdmin}` }, cache: 'no-store' });
+  });
   it('does not fetch for missing, tenant, or unverified platform sessions', async () => {
     cookieGet.mockReturnValue(undefined);
     expect((await readPlatformWithdrawals(1)).status).toBe(401);
-    for (const claims of [{ tenant_id: 'tenant' }, { is_platform_admin: true }]) {
+    for (const claims of [
+      { tenant_id: 'tenant' },
+      { is_platform_admin: true },
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: '11111111-1111-1111-1111-111111111111' },
+      { is_platform_admin: true, platform_factor_version: 1, tenant_id: ZERO_UUID, is_parent: true },
+      { is_platform_admin: true, platform_factor_version: 0, tenant_id: ZERO_UUID },
+    ]) {
       cookieGet.mockReturnValue({ value: token(claims) });
       expect((await readPlatformWithdrawals(1)).status).toBe(403);
     }
