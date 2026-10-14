@@ -21,6 +21,7 @@ import type { TenantScheduleRequestRow } from '../_queries/queries';
 vi.mock('../_actions/actions', () => ({
   approveScheduleRequest: vi.fn(),
   rejectScheduleRequest: vi.fn(),
+  sendScheduleRequestPaymentLink: vi.fn(),
 }));
 
 // The table embeds the KEL-124 chat entry button, a Client Component that
@@ -113,6 +114,9 @@ describe('ScheduleRequestTable', () => {
   it('offers no decision controls once the row leaves pending', () => {
     const approved = render([row({ status: 'approved' })]);
     expect(approved).toContain('Disetujui');
+    expect(approved.split('Kirim tautan pembayaran')).toHaveLength(3);
+    expect(render([row()])).not.toContain('Kirim tautan pembayaran');
+    expect(render([row({ status: 'rejected' })])).not.toContain('Kirim tautan pembayaran');
     expect(approved).not.toContain('Setujui');
     expect(approved).not.toContain('>Tolak<');
 

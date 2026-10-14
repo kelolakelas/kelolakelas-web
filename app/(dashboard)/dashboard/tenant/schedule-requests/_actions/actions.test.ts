@@ -35,7 +35,7 @@ vi.mock('next/headers', () => ({
 const revalidatePath = vi.fn();
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }));
 
-const { approveScheduleRequest, rejectScheduleRequest } = await import('./actions');
+const { approveScheduleRequest, rejectScheduleRequest, sendScheduleRequestPaymentLink } = await import('./actions');
 const { TENANT_SCHEDULE_REQUESTS_PATH } = await import('../_lib/schema');
 
 const GATEWAY_URL = 'http://gateway.test';
@@ -43,6 +43,31 @@ const REQUEST_ID = '9a1c3e5f-2b4d-4e6f-8a0b-1c2d3e4f5a6b';
 const APPROVE_PATH = `${GATEWAY_URL}/api/v1/schedule-requests/${REQUEST_ID}/approve`;
 const REJECT_PATH = `${GATEWAY_URL}/api/v1/schedule-requests/${REQUEST_ID}/reject`;
 const PAYMENT_URL = 'https://pay.test/checkout/session-1';
+
+describe('send payment link', () => {
+  it('sends only the request path and session authorization, never caller URL or invoice', async () => {
+    respondWith(200, { status: 'success', data: { conversation_id: REQUEST_ID } });
+    const form = approveForm();
+    form.set('checkout_session_url', 'https://evil.test');
+    form.set('transaction_id', 'foreign');
+    const result = await sendScheduleRequestPaymentLink({ success: false, message: '' }, form);
+    expect(result.success).toBe(true);
+    const request = lastRequest();
+    expect(request.url).toBe(`${GATEWAY_URL}/api/v1/schedule-requests/${REQUEST_ID}/send-payment-link`);
+    expect(request.init).toEqual({ method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: 'Bearer session-token', 'X-Tenant-ID': 'tenant-1' }, cache: 'no-store' });
+  });
+  it.each([403, 404, 409, 503])('keeps failure retryable and sanitizes %s', async (status) => {
+    respondWith(status, { status: 'error', message: 'secret backend detail' });
+    const result = await sendScheduleRequestPaymentLink({ success: false, message: '' }, approveForm());
+    expect(result.success).toBe(false);
+    expect(result.message).not.toContain('secret');
+  });
+  it('rejects invalid request without network', async () => {
+    respondWith(200, {});
+    expect((await sendScheduleRequestPaymentLink({ success: false, message: '' }, approveForm('invalid'))).success).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
 
 function approveSuccessBody() {
   return {
