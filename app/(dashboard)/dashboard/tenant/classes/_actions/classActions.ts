@@ -52,6 +52,35 @@ import {
   type CreateScheduleInput,
 } from '../_lib/schema';
 
+export async function assignScheduleTeacher(scheduleId: string, teacherId: string, effectiveDate: string): Promise<ActionResponse> {
+  if (!categoryIdSchema.safeParse(scheduleId).success || !categoryIdSchema.safeParse(teacherId).success ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) || !Number.isFinite(Date.parse(`${effectiveDate}T00:00:00Z`))) {
+    return { success: false, message: 'Jadwal, teacher, atau tanggal tidak valid.' };
+  }
+  try {
+    const response = await fetch(`${getGatewayBaseUrl()}/api/v1/schedules/tutor-permanent`, {
+      method: 'PATCH', headers: await getAuthHeaders(), cache: 'no-store',
+      body: JSON.stringify({ schedule_id: scheduleId, new_tutor_id: teacherId, effective_date: `${effectiveDate}T00:00:00Z` }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.status !== 'success') {
+      const messages: Record<number, string> = {
+        400: 'Teacher tidak aktif atau tanggal di luar masa berlaku jadwal.',
+        401: 'Sesi berakhir. Silakan masuk kembali.',
+        403: 'Anda tidak memiliki izin untuk menugaskan teacher.',
+        404: 'Jadwal tidak tersedia. Muat ulang halaman.',
+        503: 'Membership atau izin belum dapat diverifikasi. Coba kembali nanti.',
+      };
+      return { success: false, message: messages[response.status] || 'Penugasan belum berhasil. Coba kembali.' };
+    }
+    revalidatePath('/dashboard/tenant/classes');
+    revalidatePath('/dashboard/tenant/sessions');
+    return { success: true, message: 'Teacher berhasil ditugaskan.' };
+  } catch {
+    return { success: false, message: 'Server tidak dapat dihubungi. Coba kembali.' };
+  }
+}
+
 export interface ActionResponse<T = unknown> {
   success: boolean;
   message: string;

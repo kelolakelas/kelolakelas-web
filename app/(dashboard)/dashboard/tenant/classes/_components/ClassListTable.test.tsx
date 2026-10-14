@@ -97,6 +97,41 @@ describe('SchedulesGrid (schedules tab content)', () => {
     expect(html).not.toContain('👥');
   });
 
+  it('labels a private approval schedule without a tutor as Belum ditugaskan', () => {
+    const html = renderToStaticMarkup(
+      <SchedulesGrid
+        schedules={[
+          scheduleOf({ id: 'sched-private', enrollment_id: 'enr-1', tutor_id: undefined }),
+        ]}
+      />
+    );
+
+    expect(html).toContain('Belum ditugaskan');
+    expect(html).toContain('Tugaskan teacher');
+  });
+
+  it('labels an assigned private schedule without reopening the assignment form', () => {
+    const html = renderToStaticMarkup(
+      <SchedulesGrid
+        schedules={[
+          scheduleOf({ id: 'sched-private', enrollment_id: 'enr-1', tutor_id: 'tutor-1' }),
+        ]}
+      />
+    );
+
+    expect(html).toContain('Teacher ditugaskan');
+    expect(html).not.toContain('Tugaskan teacher');
+  });
+
+  it('leaves group schedules without an enrollment out of the assignment flow', () => {
+    const html = renderToStaticMarkup(
+      <SchedulesGrid schedules={[scheduleOf({ id: 'sched-group', tutor_id: 'tutor-1' })]} />
+    );
+
+    expect(html).not.toContain('Belum ditugaskan');
+    expect(html).not.toContain('Tugaskan teacher');
+  });
+
   it('shows each class name when two identical schedules come from different classes', () => {
     const html = renderToStaticMarkup(
       <SchedulesGrid
