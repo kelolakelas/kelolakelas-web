@@ -32,7 +32,7 @@ vi.mock('next/headers', () => ({
 const revalidatePath = vi.fn();
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }));
 
-const { createClass, createSchedule, getScheduleTeachers, updateCategory, deleteCategory } = await import('./classActions');
+const { assignScheduleTeacher, createClass, createSchedule, getScheduleTeachers, updateCategory, deleteCategory } = await import('./classActions');
 
 const TEACHER_ID = 'f231dcfe-a8d2-4b2a-b682-43fe0fbb7022';
 const teacherMember = { id: TEACHER_ID, user_id: '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11', email: 'teacher@example.test', first_name: 'Teacher', last_name: 'One', status: 'active', role: { id: 'role', name: 'Teacher' } };
@@ -49,6 +49,20 @@ it('loads all member pages, filters active Teacher and uses membership rather th
 it.each([403, 500])('reports member read failure %s', async (status) => {
   installFetch(failure(status));
   expect(await getScheduleTeachers()).toEqual({ state: status === 403 ? 'forbidden' : 'error' });
+});
+
+it('assigns exact membership id and RFC3339 date using the academic contract', async () => {
+  installFetch(success());
+  expect((await assignScheduleTeacher(CLASS_ID, TEACHER_ID, '2026-10-14')).success).toBe(true);
+  expect(fetchMock.mock.calls[0][0]).toContain('/api/v1/schedules/tutor-permanent');
+  expect(fetchMock.mock.calls[0][1].method).toBe('PATCH');
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ schedule_id: CLASS_ID, new_tutor_id: teacherMember.id, effective_date: '2026-10-14T00:00:00Z' });
+});
+
+it.each([400, 403, 404, 503])('assignment failure %s stays an error', async (status) => {
+  installFetch(failure(status));
+  expect((await assignScheduleTeacher(CLASS_ID, TEACHER_ID, '2026-10-14')).success).toBe(false);
+  expect(revalidatePath).not.toHaveBeenCalled();
 });
 
 it('sends exact tutor membership body, never user_id', async () => {

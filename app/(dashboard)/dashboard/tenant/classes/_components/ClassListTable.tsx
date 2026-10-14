@@ -5,6 +5,7 @@ import type { Category, ClassEntity, ClassSchedule } from '../_lib/schema';
 import { isClassPublished } from '@/lib/class-publication';
 import { CategoryControl } from './CategoryControl';
 import { AddScheduleModal } from './AddScheduleModal';
+import { AssignTeacherForm } from './AssignTeacherForm';
 import { ClassCreationWizard } from './ClassCreationWizard';
 import { ClassEditModal } from './ClassEditModal';
 import {
@@ -70,6 +71,7 @@ export function SchedulesGrid({ schedules }: { schedules: ClassSchedule[] }) {
               👥 {sched.capacity} {sched.capacity === 1 ? 'seat' : 'seats'}
             </p>
           )}
+          {sched.enrollment_id && <AssignTeacherForm schedule={sched} />}
           {sched.location && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
               📍 {sched.location}
