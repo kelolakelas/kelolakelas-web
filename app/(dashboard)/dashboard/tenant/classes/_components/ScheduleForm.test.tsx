@@ -2,6 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
+vi.mock('../_actions/classActions', () => ({
+  createSchedule: vi.fn(),
+  getScheduleTeachers: vi.fn().mockResolvedValue({ state: 'ok', teachers: [] }),
+}));
+
 const actionState = vi.hoisted(() => ({
   current: { success: false, message: '' } as Record<string, unknown>,
 }));
@@ -12,6 +17,37 @@ vi.mock('react', async (importOriginal) => ({
 }));
 
 import { ScheduleForm } from './ScheduleForm';
+import { getScheduleTeachers } from '../_actions/classActions';
+
+it('applies membership id to initial, added and generated slots and preserves it after save failure', async () => {
+  const id = 'f231dcfe-a8d2-4b2a-b682-43fe0fbb7022';
+  vi.mocked(getScheduleTeachers).mockResolvedValueOnce({ state: 'ok', teachers: [{ id, name: 'Teacher One' }] });
+  actionState.current = { success: false, message: 'Unable to save schedules' };
+  const { container } = renderForm();
+  await screen.findByRole('option', { name: 'Teacher One' });
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'), { target: { value: id } });
+  generate();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Slot' }));
+  const payload = JSON.parse((container.querySelector('[name="schedules"]') as HTMLInputElement).value);
+  expect(payload).toHaveLength(6);
+  expect(payload.every((slot: { tutor_id: string }) => slot.tutor_id === id)).toBe(true);
+  expect(screen.getByText('Unable to save schedules')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'), { target: { value: '' } });
+  expect((container.querySelector('[name="schedules"]') as HTMLInputElement).value).not.toContain('tutor_id');
+});
+
+it.each([
+  [{ state: 'ok', teachers: [] }, 'No active Teacher members.'],
+  [{ state: 'forbidden' }, 'You do not have permission to read members.'],
+  [{ state: 'error' }, 'Unable to load teachers.'],
+] as const)('explains unavailable teacher list: %j', async (result, message) => {
+  vi.mocked(getScheduleTeachers).mockResolvedValueOnce(result as Awaited<ReturnType<typeof getScheduleTeachers>>);
+  renderForm();
+  await screen.findByText(new RegExp(message));
+  expect((screen.getByLabelText('Teacher for all slots') as HTMLSelectElement).disabled).toBe(true);
+  expect(screen.getByText(/will not appear in any Teacher/)).toBeTruthy();
+});
+
 import type { ClassEntity } from '../_lib/schema';
 
 /**
@@ -253,7 +289,7 @@ describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
     expect(alerts[1].textContent).toContain('Overlaps with slot #1');
     // Advisory only: the hidden payload and the submit button are untouched.
     expect(
-      screen.getByRole('button', { name: 'Complete Class Setup ✓' })
+      screen.getByRole('button', { name: 'Save Schedules ✓' })
     ).toBeTruthy();
   });
 
