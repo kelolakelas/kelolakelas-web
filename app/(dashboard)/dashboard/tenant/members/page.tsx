@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { readTenantNav } from '../_queries/membership';
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import Link from 'next/link';
@@ -33,6 +34,11 @@ type Props = {
 };
 
 async function MembersContent({ searchParams }: Props) {
+  const nav = await readTenantNav();
+  if (nav.state !== 'ok' || !nav.membership.permissions.includes('member:read')) {
+    return <section role="alert">Akses ditolak</section>;
+  }
+  const canReadRoles = nav.membership.permissions.includes('role:read');
   const params = await searchParams;
   const requestedPage = parseMemberPage(params);
   // Started before the members read and awaited inside its own Suspense
@@ -41,7 +47,7 @@ async function MembersContent({ searchParams }: Props) {
   const invitationsRead = getTenantInvitations();
   const [initialMembersRead, roles] = await Promise.all([
     getTenantMembers(requestedPage),
-    getTenantRoles(),
+    canReadRoles ? getTenantRoles() : Promise.resolve([]),
   ]);
   const page =
     initialMembersRead.pagination.total_pages > 0 &&
