@@ -96,6 +96,55 @@ describe('SchedulesGrid (schedules tab content)', () => {
     expect(html).toContain('Mon');
     expect(html).not.toContain('👥');
   });
+
+  it('shows each class name when two identical schedules come from different classes', () => {
+    const html = renderToStaticMarkup(
+      <SchedulesGrid
+        schedules={[
+          scheduleOf({
+            id: 'sched-1',
+            capacity: 10,
+            location: 'Room A',
+            class: { ...CLASS, name: 'Matematika Dasar' },
+          }),
+          scheduleOf({
+            id: 'sched-2',
+            capacity: 10,
+            location: 'Room A',
+            class: { ...CLASS, id: 'class-2', name: 'Fisika Lanjutan' },
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain('Matematika Dasar');
+    expect(html).toContain('Fisika Lanjutan');
+  });
+
+  it('renders a neutral fallback without crashing when the class relation is absent', () => {
+    const html = renderToStaticMarkup(
+      <SchedulesGrid schedules={[scheduleOf({ class: undefined })]} />
+    );
+
+    expect(html).toContain('Mon');
+    expect(html).toContain('Kelas');
+    expect(html).not.toContain('Matematika Dasar');
+  });
+
+  it('renders a long class name without breaking the card', () => {
+    const longName =
+      'Kelas Persiapan Ujian Akhir Semester Ganjil Tahun Ajaran Dua Ribu Dua Puluh Enam';
+    const html = renderToStaticMarkup(
+      <SchedulesGrid
+        schedules={[
+          scheduleOf({ class: { ...CLASS, name: longName } }),
+        ]}
+      />
+    );
+
+    expect(html).toContain(longName);
+    expect(html).toContain('line-clamp-2');
+  });
 });
 
 describe('ClassListTable classes tab', () => {

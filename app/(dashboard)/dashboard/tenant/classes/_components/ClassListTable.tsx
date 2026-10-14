@@ -54,6 +54,9 @@ export function SchedulesGrid({ schedules }: { schedules: ClassSchedule[] }) {
           key={sched.id}
           className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-xs space-y-2"
         >
+          <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 break-words line-clamp-2">
+            {sched.class?.name || 'Kelas'}
+          </h4>
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
               {DAY_NAMES[sched.day_of_week] || `Day ${sched.day_of_week}`}
