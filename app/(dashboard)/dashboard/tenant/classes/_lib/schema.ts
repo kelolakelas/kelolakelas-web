@@ -215,7 +215,7 @@ export const scheduleItemSchema = z
       .trim()
       .regex(timeFormatRegex, 'End time must be in HH:MM or HH:MM:SS format'),
     capacity: scheduleCapacityField,
-    tutor_id: z.string().trim().optional(),
+    tutor_id: z.guid('Teacher membership ID is invalid.').optional(),
     location: z.string().trim().optional(),
     valid_from: z.string().trim().optional(),
     enrollment_id: z.string().trim().optional(),

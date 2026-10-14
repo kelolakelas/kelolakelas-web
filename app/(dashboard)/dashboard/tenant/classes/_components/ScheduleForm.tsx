@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { createSchedule, type ActionResponse } from '../_actions/classActions';
+import { createSchedule, getScheduleTeachers, type ActionResponse } from '../_actions/classActions';
+import type { ScheduleTeachersRead } from '../_lib/teachers';
 import {
   findOverlappingSlotPairs,
   generateWeeklySlots,
@@ -52,7 +53,7 @@ function SubmitScheduleButton() {
           Finalizing Schedules...
         </span>
       ) : (
-        'Complete Class Setup ✓'
+        'Save Schedules ✓'
       )}
     </button>
   );
@@ -93,6 +94,17 @@ export function ScheduleForm({
       location: 'Room 101',
     },
   ]);
+
+  const [teacherRead, setTeacherRead] = useState<ScheduleTeachersRead | null>(null);
+  const [tutorId, setTutorId] = useState('');
+  useEffect(() => {
+    let active = true;
+    getScheduleTeachers().then(
+      (result) => { if (active) setTeacherRead(result); },
+      () => { if (active) setTeacherRead({ state: 'error' }); }
+    );
+    return () => { active = false; };
+  }, []);
 
   const [state, formAction] = useActionState(createSchedule, initialActionState);
 
@@ -282,9 +294,33 @@ export function ScheduleForm({
         type="hidden"
         name="schedules"
         value={JSON.stringify(
-          schedules.map((slot) => ({ ...slot, capacity: Number(slot.capacity) }))
+          schedules.map((slot) => ({ ...slot, capacity: Number(slot.capacity), ...(tutorId ? { tutor_id: tutorId } : {}) }))
         )}
       />
+
+      <div className="space-y-2">
+        <label htmlFor="schedule-teacher" className="block text-sm font-semibold">Teacher for all slots</label>
+        <select
+          id="schedule-teacher"
+          value={tutorId}
+          onChange={(event) => setTutorId(event.target.value)}
+          disabled={teacherRead?.state !== 'ok' || teacherRead.teachers.length === 0}
+          className="min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+        >
+          <option value="">Unassigned</option>
+          {teacherRead?.state === 'ok' && teacherRead.teachers.map((teacher) => (
+            <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-600 dark:text-gray-300">
+          {!teacherRead ? 'Loading teachers…' : teacherRead.state === 'forbidden'
+            ? 'You do not have permission to read members. Ask a tenant administrator.'
+            : teacherRead.state === 'error' ? 'Unable to load teachers. Close and reopen this form to try again.'
+            : teacherRead.teachers.length === 0 ? 'No active Teacher members. Add or activate a Teacher in Members first.'
+            : 'The selected Teacher applies to every manual and generated slot.'}
+        </p>
+        {!tutorId && <p className="text-xs text-amber-700 dark:text-amber-300">These schedules will be unassigned and will not appear in any Teacher’s Sesi Saya.</p>}
+      </div>
 
       {/* Global Error Notice */}
       {!state.success && state.message && (

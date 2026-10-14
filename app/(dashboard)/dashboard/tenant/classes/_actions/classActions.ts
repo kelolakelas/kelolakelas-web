@@ -4,6 +4,42 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { classUpdateErrorMessage } from '@/lib/class-edit';
+import { normalizeListEnvelope } from '@/lib/list-envelope';
+import { memberSchema } from '../../members/_schemas/schema';
+import type { ScheduleTeacher, ScheduleTeachersRead } from '../_lib/teachers';
+
+/** Read every member page; never offer a partial list as the complete teacher list. */
+export async function getScheduleTeachers(): Promise<ScheduleTeachersRead> {
+  try {
+    const headers = await getAuthHeaders();
+    const teachers: ScheduleTeacher[] = [];
+    for (let page = 1; ; page++) {
+      const response = await fetch(`${getGatewayBaseUrl()}/api/v1/members?page=${page}&page_size=100`, {
+        headers, cache: 'no-store',
+      });
+      if (response.status === 403) return { state: 'forbidden' };
+      if (!response.ok) return { state: 'error' };
+      const result = await response.json();
+      if (result.status !== 'success' || (!Array.isArray(result.data) && !Array.isArray(result.data?.items))) {
+        return { state: 'error' };
+      }
+      const normalized = normalizeListEnvelope<unknown>(result.data);
+      for (const raw of normalized.items) {
+        const parsed = memberSchema.safeParse(raw);
+        if (!parsed.success) return { state: 'error' };
+        const member = parsed.data;
+        if (member.status === 'active' && member.role?.name === 'Teacher') {
+          teachers.push({ id: member.id, name: `${member.first_name} ${member.last_name}`.trim() || member.email });
+        }
+      }
+      if (page >= normalized.pagination.total_pages) break;
+      if (page >= 1000 || normalized.items.length === 0) return { state: 'error' };
+    }
+    return { state: 'ok', teachers };
+  } catch {
+    return { state: 'error' };
+  }
+}
 import {
   createCategorySchema,
   categoryIdSchema,

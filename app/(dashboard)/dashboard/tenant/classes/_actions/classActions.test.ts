@@ -32,7 +32,36 @@ vi.mock('next/headers', () => ({
 const revalidatePath = vi.fn();
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }));
 
-const { createClass, createSchedule, updateCategory, deleteCategory } = await import('./classActions');
+const { createClass, createSchedule, getScheduleTeachers, updateCategory, deleteCategory } = await import('./classActions');
+
+const TEACHER_ID = 'f231dcfe-a8d2-4b2a-b682-43fe0fbb7022';
+const teacherMember = { id: TEACHER_ID, user_id: '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11', email: 'teacher@example.test', first_name: 'Teacher', last_name: 'One', status: 'active', role: { id: 'role', name: 'Teacher' } };
+
+it('loads all member pages, filters active Teacher and uses membership rather than account id', async () => {
+  fetchMock = vi.fn()
+    .mockResolvedValueOnce(success({ items: [{ ...teacherMember, role: { id: 'role', name: 'Creator' } }], pagination: { page: 1, total_pages: 2 } }))
+    .mockResolvedValueOnce(success({ items: [teacherMember, { ...teacherMember, status: 'inactive' }], pagination: { page: 2, total_pages: 2 } }));
+  vi.stubGlobal('fetch', fetchMock);
+  expect(await getScheduleTeachers()).toEqual({ state: 'ok', teachers: [{ id: TEACHER_ID, name: 'Teacher One' }] });
+  expect(fetchMock.mock.calls[1][0]).toContain('page=2');
+});
+
+it.each([403, 500])('reports member read failure %s', async (status) => {
+  installFetch(failure(status));
+  expect(await getScheduleTeachers()).toEqual({ state: status === 403 ? 'forbidden' : 'error' });
+});
+
+it('sends exact tutor membership body, never user_id', async () => {
+  installFetch(success());
+  expect((await createSchedule({ success: false, message: '' }, formDataOf([{ ...validSchedules[0], tutor_id: TEACHER_ID }]))).success).toBe(true);
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ class_id: CLASS_ID, schedules: [{ day_of_week: 3, start_time: '14:00:00', end_time: '15:30:00', capacity: 10, tutor_id: TEACHER_ID }] });
+});
+
+it('rejects malformed teacher id before the network', async () => {
+  installFetch(success());
+  expect((await createSchedule({ success: false, message: '' }, formDataOf([{ ...validSchedules[0], tutor_id: 'not-a-member-id' }]))).success).toBe(false);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
 
 const GATEWAY_URL = 'http://gateway.test';
 
