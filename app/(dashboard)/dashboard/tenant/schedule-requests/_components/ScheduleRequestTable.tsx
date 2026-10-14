@@ -14,6 +14,7 @@ import {
 import type { TenantScheduleRequestRow } from '../_queries/queries';
 import { ApproveScheduleRequestDialog } from './ApproveScheduleRequestDialog';
 import { RejectScheduleRequestDialog } from './RejectScheduleRequestDialog';
+import { SendPaymentLinkButton } from './SendPaymentLinkButton';
 import { ScheduleRequestChatButton } from '@/app/(dashboard)/dashboard/parent/chat/_components/ScheduleRequestChatButton';
 
 /** Badge colours for the request lifecycle status. */
@@ -183,6 +184,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
               <RecommendationStatus request={request} />
             </div>
 
+            {request.status === 'approved' && <SendPaymentLinkButton requestId={request.id} />}
             {request.status === 'pending' && (
               <div className="flex flex-wrap gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
                 <ApproveScheduleRequestDialog
@@ -294,6 +296,8 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                         className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-200"
                       />
                     </div>
+                  ) : request.status === 'approved' ? (
+                    <SendPaymentLinkButton requestId={request.id} />
                   ) : (
                     <span className="text-xs text-gray-400">—</span>
                   )}

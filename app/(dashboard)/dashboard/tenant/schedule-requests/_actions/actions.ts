@@ -135,6 +135,39 @@ export async function approveScheduleRequest(
   }
 }
 
+export async function sendScheduleRequestPaymentLink(
+  _previous: ScheduleRequestDecisionState,
+  formData: FormData
+): Promise<ScheduleRequestDecisionState> {
+  const requestId = String(formData.get('request_id') ?? '').trim();
+  if (!UUID_PATTERN.test(requestId)) {
+    return { success: false, message: 'ID permintaan jadwal tidak valid.' };
+  }
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(
+      `${getGatewayBaseUrl()}/api/v1/schedule-requests/${encodeURIComponent(requestId)}/send-payment-link`,
+      { method: 'POST', headers, cache: 'no-store' }
+    );
+    const result = await readDecisionEnvelope(response);
+    if (!response.ok || result?.status !== 'success') {
+      return {
+        success: false,
+        message: response.status === 409
+          ? 'Tautan tidak dapat dikirim: request harus approved dan invoice harus aktif, belum dibayar, serta memiliki checkout URL.'
+          : response.status === 403
+            ? 'Anda tidak memiliki izin mengirim tautan pembayaran.'
+            : response.status === 404
+              ? 'Permintaan jadwal tidak ditemukan atau tidak dapat diakses.'
+              : 'Tautan pembayaran belum dapat dikirim. Coba lagi; retry tidak menggandakan pesan.',
+      };
+    }
+    return { success: true, message: 'Tautan pembayaran terkirim ke percakapan parent. Retry tidak menggandakan pesan.' };
+  } catch (error) {
+    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Tautan pembayaran belum dapat dikirim. Coba lagi.' };
+  }
+}
+
 /**
  * Rejects one pending private schedule request of the caller's tenant,
  * optionally with recommended alternative slots (KEL-116).
