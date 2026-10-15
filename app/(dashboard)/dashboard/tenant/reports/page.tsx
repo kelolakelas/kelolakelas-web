@@ -195,7 +195,6 @@ async function ReportsContent({ searchParams }: Props) {
         {canCreate && result.error === null && (
           <ReportFormDialog
             mode="create"
-            enrollmentOptions={result.data.enrollments}
             idPrefix="report-create"
           />
         )}

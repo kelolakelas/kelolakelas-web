@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createTenantReport, updateTenantReport, type ReportActionState } from '../_actions/reports';
 import {
@@ -9,6 +9,7 @@ import {
   type ReportEnrollment,
   type TenantReport,
 } from '../_lib/schema';
+import { EnrollmentPicker } from './EnrollmentPicker';
 
 const initialActionState: ReportActionState = { success: false, message: '' };
 
@@ -39,25 +40,26 @@ function scoreDefault(report: TenantReport | null): string {
 }
 
 /**
- * Create/update dialog for one student evaluation report (KEL-139).
+ * Create/update dialog for one student evaluation report (KEL-139, KEL-167).
  *
- * The create mode addresses an enrollment chosen from the select; the
- * update mode edits the report's own `title`, `evaluation_notes`, and
- * `score` and never sends an enrollment, because the backend checks the
- * assignment against the stored enrollment. Validation failures from the
- * shared form schema surface as the Server Action message above the form.
+ * The create mode addresses an enrollment chosen from the server-search
+ * picker (KEL-167), which reads exactly one backend page per explicit
+ * search/pagination action and never prefetches on page load — the old
+ * static select prefetched and silently truncated past page 1. The update
+ * mode edits the report's own `title`, `evaluation_notes`, and `score` and
+ * never sends an enrollment, because the backend checks the assignment
+ * against the stored enrollment. Validation failures from the shared form
+ * schema surface as the Server Action message above the form.
  */
 export function ReportFormDialog({
   mode,
   report,
   enrollment,
-  enrollmentOptions,
   idPrefix,
 }: {
   mode: 'create' | 'update';
   report?: TenantReport | null;
   enrollment?: ReportEnrollment | null;
-  enrollmentOptions: readonly { enrollment_id: string; label: string }[];
   idPrefix: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -69,7 +71,11 @@ export function ReportFormDialog({
   const dialogId = `${idPrefix}-report-dialog`;
   const titleId = `${idPrefix}-report-title`;
   const current = mode === 'update' ? (report ?? null) : null;
-  const hasEnrollmentOptions = mode === 'update' || enrollmentOptions.length > 0;
+  // KEL-167: the create mode no longer depends on page-load options — the
+  // server-search picker reads on demand, so the form opens empty and the
+  // submit enables once a student is chosen. Update never sends enrollment.
+  const [hasSelectedEnrollment, setHasSelectedEnrollment] = useState(false);
+  const canSubmit = mode === 'update' || hasSelectedEnrollment;
 
   function openDialog() {
     dialogRef.current?.showModal();
@@ -142,35 +148,7 @@ export function ReportFormDialog({
           {mode === 'update' && current && <input type="hidden" name="report_id" value={current.id} />}
 
           {mode === 'create' && (
-            <div>
-              <label
-                htmlFor={`${dialogId}-enrollment`}
-                className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
-              >
-                Siswa
-              </label>
-              <select
-                id={`${dialogId}-enrollment`}
-                name="enrollment_id"
-                defaultValue=""
-                required
-                className="mt-1.5 min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
-              >
-                <option value="" disabled>
-                  {hasEnrollmentOptions ? 'Pilih siswa' : 'Siswa yang Anda ajar belum ditemukan'}
-                </option>
-                {enrollmentOptions.map((option) => (
-                  <option key={option.enrollment_id} value={option.enrollment_id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {!hasEnrollmentOptions && (
-                <p className="mt-1.5 text-sm text-amber-700 dark:text-amber-300" role="status">
-                  Daftar siswa yang Anda ajar belum dapat dimuat. Coba muat ulang halaman sebelum membuat laporan.
-                </p>
-              )}
-            </div>
+            <EnrollmentPicker dialogId={dialogId} onSelectionChange={setHasSelectedEnrollment} />
           )}
 
           <div>
@@ -253,7 +231,7 @@ export function ReportFormDialog({
             >
               {state.success ? 'Tutup' : 'Batal'}
             </button>
-            <ReportSubmitButton mode={mode} disabled={!hasEnrollmentOptions} />
+            <ReportSubmitButton mode={mode} disabled={!canSubmit} />
           </div>
         </form>
       </dialog>

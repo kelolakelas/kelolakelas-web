@@ -18,21 +18,24 @@ vi.mock('../_actions/reports', () => ({
   createTenantReport: vi.fn(),
   updateTenantReport: vi.fn(),
 }));
+vi.mock('../_actions/enrollment-search', () => ({
+  searchDirectEnrollments: vi.fn(async () => ({ data: null, error: 'api' as const, message: 'x' })),
+  searchTaughtEnrollments: vi.fn(async () => ({ data: null, error: 'api' as const, message: 'x' })),
+}));
 
 /**
- * Render tests for the report form dialog's enrollment select (KEL-139 fix r1).
+ * Render tests for the report form dialog's student picker (KEL-167).
  *
- * The default Teacher role has no `enrollment:read`, so the auxiliary
- * lookups can legitimately answer with no options — including on the very
- * first report, when no row exists to derive a fallback from. What is
- * asserted is the dialog contract that failure mode depends on:
+ * The create mode no longer renders a static select fed by page-load
+ * options: it renders the server-search picker, which reads one backend
+ * page per explicit search/pagination action and never fetches on mount.
+ * What is asserted is the dialog contract the picker plugs into:
  *
- * - with options, the required select offers every taught enrollment and the
- *   submit stays enabled;
- * - without options, the dialog says the taught-student list could not be
- *   loaded (instead of a dead required select) and the submit is disabled so
- *   the member cannot file a report that fails server-side validation;
- * - the update dialog never asks for an enrollment, because the backend
+ * - the create form carries a search box backed by a hidden `enrollment_id`
+ *   field (the exact name the Server Action validates), and the submit
+ *   starts disabled until a student is chosen — so an empty submit cannot
+ *   file a report that fails server-side validation;
+ * - the update dialog still asks for no enrollment, because the backend
  *   checks the assignment against the stored one.
  *
  * The Server Action is stubbed through `useActionState`, following the
@@ -42,10 +45,6 @@ vi.mock('../_actions/reports', () => ({
  */
 
 const { ReportFormDialog } = await import('./ReportFormDialog');
-
-const OPTIONS = [
-  { enrollment_id: 'c0ffee00-1111-4222-8333-444455556666', label: 'Budi Santoso · Matematika Dasar' },
-];
 
 const REPORT = {
   id: '3b1f0c9a-4a7e-4c1d-9c4e-6f2b0d8a5e11',
@@ -80,64 +79,53 @@ function dialogOf(container: HTMLElement): HTMLDialogElement {
   return dialog;
 }
 
-describe('ReportFormDialog enrollment select', () => {
-  it('offers the taught enrollments when the lookup succeeds', () => {
-    const { container } = render(
-      <ReportFormDialog mode="create" enrollmentOptions={OPTIONS} idPrefix="test-create" />
-    );
-    const dialog = dialogOf(container);
-    const select = dialog.querySelector('select[name="enrollment_id"]') as HTMLSelectElement;
+function createSubmitOf(dialog: HTMLElement): HTMLButtonElement {
+  return within(dialog).getByRole('button', {
+    name: 'Buat laporan',
+    hidden: true,
+  }) as HTMLButtonElement;
+}
 
-    expect(select.required).toBe(true);
-    expect([...select.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
-      'Pilih siswa',
-      'Budi Santoso · Matematika Dasar',
-    ]);
-    expect(within(dialog).queryByRole('status', { hidden: true })).toBeNull();
+describe('ReportFormDialog student picker', () => {
+  it('renders the search picker with an empty hidden enrollment field', () => {
+    const { container } = render(<ReportFormDialog mode="create" idPrefix="test-create" />);
+    const dialog = dialogOf(container);
+
+    // The hidden field carries the exact name the Server Action validates;
+    // it starts empty so no stale enrollment can be submitted.
+    const hidden = dialog.querySelector('input[type="hidden"][name="enrollment_id"]');
+    expect(hidden).not.toBeNull();
+    expect((hidden as HTMLInputElement).value).toBe('');
+
     expect(
-      (
-        within(dialog).getByRole('button', {
-          name: 'Buat laporan',
-          hidden: true,
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(false);
+      within(dialog).getByRole('searchbox', { hidden: true, name: 'Siswa' })
+    ).not.toBeNull();
+
+    // No static options ship with the form anymore.
+    expect(dialog.querySelector('select[name="enrollment_id"]')).toBeNull();
   });
 
-  it('explains an empty option list and disables the submit', () => {
-    const { container } = render(
-      <ReportFormDialog mode="create" enrollmentOptions={[]} idPrefix="test-empty" />
-    );
+  it('keeps the create submit disabled until a student is chosen', () => {
+    const { container } = render(<ReportFormDialog mode="create" idPrefix="test-empty" />);
     const dialog = dialogOf(container);
-    const select = dialog.querySelector('select[name="enrollment_id"]') as HTMLSelectElement;
 
-    expect(select.querySelectorAll('option')).toHaveLength(1);
-    expect(select.querySelector('option')?.textContent).toMatch(/belum ditemukan/);
-    expect(within(dialog).getByRole('status', { hidden: true }).textContent).toMatch(
-      /belum dapat dimuat/
-    );
-    expect(
-      (
-        within(dialog).getByRole('button', {
-          name: 'Buat laporan',
-          hidden: true,
-        }) as HTMLButtonElement
-      ).disabled
-    ).toBe(true);
+    expect(createSubmitOf(dialog).disabled).toBe(true);
+  });
+
+  it('explains that results load per page from the server', () => {
+    const { container } = render(<ReportFormDialog mode="create" idPrefix="test-hint" />);
+    const dialog = dialogOf(container);
+
+    expect(dialog.textContent).toMatch(/diambil per halaman dari server/);
   });
 
   it('opens from the trigger and asks for no enrollment on update', () => {
     const { container } = render(
-      <ReportFormDialog
-        mode="update"
-        report={REPORT}
-        enrollmentOptions={[]}
-        idPrefix="test-update"
-      />
+      <ReportFormDialog mode="update" report={REPORT} idPrefix="test-update" />
     );
     const dialog = dialogOf(container);
 
-    expect(dialog.querySelector('select[name="enrollment_id"]')).toBeNull();
+    expect(dialog.querySelector('input[name="enrollment_id"]')).toBeNull();
 
     const trigger = container.querySelector('button[aria-haspopup="dialog"]');
 
