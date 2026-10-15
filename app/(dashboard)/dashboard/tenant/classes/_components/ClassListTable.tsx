@@ -199,11 +199,11 @@ export function ClassListTable({
                     <h4 className="text-base font-bold text-gray-900 dark:text-gray-100">
                       {cls.name}
                     </h4>
-                    {cls.category?.name && (
+                    {cls.category?.name ? (
                       <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
                         {cls.category.name}
                       </span>
-                    )}
+                    ) : <span className="text-gray-400 text-xs">—</span>}
                   </div>
                   <span
                     className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${

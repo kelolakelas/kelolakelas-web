@@ -504,7 +504,8 @@ export interface ClassEntity {
   description?: string;
   created_at: string;
   updated_at?: string;
-  category?: Category;
+  /** Optional identity embedded by the tenant class-list response. */
+  category?: Pick<Category, 'id' | 'name'>;
   /**
    * Whether the class is listed publicly in `/kelas`. Always serialised by the
    * academic service, so it is optional only for older cached payloads.
