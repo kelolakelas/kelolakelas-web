@@ -28,6 +28,7 @@ vi.mock('../members/_queries/queries', async (importOriginal) => {
 });
 
 const { OverviewMetrics } = await import('./OverviewMetrics');
+const fullAccess = { permissions: ['member:read', 'role:read', 'tenant:read', 'member:invite'] };
 
 function invitation(id: string, status: 'active' | 'expired') {
   return {
@@ -64,7 +65,7 @@ afterEach(() => {
 describe('OverviewMetrics', () => {
   it('links the Active Roles card to the roles page', async () => {
     setDefaults();
-    const html = renderToStaticMarkup(await OverviewMetrics());
+    const html = renderToStaticMarkup(await OverviewMetrics(fullAccess));
 
     const activeRolesCard = html
       .split('<a ')
@@ -75,7 +76,7 @@ describe('OverviewMetrics', () => {
 
   it('keeps the Total Members card on the members page', async () => {
     setDefaults();
-    const html = renderToStaticMarkup(await OverviewMetrics());
+    const html = renderToStaticMarkup(await OverviewMetrics(fullAccess));
 
     const membersCard = html.split('<a ').find((card) => card.includes('Total Members'));
 
@@ -93,7 +94,7 @@ describe('OverviewMetrics', () => {
       ],
     });
 
-    const card = pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics()));
+    const card = pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics(fullAccess)));
 
     expect(cardValue(card)).toBe('2');
   });
@@ -107,7 +108,7 @@ describe('OverviewMetrics', () => {
       pagination: { total_items: 1 },
     });
 
-    const card = pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics()));
+    const card = pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics(fullAccess)));
 
     expect(cardValue(card)).toBe('0');
   });
@@ -115,15 +116,15 @@ describe('OverviewMetrics', () => {
   it('shows a dash instead of a count when the invitation read is forbidden or fails', async () => {
     setDefaults();
     queries.getTenantInvitations.mockResolvedValue({ state: 'forbidden' });
-    expect(cardValue(pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics())))).toBe('—');
+    expect(cardValue(pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics(fullAccess))))).toBe('—');
 
     queries.getTenantInvitations.mockResolvedValue({ state: 'error' });
-    expect(cardValue(pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics())))).toBe('—');
+    expect(cardValue(pendingInvitesCard(renderToStaticMarkup(await OverviewMetrics(fullAccess))))).toBe('—');
   });
 
   it('renders only the three real count cards, never a hardcoded system status', async () => {
     setDefaults();
-    const html = renderToStaticMarkup(await OverviewMetrics());
+    const html = renderToStaticMarkup(await OverviewMetrics(fullAccess));
 
     expect(html).toContain('Total Members');
     expect(html).toContain('Active Roles');
@@ -131,5 +132,36 @@ describe('OverviewMetrics', () => {
     expect(html).not.toContain('System Status');
     expect(html).not.toContain('Operational');
     expect(html).not.toContain('Services online');
+  });
+});
+
+
+describe('overview metric permission gating (KEL-192)', () => {
+  it('does not fetch or render administration counts for a teacher', async () => {
+    setDefaults();
+    expect(await OverviewMetrics({ permissions: ['session:read', 'report:read'] })).toBeNull();
+    for (const query of Object.values(queries)) expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['member:read', 'Total Members', 'getTenantMembers'],
+    ['role:read', 'Active Roles', 'getTenantRoles'],
+  ])('reads only the metric granted by %s', async (permission, title, reader) => {
+    setDefaults();
+    const html = renderToStaticMarkup(await OverviewMetrics({ permissions: [permission] }));
+    expect(html).toContain(title);
+    for (const name of ['Total Members', 'Active Roles', 'Pending Invites']) {
+      if (name !== title) expect(html).not.toContain(name);
+    }
+    for (const [name, query] of Object.entries(queries)) {
+      if (name === reader) expect(query).toHaveBeenCalledOnce();
+      else expect(query).not.toHaveBeenCalled();
+    }
+  });
+
+  it('hides invitation metrics without read access to their destination', async () => {
+    setDefaults();
+    expect(await OverviewMetrics({ permissions: ['member:invite'] })).toBeNull();
+    expect(queries.getTenantInvitations).not.toHaveBeenCalled();
   });
 });

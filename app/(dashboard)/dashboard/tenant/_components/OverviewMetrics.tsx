@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { overviewAccess } from '../_lib/overview';
 import {
   countActiveInvitations,
   getTenantInvitations,
@@ -50,27 +51,29 @@ function MetricCard({ title, value, description, href, iconBg, iconColor, icon }
   );
 }
 
-export async function OverviewMetrics() {
+export async function OverviewMetrics({ permissions }: { permissions: readonly string[] }) {
+  const access = overviewAccess(permissions);
+  if (access.metricCount === 0) return null;
   // Gracefully fetch metrics from server queries
   const [membersRead, roles, invitationsRead] = await Promise.all([
-    getTenantMembers(),
-    getTenantRoles(),
-    getTenantInvitations(),
+    access.members ? getTenantMembers() : null,
+    access.roles ? getTenantRoles() : null,
+    access.invitations ? getTenantInvitations() : null,
   ]);
 
-  const totalMembers = membersRead.pagination.total_items;
+  const totalMembers = membersRead?.pagination.total_items ?? 0;
   // KEL-84: pending invitations come from the invitation list, counting only
   // unexpired ones. A forbidden or failed read shows "—" rather than a
   // misleading 0.
   const pendingInvitations =
-    invitationsRead.state === 'ok' ? countActiveInvitations(invitationsRead.invitations) : '—';
-  const activeRoles = roles.length;
+    invitationsRead?.state === 'ok' ? countActiveInvitations(invitationsRead.invitations) : '—';
+  const activeRoles = roles?.length ?? 0;
 
   // KEL-171: no "System Status" card. Service health is never measured here,
   // so a hardcoded "Operational" label would mislead. Only real counts stay.
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <MetricCard
+      {access.members && <MetricCard
         title="Total Members"
         value={totalMembers}
         description="Active team members in tenant"
@@ -87,9 +90,9 @@ export async function OverviewMetrics() {
             />
           </svg>
         }
-      />
+      />}
 
-      <MetricCard
+      {access.roles && <MetricCard
         title="Active Roles"
         value={activeRoles}
         description="Configured tenant roles"
@@ -106,9 +109,9 @@ export async function OverviewMetrics() {
             />
           </svg>
         }
-      />
+      />}
 
-      <MetricCard
+      {access.invitations && <MetricCard
         title="Pending Invites"
         value={pendingInvitations}
         description="Invitations awaiting response"
@@ -125,7 +128,7 @@ export async function OverviewMetrics() {
             />
           </svg>
         }
-      />
+      />}
 
     </div>
   );
