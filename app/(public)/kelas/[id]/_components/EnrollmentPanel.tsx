@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { startTransition, useActionState, useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { enrollInClass, previewClassVoucher } from '../_actions/actions';
 import { StudentForm } from '@/app/(dashboard)/dashboard/parent/students/_components/StudentForm';
@@ -53,8 +53,45 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   scheduleRequests?: ScheduleRequest[];
   enrollments?: EnrollmentLinkCandidate[];
 }) {
-  const [state, formAction] = useActionState(enrollInClass.bind(null, classId), initialState);
   const [voucherCode, setVoucherCode] = useState('');
+  const [studentOptions, setStudentOptions] = useState(students);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedScheduleId, setSelectedScheduleId] = useState('');
+  const [selectedCycle, setSelectedCycle] = useState('monthly');
+  const [selectedMethod, setSelectedMethod] = useState('VC');
+  // KEL-194: the failing action echoes the raw submission in `state.values`.
+  // The displayed picks are derived from that committed echo below (not via
+  // setState in the dispatch wrapper: React resets the form DOM on action
+  // completion, and state updates queued in that dispatch path were verified
+  // live to be dropped for that update while the committed state kept the
+  // echo). Fields the parent re-touches after the failure keep the fresh
+  // edit; every other field shows the echoed submission.
+  const [state, formAction] = useActionState(async (_previous: EnrollmentActionState, formData: FormData) => {
+    return enrollInClass(classId, _previous, formData);
+  }, initialState);
+  const failedValues = !state.success && state.values ? state.values : null;
+  const failedKey = failedValues
+    ? [failedValues.student_id, failedValues.schedule_id, failedValues.billing_cycle, failedValues.payment_method, failedValues.voucher_code].join('|')
+    : '';
+  // Previous-render comparison (React-sanctioned derived-state pattern): a
+  // new failure echo resets the touched list, so a fresh mount carrying an
+  // echo adopts it. No effect and no ref access during render.
+  const [lastFailedKey, setLastFailedKey] = useState('');
+  const [editedAfterFailure, setEditedAfterFailure] = useState<string[]>([]);
+  if (failedKey !== lastFailedKey) {
+    setLastFailedKey(failedKey);
+    setEditedAfterFailure([]);
+  }
+  const markEditedAfterFailure = (field: string) => {
+    setEditedAfterFailure((current) => (current.includes(field) ? current : [...current, field]));
+  };
+  const shownValue = (field: 'student_id' | 'schedule_id' | 'billing_cycle' | 'payment_method' | 'voucher_code', local: string) =>
+    failedValues && !editedAfterFailure.includes(field) ? failedValues[field] || local : local;
+  const shownStudentId = shownValue('student_id', selectedStudentId);
+  const shownScheduleId = shownValue('schedule_id', selectedScheduleId);
+  const shownCycle = shownValue('billing_cycle', selectedCycle);
+  const shownMethod = shownValue('payment_method', selectedMethod);
+  const shownVoucher = shownValue('voucher_code', voucherCode);
   const [preview, setPreview] = useState<VoucherPreviewState | null>(null);
   const [previewPending, startPreview] = useTransition();
   const previewVersion = useRef(0);
@@ -63,12 +100,10 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
     const version = ++previewVersion.current;
     setPreview(null);
     startPreview(async () => {
-      const result = await previewClassVoucher(classId, voucherCode);
+      const result = await previewClassVoucher(classId, shownVoucher);
       if (version === previewVersion.current) setPreview(result);
     });
   };
-  const [studentOptions, setStudentOptions] = useState(students);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [resubmitSeed, setResubmitSeed] = useState(0);
   const [resubmitFrom, setResubmitFrom] = useState<ScheduleRequest | undefined>(undefined);
@@ -97,6 +132,7 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   const handleStudentCreated = useCallback((student: Student) => {
     setStudentOptions((current) => current.some((item) => item.id === student.id) ? current : [...current, student]);
     setSelectedStudentId(student.id);
+    markEditedAfterFailure('student_id');
     dialogRef.current?.close();
   }, []);
 
@@ -157,23 +193,42 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   const availableSchedules = schedules.filter((schedule) => schedule.available);
   const orderId = state.payment?.merchantOrderId;
   const statusHref = orderId && parseMerchantOrderId(orderId) ? `${PAYMENT_RETURN_PATH}?merchantOrderId=${encodeURIComponent(orderId)}` : null;
+  // KEL-194: when the echoed submission refers to a student or schedule that
+  // is no longer offered, keep it visible as a disabled selected option so
+  // the parent sees what was retried, alongside the backend's explicit error
+  // message asking for a new choice.
+  const echoedStudentMissing = Boolean(!state.success && state.values?.student_id && !studentOptions.some((student) => student.id === state.values?.student_id));
+  const echoedScheduleMissing = Boolean(!state.success && state.values?.schedule_id && !schedules.some((schedule) => schedule.id === state.values?.schedule_id));
   return (
     <section className="mt-10 rounded-3xl border border-[#dfe3d7] bg-[#eef3dd] p-6 sm:p-8">
       <p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Enrollment parent</p>
       <h2 className="mt-2 text-2xl font-black">Pilih student dan jadwal</h2>
       <p className="mt-2 text-[#52615b]">Harga dan status pembayaran ditentukan oleh backend setelah enrollment tervalidasi.</p>
-      <form action={formAction} className="mt-6 space-y-5">
+      {/* KEL-194: dispatch via onSubmit instead of the `action` prop.
+          React 19 resets the form DOM (native form.reset()) after every
+          `action`-prop submission, which would put the controlled
+          selects/radios back to their mount defaults (empty/monthly/VC)
+          behind React's back. Calling the useActionState dispatch directly
+          skips that reset, so the DOM stays in sync with the echoed picks.
+          Native `required` validation still runs before onSubmit fires. */}
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        const submitted = new FormData(event.currentTarget);
+        startTransition(() => {
+          formAction(submitted);
+        });
+      }} className="mt-6 space-y-5">
         {state.message && <div role={state.success ? 'status' : 'alert'} className={`rounded-2xl p-3 text-sm font-medium ${state.success ? 'bg-[#e8f3df] text-[#31551d]' : 'bg-[#fde8e7] text-[#8e2119]'}`}><p>{state.message}</p>{state.link && <Link className="mt-2 inline-block font-bold underline" href={state.link.href}>{state.link.label}</Link>}</div>}
-        <div><label htmlFor="enrollment-student" className="text-sm font-bold">Student</label><select id="enrollment-student" name="student_id" value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">Pilih student</option>{studentOptions.map((student) => <option value={student.id} key={student.id}>{student.first_name}{studentLastName(student) ? ` ${studentLastName(student)}` : ''}{student.nickname ? ` (${student.nickname})` : ''}</option>)}</select><FieldError errors={state.errors} name="student_id" /></div>
+        <div><label htmlFor="enrollment-student" className="text-sm font-bold">Student</label><select id="enrollment-student" name="student_id" value={shownStudentId} onChange={(event) => { setSelectedStudentId(event.target.value); markEditedAfterFailure('student_id'); }} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">Pilih student</option>{echoedStudentMissing && <option value={state.values?.student_id} disabled>Pilihan sebelumnya tidak tersedia — pilih student baru</option>}{studentOptions.map((student) => <option value={student.id} key={student.id}>{student.first_name}{studentLastName(student) ? ` ${studentLastName(student)}` : ''}{student.nickname ? ` (${student.nickname})` : ''}</option>)}</select><FieldError errors={state.errors} name="student_id" /></div>
         {addStudentButton}
-        <div><label htmlFor="enrollment-schedule" className="text-sm font-bold">Jadwal</label><select id="enrollment-schedule" name="schedule_id" required={schedules.length > 0} disabled={!availableSchedules.length} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">{availableSchedules.length ? 'Pilih jadwal' : 'Tidak ada jadwal yang tersedia'}</option>{schedules.map((schedule) => <option value={schedule.id} key={schedule.id} disabled={!schedule.available}>{schedule.label}{schedule.available ? (schedule.availableSlots !== undefined ? ` · ${schedule.availableSlots} slot` : '') : ' · penuh'}</option>)}</select>{!availableSchedules.length && schedules.length > 0 && <p className="mt-1 text-sm text-[#8e2119]">Semua jadwal sedang penuh. Coba lagi setelah ada slot tersedia.</p>}<FieldError errors={state.errors} name="schedule_id" /></div>
-        <div><label htmlFor="enrollment-cycle" className="text-sm font-bold">Periode pembayaran</label><select id="enrollment-cycle" name="billing_cycle" defaultValue="monthly" required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="monthly">Bulanan</option><option value="quarterly">Per tiga bulan</option><option value="yearly">Tahunan</option></select><FieldError errors={state.errors} name="billing_cycle" /></div>
+        <div><label htmlFor="enrollment-schedule" className="text-sm font-bold">Jadwal</label><select id="enrollment-schedule" name="schedule_id" value={shownScheduleId} onChange={(event) => { setSelectedScheduleId(event.target.value); markEditedAfterFailure('schedule_id'); }} required={schedules.length > 0} disabled={!availableSchedules.length} className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="">{availableSchedules.length ? 'Pilih jadwal' : 'Tidak ada jadwal yang tersedia'}</option>{echoedScheduleMissing && <option value={state.values?.schedule_id} disabled>Pilihan sebelumnya tidak tersedia — pilih jadwal baru</option>}{schedules.map((schedule) => <option value={schedule.id} key={schedule.id} disabled={!schedule.available}>{schedule.label}{schedule.available ? (schedule.availableSlots !== undefined ? ` · ${schedule.availableSlots} slot` : '') : ' · penuh'}</option>)}</select>{!availableSchedules.length && schedules.length > 0 && <p className="mt-1 text-sm text-[#8e2119]">Semua jadwal sedang penuh. Coba lagi setelah ada slot tersedia.</p>}<FieldError errors={state.errors} name="schedule_id" /></div>
+        <div><label htmlFor="enrollment-cycle" className="text-sm font-bold">Periode pembayaran</label><select id="enrollment-cycle" name="billing_cycle" value={shownCycle} onChange={(event) => { setSelectedCycle(event.target.value); markEditedAfterFailure('billing_cycle'); }} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"><option value="monthly">Bulanan</option><option value="quarterly">Per tiga bulan</option><option value="yearly">Tahunan</option></select><FieldError errors={state.errors} name="billing_cycle" /></div>
         <fieldset className="rounded-2xl border border-[#c8d0c5] bg-white p-4">
           <legend className="px-1 text-sm font-bold">Metode pembayaran</legend>
           <div className="mt-2 space-y-2">
             {PAYMENT_CHANNEL_OPTIONS.map((option) => (
               <label key={option.value} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-2 hover:bg-[#f4f8ec]">
-                <input type="radio" name="payment_method" value={option.value} defaultChecked={option.value === 'VC'} required className="mt-1 h-5 w-5 accent-[#617c35]" />
+                <input type="radio" name="payment_method" value={option.value} checked={shownMethod === option.value} onChange={(event) => { setSelectedMethod(event.target.value); markEditedAfterFailure('payment_method'); }} required className="mt-1 h-5 w-5 accent-[#617c35]" />
                 <span><span className="block font-bold">{option.label}</span><span className="block text-sm text-[#52615b]">{option.hint}</span></span>
               </label>
             ))}
@@ -182,8 +237,9 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
         </fieldset>
         <div>
           <label htmlFor="enrollment-voucher" className="text-sm font-bold">Kode voucher (opsional)</label>
-          <input id="enrollment-voucher" name="voucher_code" value={voucherCode} maxLength={100} onChange={(event) => {
+          <input id="enrollment-voucher" name="voucher_code" value={shownVoucher} maxLength={100} onChange={(event) => {
             setVoucherCode(event.target.value);
+            markEditedAfterFailure('voucher_code');
             ++previewVersion.current;
             setPreview(null);
             setCheckoutKey(crypto.randomUUID());

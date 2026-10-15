@@ -18,6 +18,16 @@ function form() {
   return data;
 }
 
+// KEL-194: every enrollInClass failure echoes the parent's raw submission so
+// the panel can restore the same choices instead of resetting the form.
+const echoedSubmission = {
+  student_id: id,
+  schedule_id: '',
+  billing_cycle: 'monthly',
+  payment_method: '',
+  voucher_code: '',
+};
+
 function respondWith(status: number, body: unknown) {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status })));
 }
@@ -40,31 +50,32 @@ describe('enrollInClass conflict messages', () => {
       success: false,
       message: 'Student ini sudah terdaftar atau masih memiliki pembayaran tertunda di kelas ini.',
       link: { href: '/dashboard/parent/enrollments', label: 'Lihat status enrollment' },
+      values: echoedSubmission,
     });
   });
 
   it('keeps the previous message for a full schedule 409', async () => {
     respondWith(409, { status: 'error', message: 'selected schedule is full', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: genericConflict });
+    expect(state).toEqual({ success: false, message: genericConflict, values: echoedSubmission });
   });
 
   it('keeps the previous message for an idempotency conflict 409', async () => {
     respondWith(409, { status: 'error', message: 'idempotency key was already used with a different enrollment request', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: genericConflict });
+    expect(state).toEqual({ success: false, message: genericConflict, values: echoedSubmission });
   });
 
   it('ignores the duplicate code on a non-409 status', async () => {
     respondWith(500, { status: 'error', code: 'duplicate_enrollment', message: 'Failed to create enrollment' });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: serverError });
+    expect(state).toEqual({ success: false, message: serverError, values: echoedSubmission });
   });
 
   it('keeps the server error message from an older backend that returned 500 for a duplicate', async () => {
     respondWith(500, { status: 'error', message: 'Failed to create enrollment', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: serverError });
+    expect(state).toEqual({ success: false, message: serverError, values: echoedSubmission });
   });
 });
 
@@ -74,31 +85,31 @@ describe('enrollInClass platform fee rejection', () => {
   it('shows the platform fee message for the coded 422', async () => {
     respondWith(422, { status: 'error', code: 'platform_fee_exceeds_gross', message: 'Biaya platform melebihi jumlah pembayaran', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: platformFeeMessage });
+    expect(state).toEqual({ success: false, message: platformFeeMessage, values: echoedSubmission });
   });
 
   it('keeps the previous 422 message when the response carries no code', async () => {
     respondWith(422, { status: 'error', message: 'Biaya platform melebihi jumlah pembayaran', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: 'Pilihan enrollment tidak dapat diproses. Periksa student dan jadwal Anda.' });
+    expect(state).toEqual({ success: false, message: 'Pilihan enrollment tidak dapat diproses. Periksa student dan jadwal Anda.', values: echoedSubmission });
   });
 
   it('keeps the ownership 422 message', async () => {
     respondWith(422, { status: 'error', message: 'student does not belong to this parent', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: 'Student yang dipilih bukan milik akun parent ini.' });
+    expect(state).toEqual({ success: false, message: 'Student yang dipilih bukan milik akun parent ini.', values: echoedSubmission });
   });
 
   it('keeps the server error message from an older academic that answered the rejection with 500', async () => {
     respondWith(500, { status: 'error', message: 'Failed to create enrollment', data: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: serverError });
+    expect(state).toEqual({ success: false, message: serverError, values: echoedSubmission });
   });
 
   it('ignores the platform fee code on a non-422 status', async () => {
     respondWith(500, { status: 'error', code: 'platform_fee_exceeds_gross', message: 'Failed to create enrollment' });
     const state = await enrollInClass(id, { success: false, message: '' }, form());
-    expect(state).toEqual({ success: false, message: serverError });
+    expect(state).toEqual({ success: false, message: serverError, values: echoedSubmission });
   });
 
   it('still redirects to checkout on success', async () => {

@@ -26,7 +26,10 @@ describe('public group voucher checkout', () => {
     const fetchMock = response(422, { status: 'error', code: 'voucher_rejected' });
     const form = new FormData();
     Object.entries({ student_id: id, schedule_id: id, billing_cycle: 'monthly', payment_method: 'VA', idempotency_key: id, voucher_code: code, discount_amount: '999999', gross_amount: '1' }).forEach(([key, value]) => form.set(key, value));
-    expect(await enrollInClass(id, { success: false, message: '' }, form)).toEqual(voucherRejectedState);
+    expect(await enrollInClass(id, { success: false, message: '' }, form)).toEqual({
+      ...voucherRejectedState,
+      values: { student_id: id, schedule_id: id, billing_cycle: 'monthly', payment_method: 'VA', voucher_code: code.trim() },
+    });
     expect(fetchMock).toHaveBeenCalledWith(`http://gateway.test/api/v1/catalog/classes/${id}/enrollments`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ student_id: id, billing_cycle: 'monthly', schedule_id: id, payment_method: 'VA', ...(code.trim() ? { voucher_code: 'HEMAT' } : {}) }), headers: expect.objectContaining({ 'Idempotency-Key': id }) }));
     expect(voucherRejectedState.message).toContain('checkout ulang tanpa voucher');
     expect(voucherRejectedState.message).toContain('invoice pengganti');
@@ -36,7 +39,10 @@ describe('public group voucher checkout', () => {
     const form = new FormData();
     Object.entries({ student_id: id, schedule_id: id, billing_cycle: 'monthly', payment_method: 'VA', idempotency_key: id, voucher_code: 'HEMAT' }).forEach(([key, value]) => form.set(key, value));
     for (let attempt = 0; attempt < 2; attempt++) {
-      expect(await enrollInClass(id, { success: false, message: '' }, form)).toEqual(voucherRejectedState);
+      expect(await enrollInClass(id, { success: false, message: '' }, form)).toEqual({
+        ...voucherRejectedState,
+        values: { student_id: id, schedule_id: id, billing_cycle: 'monthly', payment_method: 'VA', voucher_code: 'HEMAT' },
+      });
     }
     const requests = fetchMock.mock.calls as unknown as [string, RequestInit][];
     expect(requests[0][1]).toEqual(requests[1][1]);
