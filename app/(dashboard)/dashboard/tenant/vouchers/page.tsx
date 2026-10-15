@@ -15,7 +15,7 @@ export default async function TenantVouchersPage({ searchParams }: PageProps) {
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Vouchers</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400">Create, edit, and deactivate tenant vouchers. Checkout redemption is not yet available.</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Create, edit, and deactivate tenant vouchers. Parents can apply eligible vouchers at initial group-class checkout. Discounts do not apply to renewals or private classes.</p>
       </header>
       {result.error ? (
         <div role="alert" className="rounded-xl border border-amber-200 p-4 text-sm">
