@@ -5,6 +5,7 @@ import { OverviewMetrics } from './_components/OverviewMetrics';
 import { OverviewMetricsSkeleton } from './_components/OverviewSkeleton';
 import { SalesSummaryCard, SalesSummarySkeleton } from './_components/SalesSummaryCard';
 import { readTenantNav } from './_queries/membership';
+import { overviewAccess } from './_lib/overview';
 
 export const metadata: Metadata = {
   title: 'Overview - Tenant Dashboard',
@@ -27,6 +28,8 @@ export const metadata: Metadata = {
  */
 export default async function TenantOverviewPage() {
   const nav = await readTenantNav();
+  const permissions = nav.state === 'ok' ? nav.membership.permissions : [];
+  const access = overviewAccess(permissions);
   const greeting = nav.roleName ? `Welcome back, ${nav.roleName}` : 'Welcome back';
 
   return (
@@ -42,7 +45,7 @@ export default async function TenantOverviewPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        {access.invitations && <div className="flex items-center gap-3">
           <Link
             href="/dashboard/tenant/members"
             className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -52,13 +55,13 @@ export default async function TenantOverviewPage() {
             </svg>
             <span>Invite Member</span>
           </Link>
-        </div>
+        </div>}
       </div>
 
       {/* Metric Cards wrapped in Suspense for PPR */}
-      <Suspense fallback={<OverviewMetricsSkeleton />}>
-        <OverviewMetrics />
-      </Suspense>
+      {access.metricCount > 0 && <Suspense fallback={<OverviewMetricsSkeleton count={access.metricCount} />}>
+        <OverviewMetrics permissions={permissions} />
+      </Suspense>}
 
       {/* KEL-58: own boundary, so a slow or failed billing read never holds back the metrics above */}
       <Suspense fallback={<SalesSummarySkeleton />}>
@@ -66,7 +69,7 @@ export default async function TenantOverviewPage() {
       </Suspense>
 
       {/* Quick Action & System Shortcuts Section */}
-      <div className="grid grid-cols-1 gap-6">
+      {(access.members || access.settings) && <div className="grid grid-cols-1 gap-6">
         {/* Quick Management Actions */}
         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 p-6 shadow-xs space-y-4">
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
@@ -77,7 +80,7 @@ export default async function TenantOverviewPage() {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            <Link
+            {access.members && <Link
               href="/dashboard/tenant/members"
               className="flex min-h-[44px] items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4 transition-colors hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/30"
             >
@@ -97,16 +100,16 @@ export default async function TenantOverviewPage() {
                     Member Directory
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    View & invite team members
+                    {access.invitations ? 'View & invite team members' : 'View team members'}
                   </div>
                 </div>
               </div>
               <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </Link>
+            </Link>}
 
-            <Link
+            {access.settings && <Link
               href="/dashboard/tenant/settings"
               className="flex min-h-[44px] items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4 transition-colors hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/30"
             >
@@ -133,10 +136,10 @@ export default async function TenantOverviewPage() {
               <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </Link>
+            </Link>}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

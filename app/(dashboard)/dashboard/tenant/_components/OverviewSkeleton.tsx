@@ -1,7 +1,7 @@
-export function OverviewMetricsSkeleton() {
+export function OverviewMetricsSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {[1, 2, 3].map((i) => (
+      {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
           className="animate-pulse rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 p-5 shadow-xs space-y-3"
