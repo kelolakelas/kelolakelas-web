@@ -54,6 +54,23 @@ afterEach(() => {
 });
 
 describe('createScheduleRequest', () => {
+  it.each(['VC', 'VA', 'BC', 'SP', 'NQ'])('forwards the selected channel %s in the exact academic body', async (payment_method) => {
+    respondWith(201, { status: 'success', data: { id: requestId } });
+    const result = await createScheduleRequest({ success: false, message: '' }, createForm({ payment_method }));
+    expect(result.success).toBe(true);
+    expect(JSON.parse(String(lastRequest().init.body))).toEqual({
+      student_id: studentId, billing_cycle: 'monthly', payment_method,
+      slots: [{ day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00' }], note: 'Lokasi les di rumah.',
+    });
+  });
+
+  it.each(['INVALID', ''])('rejects channel %s before fetching', async (payment_method) => {
+    respondWith(201, {});
+    const result = await createScheduleRequest({ success: false, message: '' }, createForm({ payment_method }));
+    expect(result.success).toBe(false);
+    expect(result.errors?.payment_method).toBeDefined();
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('posts the request payload and confirms the pending review state', async () => {
     respondWith(201, { status: 'success', data: { id: requestId, status: 'pending' } });
 
@@ -69,6 +86,7 @@ describe('createScheduleRequest', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       student_id: studentId,
       billing_cycle: 'monthly',
+      payment_method: 'VC',
       slots: [{ day_of_week: 1, start_time: '16:00:00', end_time: '17:30:00' }],
       note: 'Lokasi les di rumah.',
     });
@@ -93,6 +111,7 @@ describe('createScheduleRequest', () => {
     expect(JSON.parse(String(lastRequest().init.body))).toEqual({
       student_id: studentId,
       billing_cycle: 'monthly',
+      payment_method: 'VC',
       slots: [
         { day_of_week: 1, start_time: '16:00:00', end_time: '17:00:00' },
         { day_of_week: 3, start_time: '09:05:00', end_time: '10:00:00' },
