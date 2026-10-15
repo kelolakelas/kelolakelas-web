@@ -42,10 +42,29 @@ export const enrollmentFormSchema = z.object({
   idempotency_key: z.string().uuid('Sesi checkout tidak valid. Muat ulang halaman lalu coba lagi.'),
 });
 
+export type EnrollmentSubmissionValues = {
+  student_id: string;
+  schedule_id: string;
+  billing_cycle: string;
+  payment_method: string;
+  voucher_code: string;
+};
+
 export type EnrollmentActionState = {
   success: boolean;
   message: string;
   errors?: Record<string, string[]>;
+  /**
+   * Echo of the parent's last checkout submission (KEL-194).
+   *
+   * React resets the checkout form's DOM on every action completion, so an
+   * uncontrolled schedule/cycle/payment picker would fall back to its mount
+   * defaults (empty schedule, monthly, VC) after a failure. The action
+   * returns the raw submitted strings on every failure path and the panel
+   * restores them, so retrying the same intent carries identical choices.
+   * Present only on failures; success carries no echo.
+   */
+  values?: EnrollmentSubmissionValues;
   /** Follow-up page shown as a link under the message, e.g. the parent's enrollment status. */
   link?: { href: string; label: string };
   /**
@@ -115,5 +134,27 @@ export function enrollmentPayload(input: z.infer<typeof enrollmentFormSchema>) {
     ...(input.schedule_id ? { schedule_id: input.schedule_id } : {}),
     payment_method: input.payment_method,
     ...(input.voucher_code ? { voucher_code: input.voucher_code } : {}),
+  };
+}
+
+/**
+ * Reads the parent's raw checkout submission for the failure echo (KEL-194).
+ *
+ * Only plain string entries are kept, so an unexpected `File` entry can
+ * never be serialized back into the action state (same allowlist rule as
+ * KEL-172). `voucher_code` is trimmed like the schema does, so the panel
+ * restores exactly what the schema validated.
+ */
+export function enrollmentSubmissionValues(formData: FormData): EnrollmentSubmissionValues {
+  const text = (name: string): string => {
+    const entry = formData.get(name);
+    return typeof entry === 'string' ? entry : '';
+  };
+  return {
+    student_id: text('student_id'),
+    schedule_id: text('schedule_id'),
+    billing_cycle: text('billing_cycle'),
+    payment_method: text('payment_method'),
+    voucher_code: text('voucher_code').trim(),
   };
 }

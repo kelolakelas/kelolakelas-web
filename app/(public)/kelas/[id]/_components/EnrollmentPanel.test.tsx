@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,13 +12,19 @@ const mocks = vi.hoisted(() => ({
   cancelScheduleRequest: vi.fn(),
   createStudent: vi.fn(),
   updateStudent: vi.fn(),
+  enrollAction: { current: null as unknown as (prev: unknown, fd: unknown) => Promise<Record<string, unknown>> },
 }));
 
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
-  useActionState: (action: unknown) => action === mocks.createStudent || action === mocks.updateStudent
-    ? [mocks.studentState.current, vi.fn()]
-    : [mocks.enrollmentState.current, vi.fn()],
+  useActionState: (action: unknown) => {
+    if (action === mocks.createStudent || action === mocks.updateStudent) return [mocks.studentState.current, vi.fn()];
+    // Capture the panel's dispatch wrapper (KEL-194): failing tests drive it
+    // directly with a real FormData instead of overwriting the displayed
+    // state, so the echo-restore path runs exactly as wired.
+    mocks.enrollAction.current = action as (prev: unknown, fd: unknown) => Promise<Record<string, unknown>>;
+    return [mocks.enrollmentState.current, vi.fn()];
+  },
 }));
 vi.mock('react-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-dom')>()),
@@ -56,6 +62,7 @@ function renderGroup() {
 beforeEach(() => {
   mocks.enrollmentState.current = { success: false, message: '' };
   mocks.studentState.current = { success: false, message: '' };
+  mocks.enrollInClass.mockReset();
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
     configurable: true,
     value(this: HTMLDialogElement) { this.open = true; },
@@ -218,6 +225,121 @@ describe('EnrollmentPanel', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('checkout ulang tanpa voucher');
     expect(alert.textContent).toContain('invoice pengganti');
+  });
+});
+
+describe('EnrollmentPanel preserves the last checkout submission after an error (KEL-194)', () => {
+  const studentB = { id: '223e4567-e89b-12d3-a456-426614174002', parent_id: 'parent-1', first_name: 'Sari', date_of_birth: '2019-02-02' };
+  const scheduleB = { id: '323e4567-e89b-12d3-a456-426614174003', label: 'Rabu 10.00', available: true };
+  const key = '423e4567-e89b-12d3-a456-426614174004';
+
+  function renderCheckout() {
+    return render(
+      <EnrollmentPanel
+        classId={classId}
+        classType="group"
+        isParent
+        students={[existingStudent, studentB]}
+        schedules={[{ id: classId, label: 'Senin 09.00', available: true }, scheduleB]}
+        idempotencyKey={key}
+      />,
+    );
+  }
+
+  function pickQuarterlyQris() {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Student' }), { target: { value: studentB.id } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Jadwal' }), { target: { value: scheduleB.id } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Periode pembayaran' }), { target: { value: 'quarterly' } });
+    fireEvent.click(screen.getByRole('radio', { name: /QRIS/ }));
+    fireEvent.change(screen.getByLabelText('Kode voucher (opsional)'), { target: { value: 'HEMAT' } });
+  }
+
+  function retryPayload() {
+    const data = new FormData(screen.getByRole('button', { name: 'Lanjut ke pembayaran' }).closest('form')!);
+    return Object.fromEntries([...data.entries()].map(([name, value]) => [name, String(value)]));
+  }
+
+  // KEL-194: drive the panel's real useActionState dispatch wrapper with the
+  // live form's FormData (like a browser submit), then surface the returned
+  // state the way an action completion would. Overwriting the mocked state
+  // alone would bypass the echo-restore wiring under test.
+  async function failThroughDispatch(values: Record<string, string>, message = 'Checkout belum tersedia karena layanan pembayaran sedang bermasalah. Coba lagi nanti.') {
+    vi.mocked(mocks.enrollInClass).mockResolvedValueOnce({ success: false, message, values });
+    const form = screen.getByRole('button', { name: 'Lanjut ke pembayaran' }).closest('form')!;
+    let next: Record<string, unknown> = {};
+    await act(async () => {
+      next = await mocks.enrollAction.current({}, new FormData(form));
+    });
+    mocks.enrollmentState.current = next;
+  }
+
+  it('keeps quarterly+QRIS, voucher, and the idempotency key after a 5xx', async () => {
+    const view = renderCheckout();
+    pickQuarterlyQris();
+    const payloadBefore = retryPayload();
+    // Typing a voucher rotates the checkout key by design (new voucher = new
+    // intent); the requirement is that the key then stays stable across the
+    // failed submit and the retry.
+    expect(payloadBefore.idempotency_key).toBeTruthy();
+    expect(payloadBefore).toMatchObject({ student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'NQ', voucher_code: 'HEMAT' });
+
+    await failThroughDispatch({ student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'NQ', voucher_code: 'HEMAT' });
+    view.rerender(
+      <EnrollmentPanel classId={classId} classType="group" isParent students={[existingStudent, studentB]} schedules={[{ id: classId, label: 'Senin 09.00', available: true }, scheduleB]} idempotencyKey={key} />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('layanan pembayaran'));
+    expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(studentB.id);
+    expect((screen.getByRole('combobox', { name: 'Jadwal' }) as HTMLSelectElement).value).toBe(scheduleB.id);
+    expect((screen.getByRole('combobox', { name: 'Periode pembayaran' }) as HTMLSelectElement).value).toBe('quarterly');
+    expect((screen.getByRole('radio', { name: /QRIS/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Kode voucher (opsional)') as HTMLInputElement).value).toBe('HEMAT');
+    // Retry carries the identical intent on the same idempotency key.
+    expect(retryPayload()).toEqual(payloadBefore);
+  });
+
+  it('keeps yearly+VA after a 409 without reverting to monthly/VC', async () => {
+    const view = renderCheckout();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Student' }), { target: { value: existingStudent.id } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Jadwal' }), { target: { value: classId } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Periode pembayaran' }), { target: { value: 'yearly' } });
+    fireEvent.click(screen.getByRole('radio', { name: /Virtual Account/ }));
+
+    await failThroughDispatch(
+      { student_id: existingStudent.id, schedule_id: classId, billing_cycle: 'yearly', payment_method: 'VA', voucher_code: '' },
+      'Jadwal penuh atau enrollment ini sudah berubah. Pilih jadwal lain atau gunakan checkout yang sama.',
+    );
+    view.rerender(
+      <EnrollmentPanel classId={classId} classType="group" isParent students={[existingStudent, studentB]} schedules={[{ id: classId, label: 'Senin 09.00', available: true }, scheduleB]} idempotencyKey={key} />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Jadwal penuh'));
+    expect((screen.getByRole('combobox', { name: 'Periode pembayaran' }) as HTMLSelectElement).value).toBe('yearly');
+    expect((screen.getByRole('radio', { name: /Virtual Account/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('radio', { name: /Kartu kredit\/debit/ }) as HTMLInputElement).checked).toBe(false);
+    expect(retryPayload()).toMatchObject({ billing_cycle: 'yearly', payment_method: 'VA', idempotency_key: key });
+  });
+
+  it('shows an explicit fallback when the echoed student or schedule is no longer offered', async () => {
+    // The student list is seeded once per mount, so the "latest fetch no
+    // longer carries the last submission" case is a fresh mount whose echoed
+    // state names ids absent from the current options.
+    const view = render(
+      <EnrollmentPanel classId={classId} classType="group" isParent students={[existingStudent]} schedules={[{ id: classId, label: 'Senin 09.00', available: true }]} idempotencyKey={key} />,
+    );
+    await failThroughDispatch(
+      { student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'NQ', voucher_code: '' },
+      'Kelas atau student tidak ditemukan. Muat ulang halaman lalu coba lagi.',
+    );
+    view.rerender(
+      <EnrollmentPanel classId={classId} classType="group" isParent students={[existingStudent]} schedules={[{ id: classId, label: 'Senin 09.00', available: true }]} idempotencyKey={key} />,
+    );
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('tidak ditemukan'));
+    expect(screen.getByRole('option', { name: /pilih student baru/i })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /pilih jadwal baru/i })).toBeTruthy();
+    // Cycle and method are still the parent's own choices, not silent defaults.
+    expect((screen.getByRole('combobox', { name: 'Periode pembayaran' }) as HTMLSelectElement).value).toBe('quarterly');
+    expect((screen.getByRole('radio', { name: /QRIS/ }) as HTMLInputElement).checked).toBe(true);
   });
 });
 

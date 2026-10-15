@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage, withGatewayClientIp } from '@/lib/gateway';
 import { getSessionIdentityFromToken } from '@/lib/auth-session';
-import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, INSTRUCTION_PAYMENT_CHANNELS, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState, type VoucherPreviewState, isVoucherRejectedResponse, voucherRejectedState } from '@/lib/enrollment';
+import { duplicateEnrollmentState, enrollmentFormSchema, enrollmentPayload, enrollmentSubmissionValues, INSTRUCTION_PAYMENT_CHANNELS, isDuplicateEnrollmentResponse, isPlatformFeeRejectedResponse, platformFeeRejectedState, type EnrollmentActionState, type VoucherPreviewState, isVoucherRejectedResponse, voucherRejectedState } from '@/lib/enrollment';
 import { getCheckoutInstructions } from '@/lib/payment-instructions';
 import {
   normalizeApprovePayment,
@@ -50,6 +50,10 @@ function checkoutUrl(value: unknown) {
 }
 
 export async function enrollInClass(classId: string, _previous: EnrollmentActionState, formData: FormData): Promise<EnrollmentActionState> {
+  // KEL-194: the parent's raw submission is read once so every failure path
+  // below can echo it back; the panel restores the same choices instead of
+  // falling back to empty/monthly/VC after React resets the form DOM.
+  const submitted = enrollmentSubmissionValues(formData);
   const validation = enrollmentFormSchema.safeParse({
     student_id: formData.get('student_id')?.toString() || '',
     billing_cycle: formData.get('billing_cycle')?.toString() || '',
@@ -58,10 +62,10 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     payment_method: formData.get('payment_method')?.toString() || undefined,
     idempotency_key: formData.get('idempotency_key')?.toString() || '',
   });
-  if (!validation.success) return validationError(validation.error);
+  if (!validation.success) return { ...validationError(validation.error), values: submitted };
 
   if (!UUID_PATTERN.test(classId)) {
-    return { success: false, message: 'Kelas tidak valid. Muat ulang halaman lalu coba lagi.' };
+    return { success: false, message: 'Kelas tidak valid. Muat ulang halaman lalu coba lagi.', values: submitted };
   }
 
   let destination: string | null = null;
@@ -70,7 +74,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
   try {
     const token = (await cookies()).get(AUTH_COOKIE)?.value;
     const session = getSessionIdentityFromToken(token);
-    if (!session?.isParent) return { success: false, message: 'Hanya parent yang login dapat memulai enrollment.' };
+    if (!session?.isParent) return { success: false, message: 'Hanya parent yang login dapat memulai enrollment.', values: submitted };
 
     const response = await fetch(`${getGatewayBaseUrl()}/api/v1/catalog/classes/${encodeURIComponent(classId)}/enrollments`, {
       method: 'POST',
@@ -84,21 +88,21 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
       cache: 'no-store',
     });
     const result = await response.json().catch(() => ({}));
-    if (isDuplicateEnrollmentResponse(response.status, result)) return duplicateEnrollmentState;
-    if (isVoucherRejectedResponse(response.status, result)) return voucherRejectedState;
-    if (isPlatformFeeRejectedResponse(response.status, result)) return platformFeeRejectedState;
-    if (!response.ok || result.status !== 'success') return { success: false, message: responseMessage(response, result) };
+    if (isDuplicateEnrollmentResponse(response.status, result)) return { ...duplicateEnrollmentState, values: submitted };
+    if (isVoucherRejectedResponse(response.status, result)) return { ...voucherRejectedState, values: submitted };
+    if (isPlatformFeeRejectedResponse(response.status, result)) return { ...platformFeeRejectedState, values: submitted };
+    if (!response.ok || result.status !== 'success') return { success: false, message: responseMessage(response, result), values: submitted };
 
     const enrollment = result.data?.enrollment;
     if (typeof enrollment?.id === 'string' && UUID_PATTERN.test(enrollment.id)) enrollmentId = enrollment.id;
 
     destination = checkoutUrl(result.data?.payment?.checkout_session_url);
-    if (!destination) return { success: false, message: 'Enrollment tersimpan tetapi URL checkout belum tersedia. Silakan buka riwayat enrollment Anda.' };
+    if (!destination) return { success: false, message: 'Enrollment tersimpan tetapi URL checkout belum tersedia. Silakan buka riwayat enrollment Anda.', values: submitted };
   } catch (error) {
-    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan enrollment sedang tidak tersedia. Coba lagi nanti.' };
+    return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan enrollment sedang tidak tersedia. Coba lagi nanti.', values: submitted };
   }
 
-  if (!destination) return { success: false, message: 'URL checkout belum tersedia. Coba lagi dari detail kelas.' };
+  if (!destination) return { success: false, message: 'URL checkout belum tersedia. Coba lagi dari detail kelas.', values: submitted };
   // VA/QRIS stay on the page: the action reads the instructions back from
   // billing instead of leaving for the provider (KEL-127). The lookup runs
   // server-side under the parent's session, so a parent cannot point the
@@ -112,7 +116,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     }
     const instructions = await getCheckoutInstructions({ enrollmentId });
     if (instructions.error) {
-      return { success: false, message: instructions.message };
+      return { success: false, message: instructions.message, values: submitted };
     }
     // A same-key replay may return a card invoice created before the picker
     // changed (billing preserves the original method). Never show a VA/QR
