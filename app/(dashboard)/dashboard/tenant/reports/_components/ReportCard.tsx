@@ -77,7 +77,6 @@ export function ReportCard({
             mode="update"
             report={report}
             enrollment={enrollment}
-            enrollmentOptions={[]}
             idPrefix={idPrefix}
           />
         ) : (

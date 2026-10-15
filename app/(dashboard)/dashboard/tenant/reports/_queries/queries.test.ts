@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ListPagination } from '@/lib/list-envelope';
 
 /**
- * Integration test for the tenant report overview reader (KEL-139).
+ * Integration test for the tenant report readers (KEL-139, KEL-167).
  *
  * The module cannot reach its real collaborators here: `next/headers` needs
  * a request scope, and the gateway reads go out over `fetch`. Both are
@@ -17,11 +17,11 @@ import type { ListPagination } from '@/lib/list-envelope';
  * authorization failures surface as `forbidden` (not as a technical error),
  * the list carries only the vocabulary the backend `parseReportQuery`
  * understands, rows that fail normalisation are skipped rather than failing
- * the list, a refused enrollment list falls back to the Teacher-authorized
- * taught-session lookup (so the first report can be created with no rows on
- * the page), and failed auxiliary lookups degrade to the enrollments already
- * visible on the page — or to an explicit empty option — instead of taking
- * the page down.
+ * the list, and — KEL-167 — the overview makes exactly one academic request
+ * (no enrollment/session prefetch on page load): the create-form student
+ * picker reads on demand through the exported search readers, one explicit
+ * page per call, with the direct list (`enrollment:read`, Creator path) and
+ * the taught-session lookup (`schedule:read`, Teacher path).
  */
 
 vi.mock('next/headers', () => ({
@@ -34,7 +34,8 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-const { getTenantReports } = await import('./queries');
+const { getTenantReports, searchDirectEnrollmentOptions, searchTaughtEnrollmentOptions } =
+  await import('./queries');
 
 const GATEWAY_URL = 'http://gateway.test';
 
@@ -111,16 +112,10 @@ function headersOf(path: string): Record<string, string> {
   return (call?.[1] as RequestInit | undefined)?.headers as Record<string, string>;
 }
 
-function reportsRoute(reports: unknown[], enrollments: unknown[] | null = []) {
+function reportsOnlyRoute(reports: unknown[]) {
   return (url: string) => {
     if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
       return success({ items: reports, pagination: pagination({ total_items: reports.length }) });
-    }
-    if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
-      if (enrollments === null) {
-        return failure(500);
-      }
-      return success({ items: enrollments, pagination: pagination({ total_items: enrollments.length }) });
     }
     return undefined;
   };
@@ -144,7 +139,7 @@ afterEach(() => {
 
 describe('getTenantReports', () => {
   it('reads one page with the backend vocabulary and normalizes the rows', async () => {
-    installFetch(reportsRoute([reportRow()]));
+    installFetch(reportsOnlyRoute([reportRow()]));
 
     const result = await getTenantReports({});
 
@@ -155,16 +150,15 @@ describe('getTenantReports', () => {
     expect(result.data.rows[0]?.report.title).toBe('Evaluasi tengah semester');
     expect(result.data.rows[0]?.report.enrollment?.student?.first_name).toBe('Budi');
 
+    // KEL-167: the overview makes exactly one academic request — no
+    // enrollment/session prefetch on page load. The picker reads on demand.
     const paths = requestedPaths();
-    expect(paths).toHaveLength(2);
+    expect(paths).toHaveLength(1);
 
     const reportsUrl = new URL(paths[0] as string);
     expect(reportsUrl.searchParams.get('page')).toBe('1');
     expect(reportsUrl.searchParams.get('page_size')).toBe('20');
     expect(reportsUrl.searchParams.has('class_id')).toBe(false);
-
-    const enrollmentsUrl = new URL(paths[1] as string);
-    expect(enrollmentsUrl.searchParams.get('status')).toBe('active');
 
     expect(headersOf(paths[0] as string)).toMatchObject({
       Authorization: 'Bearer session-token',
@@ -173,7 +167,7 @@ describe('getTenantReports', () => {
   });
 
   it('forwards the search, enrollment, and date filters', async () => {
-    installFetch(reportsRoute([]));
+    installFetch(reportsOnlyRoute([]));
 
     await getTenantReports({
       search: 'evaluasi',
@@ -191,7 +185,7 @@ describe('getTenantReports', () => {
   });
 
   it('reports an invalid filter without calling the backend', async () => {
-    installFetch(reportsRoute([reportRow()]));
+    installFetch(reportsOnlyRoute([reportRow()]));
 
     const result = await getTenantReports({ enrollment_id: 'siswa-1' });
 
@@ -222,7 +216,7 @@ describe('getTenantReports', () => {
   });
 
   it('skips rows that fail normalisation instead of failing the list', async () => {
-    installFetch(reportsRoute([{ title: 'Tanpa id' }, reportRow()]));
+    installFetch(reportsOnlyRoute([{ title: 'Tanpa id' }, reportRow()]));
 
     const result = await getTenantReports({});
 
@@ -233,263 +227,25 @@ describe('getTenantReports', () => {
     expect(result.data.rows[0]?.report.id).toBe(REPORT_ID);
   });
 
-  it('degrades failed auxiliary lookups to the enrollments on the page', async () => {
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [reportRow()], pagination: pagination({ total_items: 1 }) });
-      }
-      return failure(403, 'no auxiliary access');
-    });
+  it('derives the filter options only from the rows on the page', async () => {
+    installFetch(reportsOnlyRoute([reportRow()]));
 
     const result = await getTenantReports({});
 
     expect(result.error).toBeNull();
     if (result.error !== null || result.data === null) return;
 
-    expect(result.data.rows).toHaveLength(1);
+    // The filter select feeds from the page's own rows only; the create-form
+    // options moved to the on-demand picker (KEL-167), so no auxiliary
+    // request may go out here.
     expect(result.data.enrollments).toEqual([
       { enrollment_id: ENROLLMENT_ID, label: 'Budi Santoso · Matematika Dasar' },
     ]);
+    expect(requestedPaths()).toHaveLength(1);
   });
 
-  it('uses taught sessions when a Teacher cannot read enrollments and has no reports yet', async () => {
-    const sessionId = 'd1f1c0a9-4a7e-4c1d-9c4e-6f2b0d8a5e22';
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [], pagination: pagination({ total_items: 0, total_pages: 0 }) });
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
-        return failure(403, 'enrollment:read required');
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
-        return success({
-          items: [{ id: sessionId, class: { id: 'class-1', name: 'Matematika Dasar' } }],
-          pagination: pagination({ total_items: 1 }),
-        });
-      }
-      if (url === `${GATEWAY_URL}/api/v1/sessions/${sessionId}/attendees`) {
-        return success([
-          {
-            id: ENROLLMENT_ID,
-            student: { first_name: 'Budi', last_name: 'Santoso' },
-          },
-        ]);
-      }
-      return undefined;
-    });
-
-    const result = await getTenantReports({});
-
-    expect(result.error).toBeNull();
-    if (result.error !== null || result.data === null) return;
-
-    expect(result.data.rows).toHaveLength(0);
-    expect(result.data.enrollments).toEqual([
-      { enrollment_id: ENROLLMENT_ID, label: 'Budi Santoso · Matematika Dasar' },
-    ]);
-    expect(requestedPaths()).toContain(`${GATEWAY_URL}/api/v1/sessions/${sessionId}/attendees`);
-  });
-
-  it('walks every taught session page so a class past page 1 can file its first report', async () => {
-    const sessionPage1 = 'd1f1c0a9-4a7e-4c1d-9c4e-6f2b0d8a5e22';
-    const sessionPage2 = 'e2f2d1b0-5b8f-4d2e-ad5f-7f3c1e9b6f33';
-    const otherEnrollment = 'a0aa0000-1111-4222-8333-444455556666';
-    const targetEnrollment = 'b0bb0000-1111-4222-8333-444455556666';
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [], pagination: pagination({ total_items: 0, total_pages: 0 }) });
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
-        return failure(403, 'enrollment:read required');
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
-        const page = new URL(url).searchParams.get('page');
-        if (page === '2') {
-          return success({
-            items: [{ id: sessionPage2, class: { id: 'class-b', name: 'Kelas B' } }],
-            pagination: pagination({ page: 2, total_items: 2, total_pages: 2 }),
-          });
-        }
-        return success({
-          items: [{ id: sessionPage1, class: { id: 'class-a', name: 'Kelas A' } }],
-          pagination: pagination({ total_items: 2, total_pages: 2 }),
-        });
-      }
-      if (url === `${GATEWAY_URL}/api/v1/sessions/${sessionPage1}/attendees`) {
-        return success([
-          { id: otherEnrollment, student: { first_name: 'Andi', last_name: 'Awal' } },
-        ]);
-      }
-      if (url === `${GATEWAY_URL}/api/v1/sessions/${sessionPage2}/attendees`) {
-        return success([
-          { id: targetEnrollment, student: { first_name: 'Budi', last_name: 'Kedua' } },
-        ]);
-      }
-      return undefined;
-    });
-
-    const result = await getTenantReports({});
-
-    expect(result.error).toBeNull();
-    if (result.error !== null || result.data === null) return;
-
-    expect(result.data.rows).toHaveLength(0);
-    expect(result.data.enrollments).toContainEqual({
-      enrollment_id: targetEnrollment,
-      label: 'Budi Kedua · Kelas B',
-    });
-
-    const sessionRequests = requestedPaths().filter((path) =>
-      path.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)
-    );
-    expect(sessionRequests).toHaveLength(2);
-    for (const path of sessionRequests) {
-      expect(new URL(path).searchParams.get('mine')).toBe('true');
-    }
-    expect(new URL(sessionRequests[0] as string).searchParams.get('page')).toBe('1');
-    expect(new URL(sessionRequests[1] as string).searchParams.get('page')).toBe('2');
-  });
-
-  it('walks every enrollment page so a Creator sees students past page 1', async () => {
-    const otherEnrollment = {
-      id: 'a0aa0000-1111-4222-8333-444455556666',
-      student: { first_name: 'Andi', last_name: 'Awal' },
-      class: { id: 'class-a', name: 'Kelas A' },
-    };
-    const targetEnrollment = 'b0bb0000-1111-4222-8333-444455556666';
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [], pagination: pagination({ total_items: 0, total_pages: 0 }) });
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
-        const page = new URL(url).searchParams.get('page');
-        if (page === '2') {
-          return success({
-            items: [
-              {
-                id: targetEnrollment,
-                student: { first_name: 'Citra', last_name: 'Target' },
-                class: { id: 'class-b', name: 'Kelas B' },
-              },
-            ],
-            pagination: pagination({ page: 2, total_items: 2, total_pages: 2 }),
-          });
-        }
-        return success({
-          items: [otherEnrollment],
-          pagination: pagination({ total_items: 2, total_pages: 2 }),
-        });
-      }
-      return undefined;
-    });
-
-    const result = await getTenantReports({});
-
-    expect(result.error).toBeNull();
-    if (result.error !== null || result.data === null) return;
-
-    expect(result.data.enrollments).toContainEqual({
-      enrollment_id: targetEnrollment,
-      label: 'Citra Target · Kelas B',
-    });
-    const enrollmentRequests = requestedPaths().filter((path) =>
-      path.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)
-    );
-    expect(enrollmentRequests).toHaveLength(2);
-    expect(
-      requestedPaths().some((path) => path.startsWith(`${GATEWAY_URL}/api/v1/sessions?`))
-    ).toBe(false);
-  });
-
-  it('keeps the reports when a later auxiliary page fails', async () => {
-    const sessionId = 'd1f1c0a9-4a7e-4c1d-9c4e-6f2b0d8a5e22';
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [reportRow()], pagination: pagination({ total_items: 1 }) });
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
-        return failure(403, 'enrollment:read required');
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
-        const page = new URL(url).searchParams.get('page');
-        if (page === '2') {
-          return failure(500, 'later page down');
-        }
-        return success({
-          items: [{ id: sessionId, class: { id: 'class-1', name: 'Matematika Dasar' } }],
-          pagination: pagination({ total_items: 2, total_pages: 2 }),
-        });
-      }
-      if (url === `${GATEWAY_URL}/api/v1/sessions/${sessionId}/attendees`) {
-        return success([
-          { id: ENROLLMENT_ID, student: { first_name: 'Budi', last_name: 'Santoso' } },
-        ]);
-      }
-      return undefined;
-    });
-
-    const result = await getTenantReports({});
-
-    expect(result.error).toBeNull();
-    if (result.error !== null || result.data === null) return;
-
-    expect(result.data.rows).toHaveLength(1);
-    expect(result.data.enrollments).toEqual([
-      { enrollment_id: ENROLLMENT_ID, label: 'Budi Santoso · Matematika Dasar' },
-    ]);
-  });
-
-  it('treats malformed pagination as one page and dedupes repeated enrollments', async () => {
-    const sessionOne = 'd1f1c0a9-4a7e-4c1d-9c4e-6f2b0d8a5e22';
-    const sessionTwo = 'e2f2d1b0-5b8f-4d2e-ad5f-7f3c1e9b6f33';
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [], pagination: pagination({ total_items: 0, total_pages: 0 }) });
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
-        return failure(403, 'enrollment:read required');
-      }
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
-        return success({
-          items: [
-            { id: sessionOne, class: { id: 'class-1', name: 'Matematika Dasar' } },
-            { id: sessionTwo, class: { id: 'class-1', name: 'Matematika Dasar' } },
-          ],
-          pagination: { page: 1, page_size: 100, total_items: 2, total_pages: 'banyak' },
-        });
-      }
-      if (
-        url === `${GATEWAY_URL}/api/v1/sessions/${sessionOne}/attendees` ||
-        url === `${GATEWAY_URL}/api/v1/sessions/${sessionTwo}/attendees`
-      ) {
-        return success([
-          { id: ENROLLMENT_ID, student: { first_name: 'Budi', last_name: 'Santoso' } },
-          { title: 'Tanpa id' },
-        ]);
-      }
-      return undefined;
-    });
-
-    const result = await getTenantReports({});
-
-    expect(result.error).toBeNull();
-    if (result.error !== null || result.data === null) return;
-
-    expect(result.data.enrollments).toEqual([
-      { enrollment_id: ENROLLMENT_ID, label: 'Budi Santoso · Matematika Dasar' },
-    ]);
-    expect(
-      requestedPaths().filter((path) => path.startsWith(`${GATEWAY_URL}/api/v1/sessions?`))
-    ).toHaveLength(1);
-  });
-
-  it('keeps an empty create option safe when every auxiliary lookup fails', async () => {
-    installFetch((url) => {
-      if (url.startsWith(`${GATEWAY_URL}/api/v1/reports?`)) {
-        return success({ items: [], pagination: pagination({ total_items: 0, total_pages: 0 }) });
-      }
-      return failure(503);
-    });
+  it('keeps an empty filter list without hiding the reports', async () => {
+    installFetch(reportsOnlyRoute([]));
 
     const result = await getTenantReports({});
 
@@ -510,5 +266,303 @@ describe('getTenantReports', () => {
       throw new Error('Expected a configuration state without data');
     }
     expect(result.message).toContain('GATEWAY_API_URL');
+  });
+});
+
+describe('searchDirectEnrollmentOptions', () => {
+  it('reads one explicit page with the search text and the active status', async () => {
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
+        return success({
+          items: [
+            {
+              id: ENROLLMENT_ID,
+              class_id: 'class-1',
+              student: { first_name: 'Budi', last_name: 'Santoso' },
+              class: { id: 'class-1', name: 'Matematika Dasar' },
+            },
+          ],
+          pagination: pagination({ total_items: 1 }),
+        });
+      }
+      return undefined;
+    });
+
+    const result = await searchDirectEnrollmentOptions('budi', 1);
+
+    expect(result.error).toBeNull();
+    if (result.error !== null || result.data === null) return;
+
+    expect(result.data.items).toEqual([
+      {
+        enrollment_id: ENROLLMENT_ID,
+        label: 'Budi Santoso · Matematika Dasar',
+        class_id: 'class-1',
+        class_name: 'Matematika Dasar',
+      },
+    ]);
+    expect(result.data.classes).toEqual([{ class_id: 'class-1', name: 'Matematika Dasar' }]);
+    expect(result.data.partialFailures).toBe(0);
+
+    const paths = requestedPaths();
+    expect(paths).toHaveLength(1);
+
+    const url = new URL(paths[0] as string);
+    expect(url.searchParams.get('search')).toBe('budi');
+    expect(url.searchParams.get('status')).toBe('active');
+    expect(url.searchParams.get('page')).toBe('1');
+    expect(url.searchParams.get('page_size')).toBe('100');
+  });
+
+  it('sends no search parameter for a blank query', async () => {
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
+        return success({ items: [], pagination: pagination({ total_items: 0, total_pages: 0 }) });
+      }
+      return undefined;
+    });
+
+    const result = await searchDirectEnrollmentOptions('   ', 2);
+
+    expect(result.error).toBeNull();
+    if (result.error !== null || result.data === null) return;
+
+    const url = new URL(requestedPaths()[0] as string);
+    expect(url.searchParams.has('search')).toBe(false);
+    expect(url.searchParams.get('page')).toBe('2');
+  });
+
+  it('answers limit without a request past the backend page bound', async () => {
+    installFetch(() => {
+      throw new Error('Must not request past the page bound');
+    });
+
+    for (const page of [0, -1, 1001, Number.NaN]) {
+      const result = await searchDirectEnrollmentOptions('budi', page);
+
+      expect(result.error).toBe('limit');
+      if (result.error !== 'limit' || result.data !== null) {
+        throw new Error('Expected a limit state without data');
+      }
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('answers forbidden when the caller lacks enrollment:read', async () => {
+    installFetch(() => failure(403, 'enrollment:read required'));
+
+    const result = await searchDirectEnrollmentOptions('budi', 1);
+
+    expect(result.error).toBe('forbidden');
+    if (result.error !== 'forbidden' || result.data !== null) {
+      throw new Error('Expected a forbidden state without data');
+    }
+    // The picker treats this as the Creator/Teacher branch signal.
+    expect(result.message).toMatch(/enrollment:read/);
+  });
+
+  it('answers api on a backend outage and limit on a refused page', async () => {
+    installFetch(() => failure(500));
+    expect((await searchDirectEnrollmentOptions('budi', 1)).error).toBe('api');
+
+    installFetch(() => failure(400, 'page out of range'));
+    expect((await searchDirectEnrollmentOptions('budi', 999)).error).toBe('limit');
+  });
+
+  it('dedupes repeated enrollments on the page', async () => {
+    const entry = {
+      id: ENROLLMENT_ID,
+      student: { first_name: 'Budi', last_name: 'Santoso' },
+      class: { id: 'class-1', name: 'Matematika Dasar' },
+    };
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments?`)) {
+        return success({
+          items: [entry, entry, { title: 'Tanpa id' }],
+          pagination: pagination({ total_items: 3 }),
+        });
+      }
+      return undefined;
+    });
+
+    const result = await searchDirectEnrollmentOptions('budi', 1);
+
+    expect(result.error).toBeNull();
+    if (result.error !== null || result.data === null) return;
+
+    expect(result.data.items).toHaveLength(1);
+  });
+
+  it('reports a missing gateway configuration instead of throwing', async () => {
+    delete process.env.GATEWAY_API_URL;
+
+    const result = await searchDirectEnrollmentOptions('budi', 1);
+
+    expect(result.error).toBe('configuration');
+  });
+});
+
+describe('searchTaughtEnrollmentOptions', () => {
+  const sessionId = 'd1f1c0a9-4a7e-4c1d-9c4e-6f2b0d8a5e22';
+
+  function taughtRoute(attendees: Record<string, unknown[]>) {
+    return (url: string) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
+        return success({
+          items: [{ id: sessionId, class: { id: 'class-1', name: 'Matematika Dasar' } }],
+          pagination: pagination({ total_items: 1 }),
+        });
+      }
+      const match = url.match(/\/api\/v1\/sessions\/(.+)\/attendees$/);
+      if (match) {
+        const list = attendees[match[1] as string];
+        if (list === undefined) return undefined;
+        return success(list);
+      }
+      return undefined;
+    };
+  }
+
+  it('resolves the session page students through attendees', async () => {
+    installFetch(
+      taughtRoute({
+        [sessionId]: [
+          { id: ENROLLMENT_ID, student: { first_name: 'Budi', last_name: 'Santoso' } },
+        ],
+      })
+    );
+
+    const result = await searchTaughtEnrollmentOptions('matematika', 1);
+
+    expect(result.error).toBeNull();
+    if (result.error !== null || result.data === null) return;
+
+    expect(result.data.items).toEqual([
+      {
+        enrollment_id: ENROLLMENT_ID,
+        label: 'Budi Santoso · Matematika Dasar',
+        class_id: 'class-1',
+        class_name: 'Matematika Dasar',
+      },
+    ]);
+    expect(result.data.classes).toEqual([{ class_id: 'class-1', name: 'Matematika Dasar' }]);
+    expect(result.data.partialFailures).toBe(0);
+
+    const sessionPaths = requestedPaths().filter((path) =>
+      path.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)
+    );
+    expect(sessionPaths).toHaveLength(1);
+
+    const url = new URL(sessionPaths[0] as string);
+    expect(url.searchParams.get('mine')).toBe('true');
+    expect(url.searchParams.get('search')).toBe('matematika');
+    expect(url.searchParams.get('page_size')).toBe('100');
+    expect(requestedPaths()).toContain(`${GATEWAY_URL}/api/v1/sessions/${sessionId}/attendees`);
+  });
+
+  it('counts a failed attendee read instead of hiding the page', async () => {
+    const otherSession = 'e2f2d1b0-5b8f-4d2e-ad5f-7f3c1e9b6f33';
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
+        return success({
+          items: [
+            { id: sessionId, class: { id: 'class-1', name: 'Matematika Dasar' } },
+            { id: otherSession, class: { id: 'class-2', name: 'Kelas Dua' } },
+          ],
+          pagination: pagination({ total_items: 2 }),
+        });
+      }
+      if (url === `${GATEWAY_URL}/api/v1/sessions/${sessionId}/attendees`) {
+        return success([
+          { id: ENROLLMENT_ID, student: { first_name: 'Budi', last_name: 'Santoso' } },
+        ]);
+      }
+      if (url === `${GATEWAY_URL}/api/v1/sessions/${otherSession}/attendees`) {
+        return failure(500, 'attendee read down');
+      }
+      return undefined;
+    });
+
+    const result = await searchTaughtEnrollmentOptions('', 1);
+
+    expect(result.error).toBeNull();
+    if (result.error !== null || result.data === null) return;
+
+    expect(result.data.items).toHaveLength(1);
+    expect(result.data.partialFailures).toBe(1);
+  });
+
+  it('reads an explicit later session page past the first 1000 sessions', async () => {
+    const lateSession = 'f3f3e2c1-6c9d-4e5f-bd6e-8d4e2f0a7b44';
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
+        const params = new URL(url).searchParams;
+        expect(params.get('mine')).toBe('true');
+        expect(params.get('page')).toBe('11');
+        return success({
+          items: [{ id: lateSession, class: { id: 'class-9', name: 'Kelas Akhir' } }],
+          pagination: { page: 11, page_size: 100, total_items: 1101, total_pages: 12 },
+        });
+      }
+      if (url === `${GATEWAY_URL}/api/v1/sessions/${lateSession}/attendees`) {
+        return success([
+          { id: ENROLLMENT_ID, student: { first_name: 'Siswa', last_name: 'Seribu' } },
+        ]);
+      }
+      return undefined;
+    });
+
+    const result = await searchTaughtEnrollmentOptions('', 11);
+
+    expect(result.error).toBeNull();
+    if (result.error !== null || result.data === null) return;
+
+    expect(result.data.items).toEqual([
+      {
+        enrollment_id: ENROLLMENT_ID,
+        label: 'Siswa Seribu · Kelas Akhir',
+        class_id: 'class-9',
+        class_name: 'Kelas Akhir',
+      },
+    ]);
+    expect(result.data.pagination.page).toBe(11);
+    expect(result.data.pagination.total_pages).toBe(12);
+  });
+
+  it('answers forbidden when the caller lacks schedule:read', async () => {
+    installFetch((url) => {
+      if (url.startsWith(`${GATEWAY_URL}/api/v1/sessions?`)) {
+        return failure(403, 'schedule:read required');
+      }
+      return undefined;
+    });
+
+    const result = await searchTaughtEnrollmentOptions('', 1);
+
+    expect(result.error).toBe('forbidden');
+    if (result.error !== 'forbidden' || result.data !== null) {
+      throw new Error('Expected a forbidden state without data');
+    }
+    expect(result.message).toMatch(/schedule:read/);
+  });
+
+  it('answers limit without a request past the backend page bound', async () => {
+    installFetch(() => {
+      throw new Error('Must not request past the page bound');
+    });
+
+    const result = await searchTaughtEnrollmentOptions('', 1001);
+
+    expect(result.error).toBe('limit');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing gateway configuration instead of throwing', async () => {
+    delete process.env.GATEWAY_API_URL;
+
+    const result = await searchTaughtEnrollmentOptions('', 1);
+
+    expect(result.error).toBe('configuration');
   });
 });
