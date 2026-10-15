@@ -33,7 +33,7 @@ function openDialog() {
 describe('CancelEnrollmentButton', () => {
   it('keeps a refusal visible inside the open dialog and submits the enrollment ID', async () => {
     mocks.cancel.mockResolvedValue({ status: 'error', message: 'Enrollment tidak dapat dibatalkan.' });
-    render(<CancelEnrollmentButton enrollmentId={enrollmentId} />);
+    render(<CancelEnrollmentButton enrollmentId={enrollmentId} canCancel />);
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ya, batalkan' }));
     expect((await within(dialog).findByRole('alert')).textContent).toBe('Enrollment tidak dapat dibatalkan.');
@@ -47,7 +47,7 @@ describe('CancelEnrollmentButton', () => {
 
   it('closes after a successful action and announces success outside the dialog', async () => {
     mocks.cancel.mockResolvedValue({ status: 'success', message: 'Pendaftaran dibatalkan.' });
-    render(<CancelEnrollmentButton enrollmentId={enrollmentId} />);
+    render(<CancelEnrollmentButton enrollmentId={enrollmentId} canCancel />);
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ya, batalkan' }));
     expect((await screen.findByRole('status')).textContent).toBe('Pendaftaran dibatalkan.');
@@ -58,7 +58,7 @@ describe('CancelEnrollmentButton', () => {
   it('disables confirmation while the action is pending', async () => {
     let resolve!: (state: EnrollmentCancellationState) => void;
     mocks.cancel.mockReturnValue(new Promise<EnrollmentCancellationState>((done) => { resolve = done; }));
-    render(<CancelEnrollmentButton enrollmentId={enrollmentId} />);
+    render(<CancelEnrollmentButton enrollmentId={enrollmentId} canCancel />);
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Ya, batalkan' }));
     const pending = await within(dialog).findByRole('button', { name: 'Membatalkan…' });
@@ -66,4 +66,12 @@ describe('CancelEnrollmentButton', () => {
     resolve({ status: 'success', message: 'Pendaftaran dibatalkan.' });
     await screen.findByRole('status');
   });
+});
+
+
+it('renders no cancellation offer or invented success for an initially ineligible enrollment', () => {
+  render(<CancelEnrollmentButton enrollmentId={enrollmentId} canCancel={false} />);
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(mocks.cancel).not.toHaveBeenCalled();
 });
