@@ -1,5 +1,16 @@
 import { z } from 'zod';
-import { PLATFORM_FEE_EXCEEDS_GROSS_CODE, platformFeeRejectedState } from './enrollment';
+import { PAYMENT_CHANNELS, type PaymentChannel, PLATFORM_FEE_EXCEEDS_GROSS_CODE, platformFeeRejectedState } from './enrollment';
+
+export function scheduleRequestPaymentLabel(method?: string): string {
+  switch (method || 'VC') {
+    case 'VC': return 'Kartu kredit/debit';
+    case 'VA': return 'Virtual Account';
+    case 'BC': return 'BCA Virtual Account';
+    case 'SP': return 'QRIS';
+    case 'NQ': return 'QRIS (Nobu)';
+    default: return 'Metode pembayaran tidak dikenal';
+  }
+}
 import { WEEKDAY_NAMES } from './enrollment-schedule';
 
 /**
@@ -70,6 +81,7 @@ export type ScheduleRequest = {
   class_id: string;
   student_id: string;
   billing_cycle: 'monthly' | 'quarterly' | 'yearly';
+  payment_method?: PaymentChannel;
   slots: ScheduleRequestSlot[];
   note?: string | null;
   status: ScheduleRequestStatus;
@@ -109,17 +121,19 @@ export const scheduleRequestSlotSchema = z.object({
 export const scheduleRequestFormSchema = z.object({
   student_id: z.string().uuid('Pilih student yang valid.'),
   billing_cycle: z.enum(['monthly', 'quarterly', 'yearly'], { message: 'Pilih periode pembayaran.' }),
+  payment_method: z.enum(PAYMENT_CHANNELS, { message: 'Pilih metode pembayaran.' }).default('VC'),
   slots: z.array(scheduleRequestSlotSchema).min(1, 'Tambahkan minimal satu slot jadwal.'),
   note: z.string().max(2000, 'Catatan maksimal 2000 karakter.').optional(),
 });
 
 export type ScheduleRequestFormInput = z.infer<typeof scheduleRequestFormSchema>;
 
-export function scheduleRequestPayload(input: ScheduleRequestFormInput) {
+export function scheduleRequestPayload(input: z.input<typeof scheduleRequestFormSchema>) {
   const note = input.note?.trim();
   return {
     student_id: input.student_id,
     billing_cycle: input.billing_cycle,
+    payment_method: input.payment_method,
     slots: input.slots.map((slot) => ({
       day_of_week: slot.day_of_week,
       start_time: scheduleRequestTimeForBackend(slot.start_time),
@@ -278,6 +292,7 @@ export function normalizeScheduleRequests(value: unknown): ScheduleRequest[] {
         student_id: record.student_id,
         billing_cycle:
           record.billing_cycle === 'quarterly' || record.billing_cycle === 'yearly' ? record.billing_cycle : 'monthly',
+        payment_method: typeof record.payment_method === 'string' ? record.payment_method as PaymentChannel : 'VC',
         slots,
         note: typeof record.note === 'string' ? record.note : null,
         status: record.status as ScheduleRequestStatus,

@@ -9,6 +9,7 @@ import {
   hasPendingRecommendation,
   scheduleRecommendationStatusLabel,
   scheduleRequestStatusLabel,
+  scheduleRequestPaymentLabel,
   scheduleSlotLabel,
   type EnrollmentLinkCandidate,
   type ScheduleRequest,
@@ -76,6 +77,7 @@ export function ScheduleRequestList({
                     <p className="font-black">
                       {studentName(request.student_id)} · {BILLING_CYCLE_LABELS[request.billing_cycle] || request.billing_cycle}
                     </p>
+                    <p className="mt-1 text-sm text-[#52615b]">Metode pembayaran: {scheduleRequestPaymentLabel(request.payment_method)}</p>
                     <ul className="mt-2 space-y-1 text-sm text-[#52615b]">
                       {request.slots.map((slot, index) => (
                         <li key={index}>{scheduleSlotLabel(slot) || 'Slot tidak valid'}</li>

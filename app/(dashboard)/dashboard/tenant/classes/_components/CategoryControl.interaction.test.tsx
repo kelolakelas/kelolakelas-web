@@ -15,7 +15,8 @@ it('retains unsaved rename input and confirmation after referenced delete refusa
   fireEvent.click(view.getByText('Confirm delete'));
   await waitFor(() => expect(view.getByRole('alert').textContent).toContain('active classes'));
   expect((view.getByLabelText('Category name') as HTMLInputElement).value).toBe('Draft rename');
-  expect(view.getByText('Confirm delete')).toBeDefined();
+  // The error can render before the async transition clears its pending label.
+  await waitFor(() => expect((view.getByRole('button', { name: 'Confirm delete' }) as HTMLButtonElement).disabled).toBe(false));
   expect(deleteCategory).toHaveBeenCalledWith('c');
   expect(updateCategory).not.toHaveBeenCalled();
 });

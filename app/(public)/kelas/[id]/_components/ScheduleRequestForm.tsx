@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createScheduleRequest } from '../_actions/actions';
-import type { EnrollmentActionState } from '@/lib/enrollment';
+import { PAYMENT_CHANNEL_OPTIONS, type EnrollmentActionState } from '@/lib/enrollment';
+import { scheduleRequestPaymentLabel } from '@/lib/schedule-request';
 import { WEEKDAY_NAMES } from '@/lib/enrollment-schedule';
 import {
   validateScheduleSlotDrafts,
@@ -169,6 +170,16 @@ export function ScheduleRequestForm({
           ))}
         </select>
         <FieldError errors={state.errors} name="billing_cycle" />
+      </div>
+
+      <div>
+        <label htmlFor="schedule-request-payment" className="text-sm font-bold">Metode pembayaran</label>
+        <select id="schedule-request-payment" name="payment_method" defaultValue={resubmitFrom?.payment_method || 'VC'} required className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3">
+          {PAYMENT_CHANNEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          {resubmitFrom?.payment_method && !PAYMENT_CHANNEL_OPTIONS.some((option) => option.value === resubmitFrom.payment_method) && <option value={resubmitFrom.payment_method}>{scheduleRequestPaymentLabel(resubmitFrom.payment_method)}</option>}
+        </select>
+        <p className="mt-1 text-sm text-[#52615b]">Invoice dibuat setelah persetujuan dengan metode ini. Metode invoice aktif tidak dapat diganti.</p>
+        <FieldError errors={state.errors} name="payment_method" />
       </div>
 
       <fieldset>

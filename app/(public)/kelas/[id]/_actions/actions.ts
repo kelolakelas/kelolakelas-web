@@ -186,6 +186,7 @@ export async function createScheduleRequest(_previous: EnrollmentActionState, fo
   const validation = scheduleRequestFormSchema.safeParse({
     student_id: formData.get('student_id')?.toString() || '',
     billing_cycle: formData.get('billing_cycle')?.toString() || '',
+    payment_method: formData.get('payment_method')?.toString() ?? undefined,
     slots: scheduleSlotFormValues(formData.get('slots')),
     note: formData.get('note')?.toString() || undefined,
   });
