@@ -25,6 +25,16 @@ function render(rows: TenantEnrollmentRow[], isFiltered = false): string {
 }
 
 describe('EnrollmentTable', () => {
+  it('keeps cancelled release jobs unpaid in desktop and mobile layouts (KEL-179)', () => {
+    const html = render([{
+      enrollment: { id: ENROLLMENT_ID, status: 'dropped' },
+      transaction: { id: 'tx-1', enrollment_id: ENROLLMENT_ID, status: 'cancelled', reconciliation_kind: 'release', reconciliation_status: 'reconciling' },
+    }]);
+    expect(html.match(/Pembayaran gagal/g)).toHaveLength(2);
+    expect(html).not.toContain('Pembayaran diterima');
+    expect(html).not.toContain('Pembayaran sudah diterima');
+  });
+
   it('shows the student, class, schedule, and both statuses', () => {
     const html = render([
       {

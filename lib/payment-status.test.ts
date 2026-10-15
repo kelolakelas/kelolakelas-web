@@ -12,6 +12,27 @@ function transaction(overrides: Partial<Parameters<typeof resumePayment>[0]> = {
 }
 
 describe('paymentPresentation', () => {
+  it.each(['reconciling', 'terminal_failed', 'completed'])('keeps unpaid release jobs separate from activation (%s, KEL-179)', (reconciliation_status) => {
+    for (const [status, label] of [['cancelled', 'Pembayaran gagal'], ['expired', 'Kedaluwarsa'], ['failed', 'Pembayaran gagal']]) {
+      const view = paymentPresentation({ ...enrollment, status: 'dropped' }, transaction({ status, reconciliation_kind: 'release', reconciliation_status }));
+      expect(view.label).toBe(label);
+      expect(view.detail).not.toContain('Pembayaran diterima');
+      expect(view.detail).not.toContain('Pembayaran sudah diterima');
+    }
+  });
+
+  it.each(['activation', undefined, ''])('preserves paid activation copy for kind %s (KEL-179)', (reconciliation_kind) => {
+    expect(paymentPresentation(enrollment, transaction({ status: 'paid', reconciliation_kind, reconciliation_status: 'reconciling' })).label).toContain('aktivasi diproses');
+    expect(paymentPresentation(enrollment, transaction({ status: 'paid', reconciliation_kind, reconciliation_status: 'terminal_failed' })).label).toBe('Aktivasi perlu tindak lanjut');
+    expect(paymentPresentation(enrollment, transaction({ status: 'cancelled', reconciliation_kind, reconciliation_status: 'reconciling' })).label).toBe('Pembayaran gagal');
+  });
+
+  it('does not invent an activation for an unknown or release job kind (KEL-179)', () => {
+    for (const reconciliation_kind of ['release', 'future-kind']) {
+      expect(paymentPresentation(enrollment, transaction({ status: 'paid', reconciliation_kind, reconciliation_status: 'reconciling' })).label).toBe('Pembayaran diterima');
+    }
+  });
+
   it('keeps reconciliation separate from a paid active enrollment', () => {
     expect(paymentPresentation(enrollment, { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'paid', reconciliation_status: 'reconciling' }).label).toContain('aktivasi');
     expect(paymentPresentation({ ...enrollment, status: 'active' }, { id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'paid', reconciliation_status: 'active' }).label).toBe('Aktif');
@@ -46,6 +67,15 @@ describe('paymentPresentation', () => {
 });
 
 describe('paymentIsSettling (KEL-44)', () => {
+  it.each(['cancelled', 'expired', 'failed'])('refreshes a %s release until the job finishes, while keeping its unpaid label (KEL-179)', (status) => {
+    const e = { ...enrollment, status: 'dropped' };
+    const t = transaction({ status, reconciliation_kind: 'release', reconciliation_status: 'reconciling' });
+    expect(paymentIsSettling(e, t)).toBe(true);
+    expect(paymentPresentation(e, t).label).not.toContain('aktivasi');
+    expect(paymentIsSettling(e, { ...t, reconciliation_status: 'completed' })).toBe(false);
+    expect(paymentIsSettling(e, { ...t, reconciliation_status: 'terminal_failed' })).toBe(false);
+  });
+
   const tx = (overrides: Record<string, unknown> = {}) => ({ id: 'transaction-1', enrollment_id: 'enrollment-1', status: 'pending', ...overrides });
 
   it.each([

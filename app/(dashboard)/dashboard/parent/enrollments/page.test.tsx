@@ -52,6 +52,18 @@ async function render(): Promise<string> {
 }
 
 describe('parent enrollment screen cancellation control', () => {
+  it('shows an unpaid cancellation while billing releases its seat (KEL-179)', async () => {
+    setRows(
+      [{ id: PENDING_ID, status: 'dropped' }],
+      [{ id: 'tx-1', enrollment_id: PENDING_ID, status: 'cancelled', reconciliation_kind: 'release', reconciliation_status: 'reconciling' }],
+    );
+    const html = await render();
+    expect(html).toContain('Pembayaran gagal');
+    expect(html).not.toContain('Pembayaran diterima');
+    expect(html).not.toContain('Pembayaran sudah diterima');
+    expect(html).not.toContain('Batalkan pendaftaran');
+  });
+
   it('offers cancellation for a pending enrollment whose invoice is unpaid', async () => {
     setRows(
       [{ id: PENDING_ID, status: 'pending', class: { name: 'Matematika Dasar' } }],
