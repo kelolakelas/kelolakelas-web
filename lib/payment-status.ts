@@ -31,6 +31,8 @@ export type TransactionRecord = {
   gross_amount?: number;
   currency?: string;
   reconciliation_status?: string;
+  /** Billing job purpose; absent on older responses. */
+  reconciliation_kind?: string;
   reconciliation_last_error?: string;
   updated_at?: string;
   /** Present on checkout-backed transactions; old rows predate both fields. */
@@ -112,8 +114,11 @@ export function paymentPresentation(enrollment: EnrollmentRecord, transaction?: 
     };
   }
   if (!transaction) return { label: 'Menunggu transaksi', detail: 'Enrollment belum memiliki transaksi pembayaran yang dapat ditampilkan.', tone: 'neutral' };
-  if (transaction.reconciliation_status === 'reconciling') return { label: 'Pembayaran diterima, aktivasi diproses', detail: 'Pembayaran sudah diterima. Aktivasi enrollment sedang dicoba ulang oleh sistem.', tone: 'warning' };
-  if (transaction.reconciliation_status === 'terminal_failed') return { label: 'Aktivasi perlu tindak lanjut', detail: 'Pembayaran diterima, tetapi aktivasi enrollment belum berhasil. Hubungi penyelenggara.', tone: 'danger' };
+  // Release jobs reconcile seat removal, not a received payment. Older billing
+  // responses omit the kind, so retain their activation copy for paid rows only.
+  const isActivation = transaction.status === 'paid' && (!transaction.reconciliation_kind || transaction.reconciliation_kind === 'activation');
+  if (isActivation && transaction.reconciliation_status === 'reconciling') return { label: 'Pembayaran diterima, aktivasi diproses', detail: 'Pembayaran sudah diterima. Aktivasi enrollment sedang dicoba ulang oleh sistem.', tone: 'warning' };
+  if (isActivation && transaction.reconciliation_status === 'terminal_failed') return { label: 'Aktivasi perlu tindak lanjut', detail: 'Pembayaran diterima, tetapi aktivasi enrollment belum berhasil. Hubungi penyelenggara.', tone: 'danger' };
   if (transaction.status === 'paid' && enrollment.status === 'active') return { label: 'Aktif', detail: 'Pembayaran diterima dan enrollment telah aktif.', tone: 'success' };
   if (transaction.status === 'paid') return { label: 'Pembayaran diterima', detail: 'Pembayaran diterima; status enrollment akan diperbarui oleh backend.', tone: 'warning' };
   if (transaction.status === 'failed' || transaction.status === 'expired' || transaction.status === 'cancelled') return { label: transaction.status === 'expired' ? 'Kedaluwarsa' : 'Pembayaran gagal', detail: enrollment.status === 'active' ? 'Pembayaran ini tidak berhasil. Enrollment tetap tercatat aktif oleh backend.' : 'Enrollment belum aktif. Buat pembayaran baru hanya bila Anda ingin melanjutkan pendaftaran.', tone: 'danger' };
@@ -122,11 +127,12 @@ export function paymentPresentation(enrollment: EnrollmentRecord, transaction?: 
 
 /**
  * Whether the backend state can still change on its own, without the parent
- * doing anything: the provider has not confirmed the payment yet, activation is
- * being retried, or billing accepted the payment and academic has not activated
- * the enrollment yet. Final states (active, failed, expired, cancelled,
- * refunded, terminal reconciliation failure) return false, which is what ends
- * the automatic refresh on the payment return page (KEL-44).
+ * doing anything: the provider has not confirmed the payment yet, activation
+ * or seat release is being retried, or billing accepted the payment and academic
+ * has not activated the enrollment yet. A release job may still refresh a failed,
+ * expired or cancelled payment without changing its payment label. Final states
+ * without a pending reconciliation (and terminal reconciliation failures) return
+ * false, which ends the automatic refresh on the payment return page (KEL-44).
  */
 export function paymentIsSettling(enrollment: EnrollmentRecord, transaction?: TransactionRecord): boolean {
   if (!transaction) return false;
