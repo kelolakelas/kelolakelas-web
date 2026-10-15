@@ -24,8 +24,9 @@ import {
  * with the enrollment no longer cancellable, and the confirmation is shown next
  * to where the control used to be.
  *
- * Callers only render this control when `canCancelEnrollment` is true, so the
- * parent never sees an action the backend would refuse with 409.
+ * Keep this component mounted for every keyed enrollment card. Only its action
+ * depends on canCancel; successful feedback survives the server revalidation
+ * that makes the enrollment no longer cancellable (KEL-178).
  */
 
 const initialState: EnrollmentCancellationState = EMPTY_ENROLLMENT_CANCELLATION_STATE;
@@ -44,7 +45,7 @@ function ConfirmSubmitButton() {
   );
 }
 
-export function CancelEnrollmentButton({ enrollmentId }: { enrollmentId: string }) {
+export function CancelEnrollmentButton({ enrollmentId, canCancel }: { enrollmentId: string; canCancel: boolean }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [state, formAction] = useActionState(cancelPendingEnrollment, initialState);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -55,8 +56,11 @@ export function CancelEnrollmentButton({ enrollmentId }: { enrollmentId: string 
     }
   }, [state]);
 
+  if (!canCancel && state.status !== 'success') return null;
+
   return (
-    <div>
+    <div className="mt-5 border-t border-[#edf0e9] pt-4">
+      {canCancel && <>
       <button
         type="button"
         onClick={() => {
@@ -100,6 +104,7 @@ export function CancelEnrollmentButton({ enrollmentId }: { enrollmentId: string 
           </p>
         )}
       </dialog>
+      </>}
 
       {state.status === 'success' && state.message && (
         <p role="status" className="mt-2 max-w-xs text-xs text-[#31551d]">

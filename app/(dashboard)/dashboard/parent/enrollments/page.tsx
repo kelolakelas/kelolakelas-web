@@ -71,7 +71,7 @@ export default async function ParentEnrollmentHistoryPage() {
                       {paymentChannelLabel(transaction) && <div><dt className="text-[#65726c]">Metode</dt><dd className="font-semibold">{paymentChannelLabel(transaction)}</dd></div>}
                     </dl>
                   )}
-                  {canCancelEnrollment(enrollment, transaction) && <div className="mt-5 border-t border-[#edf0e9] pt-4"><CancelEnrollmentButton enrollmentId={enrollment.id} /></div>}
+                  <CancelEnrollmentButton enrollmentId={enrollment.id} canCancel={canCancelEnrollment(enrollment, transaction)} />
                   {canReviewEnrollment(enrollment) && <ReviewForm enrollmentId={enrollment.id} className={enrollment.class?.name || undefined} />}
                   {instructionChannel ? (
                     <div className="mt-5 border-t border-[#edf0e9] pt-4">
