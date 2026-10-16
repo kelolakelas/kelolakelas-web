@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   changeClassSchedule,
   deleteClassSchedule,
@@ -14,6 +14,12 @@ import {
   type ClassSchedule,
 } from '../_lib/schema';
 import type { ScheduleTeachersRead } from '../_lib/teachers';
+import {
+  scheduleFieldClass,
+  scheduleLabelClass,
+  scheduleControlClass,
+  scheduleTimeGridClass,
+} from './schedule-field-styles';
 import { ClassEditForm } from './ClassEditForm';
 import { ScheduleForm } from './ScheduleForm';
 
@@ -43,6 +49,8 @@ function ScheduleVersionEditor({
   permissions: readonly string[];
   onOperation: (message: string) => Promise<void>;
 }) {
+  const formId = useId();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [slot, setSlot] = useState({
     day_of_week: schedule.day_of_week,
     start_time: schedule.start_time.slice(0, 8),
@@ -87,10 +95,19 @@ function ScheduleVersionEditor({
       ...(slot.tutor_id ? {} : { tutor_id: undefined }),
     });
     if (!removing && !parsed.success) {
+      setFieldErrors(
+        Object.fromEntries(
+          parsed.error.issues.map((issue) => [
+            issue.path.join('.'),
+            issue.message,
+          ]),
+        ),
+      );
       setFailed(true);
       setMessage(parsed.error.issues[0].message);
       return;
     }
+    setFieldErrors({});
     busy.current = true;
     setPending(true);
     try {
@@ -112,7 +129,7 @@ function ScheduleVersionEditor({
     }
   };
   return (
-    <section className="space-y-3 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+    <section className="min-w-0 space-y-3 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
       <p className="text-sm font-semibold">
         {dayNames[schedule.day_of_week - 1]} {schedule.start_time.slice(0, 5)}–
         {schedule.end_time.slice(0, 5)}
@@ -134,10 +151,26 @@ function ScheduleVersionEditor({
             disabled={pending || !editable}
             className="min-w-0 space-y-3 disabled:opacity-60"
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="block text-sm">
-                Day of week
+            <div className={scheduleTimeGridClass}>
+              <label
+                htmlFor={`${formId}-day_of_week`}
+                className={scheduleFieldClass}
+              >
+                <span
+                  id={`${formId}-day_of_week-label`}
+                  className={scheduleLabelClass}
+                >
+                  Day of week
+                </span>
                 <select
+                  id={`${formId}-day_of_week`}
+                  aria-labelledby={`${formId}-day_of_week-label`}
+                  aria-invalid={Boolean(fieldErrors.day_of_week)}
+                  aria-describedby={
+                    fieldErrors.day_of_week
+                      ? `${formId}-day_of_week-error`
+                      : undefined
+                  }
                   aria-label="Day of week"
                   value={slot.day_of_week}
                   onChange={(event) =>
@@ -146,7 +179,7 @@ function ScheduleVersionEditor({
                       day_of_week: Number(event.target.value),
                     })
                   }
-                  className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                  className={scheduleControlClass}
                 >
                   {dayNames.map((day, index) => (
                     <option key={day} value={index + 1}>
@@ -154,10 +187,34 @@ function ScheduleVersionEditor({
                     </option>
                   ))}
                 </select>
+                {fieldErrors.day_of_week && (
+                  <span
+                    id={`${formId}-day_of_week-error`}
+                    className="block text-xs text-red-600 dark:text-red-400"
+                  >
+                    {fieldErrors.day_of_week}
+                  </span>
+                )}
               </label>
-              <label className="block text-sm">
-                Start time
+              <label
+                htmlFor={`${formId}-start_time`}
+                className={scheduleFieldClass}
+              >
+                <span
+                  id={`${formId}-start_time-label`}
+                  className={scheduleLabelClass}
+                >
+                  Start time
+                </span>
                 <input
+                  id={`${formId}-start_time`}
+                  aria-labelledby={`${formId}-start_time-label`}
+                  aria-invalid={Boolean(fieldErrors.start_time)}
+                  aria-describedby={
+                    fieldErrors.start_time
+                      ? `${formId}-start_time-error`
+                      : undefined
+                  }
                   type="time"
                   step="1"
                   required
@@ -165,12 +222,36 @@ function ScheduleVersionEditor({
                   onChange={(event) =>
                     setSlot({ ...slot, start_time: event.target.value })
                   }
-                  className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                  className={scheduleControlClass}
                 />
+                {fieldErrors.start_time && (
+                  <span
+                    id={`${formId}-start_time-error`}
+                    className="block text-xs text-red-600 dark:text-red-400"
+                  >
+                    {fieldErrors.start_time}
+                  </span>
+                )}
               </label>
-              <label className="block text-sm">
-                End time
+              <label
+                htmlFor={`${formId}-end_time`}
+                className={scheduleFieldClass}
+              >
+                <span
+                  id={`${formId}-end_time-label`}
+                  className={scheduleLabelClass}
+                >
+                  End time
+                </span>
                 <input
+                  id={`${formId}-end_time`}
+                  aria-labelledby={`${formId}-end_time-label`}
+                  aria-invalid={Boolean(fieldErrors.end_time)}
+                  aria-describedby={
+                    fieldErrors.end_time
+                      ? `${formId}-end_time-error`
+                      : undefined
+                  }
                   type="time"
                   step="1"
                   required
@@ -178,13 +259,35 @@ function ScheduleVersionEditor({
                   onChange={(event) =>
                     setSlot({ ...slot, end_time: event.target.value })
                   }
-                  className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                  className={scheduleControlClass}
                 />
+                {fieldErrors.end_time && (
+                  <span
+                    id={`${formId}-end_time-error`}
+                    className="block text-xs text-red-600 dark:text-red-400"
+                  >
+                    {fieldErrors.end_time}
+                  </span>
+                )}
               </label>
             </div>
-            <label className="block text-sm">
-              Capacity
+            <label
+              htmlFor={`${formId}-capacity`}
+              className={scheduleFieldClass}
+            >
+              <span
+                id={`${formId}-capacity-label`}
+                className={scheduleLabelClass}
+              >
+                Capacity
+              </span>
               <input
+                id={`${formId}-capacity`}
+                aria-labelledby={`${formId}-capacity-label`}
+                aria-invalid={Boolean(fieldErrors.capacity)}
+                aria-describedby={
+                  fieldErrors.capacity ? `${formId}-capacity-error` : undefined
+                }
                 type="number"
                 min="1"
                 step="1"
@@ -193,29 +296,73 @@ function ScheduleVersionEditor({
                 onChange={(event) =>
                   setSlot({ ...slot, capacity: event.target.value })
                 }
-                className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                className={scheduleControlClass}
               />
+              {fieldErrors.capacity && (
+                <span
+                  id={`${formId}-capacity-error`}
+                  className="block text-xs text-red-600 dark:text-red-400"
+                >
+                  {fieldErrors.capacity}
+                </span>
+              )}
             </label>
-            <label className="block text-sm">
-              Location
+            <label
+              htmlFor={`${formId}-location`}
+              className={scheduleFieldClass}
+            >
+              <span
+                id={`${formId}-location-label`}
+                className={scheduleLabelClass}
+              >
+                Location
+              </span>
               <input
+                id={`${formId}-location`}
+                aria-labelledby={`${formId}-location-label`}
+                aria-invalid={Boolean(fieldErrors.location)}
+                aria-describedby={
+                  fieldErrors.location ? `${formId}-location-error` : undefined
+                }
                 maxLength={255}
                 value={slot.location}
                 onChange={(event) =>
                   setSlot({ ...slot, location: event.target.value })
                 }
-                className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                className={scheduleControlClass}
               />
+              {fieldErrors.location && (
+                <span
+                  id={`${formId}-location-error`}
+                  className="block text-xs text-red-600 dark:text-red-400"
+                >
+                  {fieldErrors.location}
+                </span>
+              )}
             </label>
-            <label className="block text-sm">
-              Schedule Teacher
+            <label
+              htmlFor={`${formId}-tutor_id`}
+              className={scheduleFieldClass}
+            >
+              <span
+                id={`${formId}-tutor_id-label`}
+                className={scheduleLabelClass}
+              >
+                Schedule Teacher
+              </span>
               <select
+                id={`${formId}-tutor_id`}
+                aria-labelledby={`${formId}-tutor_id-label`}
+                aria-invalid={Boolean(fieldErrors.tutor_id)}
+                aria-describedby={
+                  fieldErrors.tutor_id ? `${formId}-tutor_id-error` : undefined
+                }
                 disabled={teachers?.state !== 'ok'}
                 value={slot.tutor_id}
                 onChange={(event) =>
                   setSlot({ ...slot, tutor_id: event.target.value })
                 }
-                className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                className={scheduleControlClass}
               >
                 <option value="">Unassigned</option>
                 {teachers?.state === 'ok' &&
@@ -234,9 +381,17 @@ function ScheduleVersionEditor({
                     </option>
                   )}
               </select>
+              {fieldErrors.tutor_id && (
+                <span
+                  id={`${formId}-tutor_id-error`}
+                  className="block text-xs text-red-600 dark:text-red-400"
+                >
+                  {fieldErrors.tutor_id}
+                </span>
+              )}
             </label>
-            <label className="block text-sm">
-              Effective from
+            <label className={scheduleFieldClass}>
+              <span className={scheduleLabelClass}>Effective from</span>
               <input
                 type="date"
                 required
@@ -246,7 +401,7 @@ function ScheduleVersionEditor({
                 max={schedule.valid_until?.slice(0, 10)}
                 value={effective}
                 onChange={(event) => setEffective(event.target.value)}
-                className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+                className={scheduleControlClass}
               />
             </label>
             <p className="text-xs">

@@ -1,8 +1,18 @@
 'use client';
 
-import { useActionState, useEffect, useMemo, useState } from 'react';
+import { useActionState, useEffect, useId, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { createSchedule, getScheduleTeachers, type ActionResponse } from '../_actions/classActions';
+import {
+  createSchedule,
+  getScheduleTeachers,
+  type ActionResponse,
+} from '../_actions/classActions';
+import {
+  scheduleFieldClass,
+  scheduleLabelClass,
+  scheduleControlClass,
+  scheduleTimeGridClass,
+} from './schedule-field-styles';
 import type { ScheduleTeachersRead } from '../_lib/teachers';
 import {
   findOverlappingSlotPairs,
@@ -23,7 +33,9 @@ import {
  * `required`/`min`/`step` attributes stop an invalid form from being submitted
  * in the first place.
  */
-type ScheduleSlotDraft = Omit<ScheduleItemInput, 'capacity'> & { capacity: string };
+type ScheduleSlotDraft = Omit<ScheduleItemInput, 'capacity'> & {
+  capacity: string;
+};
 
 function SubmitScheduleButton() {
   const { pending } = useFormStatus();
@@ -90,6 +102,8 @@ export function ScheduleForm({
   onDraftSubmit,
   pending = false,
 }: ScheduleFormProps) {
+  const formId = useId();
+  const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [draftError, setDraftError] = useState('');
   const [schedules, setSchedules] = useState<ScheduleSlotDraft[]>([
     {
@@ -101,18 +115,29 @@ export function ScheduleForm({
     },
   ]);
 
-  const [teacherRead, setTeacherRead] = useState<ScheduleTeachersRead | null>(null);
+  const [teacherRead, setTeacherRead] = useState<ScheduleTeachersRead | null>(
+    null,
+  );
   const [tutorId, setTutorId] = useState('');
   useEffect(() => {
     let active = true;
     getScheduleTeachers().then(
-      (result) => { if (active) setTeacherRead(result); },
-      () => { if (active) setTeacherRead({ state: 'error' }); }
+      (result) => {
+        if (active) setTeacherRead(result);
+      },
+      () => {
+        if (active) setTeacherRead({ state: 'error' });
+      },
     );
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const [state, formAction] = useActionState(createSchedule, initialActionState);
+  const [state, formAction] = useActionState(
+    createSchedule,
+    initialActionState,
+  );
 
   useEffect(() => {
     if (state.success) {
@@ -135,14 +160,14 @@ export function ScheduleForm({
   const [generatorBreakMinutes, setGeneratorBreakMinutes] = useState('15');
   const [generatorCapacity, setGeneratorCapacity] = useState('10');
   const [generatorLocation, setGeneratorLocation] = useState('');
-  const [generatorErrors, setGeneratorErrors] = useState<Record<string, string>>(
-    {}
-  );
+  const [generatorErrors, setGeneratorErrors] = useState<
+    Record<string, string>
+  >({});
   const [generatorNotice, setGeneratorNotice] = useState<string | null>(null);
 
   const toggleGeneratorDay = (day: number) => {
     setGeneratorDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
   };
 
@@ -150,13 +175,13 @@ export function ScheduleForm({
     existing: ScheduleSlotDraft[],
     day: number,
     start: string,
-    end: string
+    end: string,
   ) =>
     existing.some(
       (slot) =>
         slot.day_of_week === day &&
         slot.start_time === start &&
-        slot.end_time === end
+        slot.end_time === end,
     );
 
   const handleGenerateSlots = () => {
@@ -190,19 +215,24 @@ export function ScheduleForm({
       // Valid input whose window fits no whole session: nothing to append,
       // reported as a form-level message so the tenant can adjust the range.
       setGeneratorNotice(
-        'No session fits the selected time range. Adjust the hours, session length, or break.'
+        'No session fits the selected time range. Adjust the hours, session length, or break.',
       );
       return;
     }
 
     const fresh = generated.filter(
       (slot) =>
-        !isDuplicateSlot(schedules, slot.day_of_week, slot.start_time, slot.end_time)
+        !isDuplicateSlot(
+          schedules,
+          slot.day_of_week,
+          slot.start_time,
+          slot.end_time,
+        ),
     );
 
     if (fresh.length === 0) {
       setGeneratorNotice(
-        'All generated slots already exist. No duplicate slots were added.'
+        'All generated slots already exist. No duplicate slots were added.',
       );
       return;
     }
@@ -212,7 +242,7 @@ export function ScheduleForm({
         fresh.length < generated.length
           ? ` (${generated.length - fresh.length} duplicate${generated.length - fresh.length === 1 ? '' : 's'} skipped)`
           : ''
-      }.`
+      }.`,
     );
     setSchedules([
       ...schedules,
@@ -247,7 +277,7 @@ export function ScheduleForm({
   const updateScheduleSlot = <K extends keyof ScheduleSlotDraft>(
     index: number,
     field: K,
-    value: ScheduleSlotDraft[K]
+    value: ScheduleSlotDraft[K],
   ) => {
     setSchedules((prev) => {
       const updated = [...prev];
@@ -265,7 +295,10 @@ export function ScheduleForm({
    * duplicate prevention, and the hidden submission payload are unchanged,
    * and the warning never blocks saving.
    */
-  const overlappingPairs = useMemo(() => findOverlappingSlotPairs(schedules), [schedules]);
+  const overlappingPairs = useMemo(
+    () => findOverlappingSlotPairs(schedules),
+    [schedules],
+  );
 
   const overlapBySlot = useMemo(() => {
     const bySlot = new Map<number, number[]>();
@@ -279,6 +312,11 @@ export function ScheduleForm({
     }
     return bySlot;
   }, [overlappingPairs]);
+
+  const slotError = (index: number, field: string) =>
+    draftErrors[`schedules.${index}.${field}`] ||
+    state.errors?.[`schedules.${index}.${field}`]?.[0] ||
+    state.errors?.schedules?.[0];
 
   return (
     <form
@@ -296,21 +334,33 @@ export function ScheduleForm({
               });
               if (parsed.success) {
                 setDraftError('');
+                setDraftErrors({});
                 onDraftSubmit(parsed.data.schedules);
-              } else
+              } else {
+                setDraftErrors(
+                  Object.fromEntries(
+                    parsed.error.issues.map((issue) => [
+                      issue.path.join('.'),
+                      issue.message,
+                    ]),
+                  ),
+                );
                 setDraftError(
                   parsed.error.issues[0]?.message ||
                     'Check the schedule slots.',
                 );
+              }
             }
           : undefined
       }
-      className="space-y-5"
+      className="min-w-0 space-y-5"
     >
       {/* Created Class Details Header */}
-      <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3 text-xs">
+      <div className="flex min-w-0 items-center justify-between break-words rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3 text-xs">
         <div>
-          <span className="text-gray-500 dark:text-gray-400 block">Class Configured:</span>
+          <span className="text-gray-500 dark:text-gray-400 block">
+            Class Configured:
+          </span>
           <span className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">
             {createdClass.name}
           </span>
@@ -325,32 +375,59 @@ export function ScheduleForm({
         type="hidden"
         name="schedules"
         value={JSON.stringify(
-          schedules.map((slot) => ({ ...slot, capacity: Number(slot.capacity), ...(tutorId ? { tutor_id: tutorId } : {}) }))
+          schedules.map((slot) => ({
+            ...slot,
+            capacity: Number(slot.capacity),
+            ...(tutorId ? { tutor_id: tutorId } : {}),
+          })),
         )}
       />
 
       <div className="space-y-2">
-        <label htmlFor="schedule-teacher" className="block text-sm font-semibold">Teacher for all slots</label>
+        <label
+          htmlFor={`${formId}-teacher`}
+          className="block text-sm font-semibold"
+        >
+          Teacher for all slots
+        </label>
         <select
-          id="schedule-teacher"
+          id={`${formId}-teacher`}
+          aria-describedby={`${formId}-teacher-help`}
           value={tutorId}
           onChange={(event) => setTutorId(event.target.value)}
-          disabled={teacherRead?.state !== 'ok' || teacherRead.teachers.length === 0}
-          className="min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900"
+          disabled={
+            teacherRead?.state !== 'ok' || teacherRead.teachers.length === 0
+          }
+          className={scheduleControlClass}
         >
           <option value="">Unassigned</option>
-          {teacherRead?.state === 'ok' && teacherRead.teachers.map((teacher) => (
-            <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
-          ))}
+          {teacherRead?.state === 'ok' &&
+            teacherRead.teachers.map((teacher) => (
+              <option key={teacher.id} value={teacher.id}>
+                {teacher.name}
+              </option>
+            ))}
         </select>
-        <p className="text-xs text-gray-600 dark:text-gray-300">
-          {!teacherRead ? 'Loading teachers…' : teacherRead.state === 'forbidden'
-            ? 'You do not have permission to read members. Ask a tenant administrator.'
-            : teacherRead.state === 'error' ? 'Unable to load teachers. Close and reopen this form to try again.'
-            : teacherRead.teachers.length === 0 ? 'No active Teacher members. Add or activate a Teacher in Members first.'
-            : 'The selected Teacher applies to every manual and generated slot.'}
+        <p
+          id={`${formId}-teacher-help`}
+          className="text-xs text-gray-600 dark:text-gray-300"
+        >
+          {!teacherRead
+            ? 'Loading teachers…'
+            : teacherRead.state === 'forbidden'
+              ? 'You do not have permission to read members. Ask a tenant administrator.'
+              : teacherRead.state === 'error'
+                ? 'Unable to load teachers. Close and reopen this form to try again.'
+                : teacherRead.teachers.length === 0
+                  ? 'No active Teacher members. Add or activate a Teacher in Members first.'
+                  : 'The selected Teacher applies to every manual and generated slot.'}
         </p>
-        {!tutorId && <p className="text-xs text-amber-700 dark:text-amber-300">These schedules will be unassigned and will not appear in any Teacher’s Sesi Saya.</p>}
+        {!tutorId && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            These schedules will be unassigned and will not appear in any
+            Teacher’s Sesi Saya.
+          </p>
+        )}
       </div>
 
       {draftError && (
@@ -358,7 +435,7 @@ export function ScheduleForm({
           {draftError}
         </p>
       )}
-        {/* Global Error Notice */}
+      {/* Global Error Notice */}
       {!state.success && state.message && (
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/50 p-3 text-xs text-red-700 dark:text-red-300">
           {state.message}
@@ -378,10 +455,13 @@ export function ScheduleForm({
         </div>
 
         {/* Days */}
-        <fieldset className="space-y-1">
-          <legend className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
-            Days
-          </legend>
+        <fieldset
+          className={scheduleFieldClass}
+          aria-describedby={
+            generatorErrors.days ? `${formId}-generator-days-error` : undefined
+          }
+        >
+          <legend className={scheduleLabelClass}>Days</legend>
           <div className="flex flex-wrap gap-2">
             {DAYS_OF_WEEK.map((day) => (
               <label
@@ -393,6 +473,12 @@ export function ScheduleForm({
                   checked={generatorDays.includes(day.id)}
                   onChange={() => toggleGeneratorDay(day.id)}
                   aria-label={`Generate on ${day.label}`}
+                  aria-invalid={Boolean(generatorErrors.days)}
+                  aria-describedby={
+                    generatorErrors.days
+                      ? `${formId}-generator-days-error`
+                      : undefined
+                  }
                   className="h-4 w-4 rounded accent-blue-600"
                 />
                 {day.label}
@@ -400,44 +486,73 @@ export function ScheduleForm({
             ))}
           </div>
           {generatorErrors.days && (
-            <p className="text-xs text-red-600 dark:text-red-400">
+            <p
+              id={`${formId}-generator-days-error`}
+              className="text-xs text-red-600 dark:text-red-400"
+            >
               {generatorErrors.days}
             </p>
           )}
         </fieldset>
 
         {/* Time window */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-2">
+          <div className={scheduleFieldClass}>
+            <label
+              htmlFor={`${formId}-generator-start_time`}
+              className={scheduleLabelClass}
+            >
               Start Time
             </label>
             <input
+              id={`${formId}-generator-start_time`}
+              aria-invalid={Boolean(generatorErrors.start_time)}
+              aria-describedby={
+                generatorErrors.start_time
+                  ? `${formId}-generator-start_time-error`
+                  : undefined
+              }
               type="time"
               value={generatorStart}
               onChange={(e) => setGeneratorStart(e.target.value)}
               aria-label="Generator start time"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+              className={scheduleControlClass}
             />
             {generatorErrors.start_time && (
-              <p className="text-xs text-red-600 dark:text-red-400">
+              <p
+                id={`${formId}-generator-start_time-error`}
+                className="text-xs text-red-600 dark:text-red-400"
+              >
                 {generatorErrors.start_time}
               </p>
             )}
           </div>
-          <div className="space-y-1">
-            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+          <div className={scheduleFieldClass}>
+            <label
+              htmlFor={`${formId}-generator-end_time`}
+              className={scheduleLabelClass}
+            >
               End Time
             </label>
             <input
+              id={`${formId}-generator-end_time`}
+              aria-invalid={Boolean(generatorErrors.end_time)}
+              aria-describedby={
+                generatorErrors.end_time
+                  ? `${formId}-generator-end_time-error`
+                  : undefined
+              }
               type="time"
               value={generatorEnd}
               onChange={(e) => setGeneratorEnd(e.target.value)}
               aria-label="Generator end time"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+              className={scheduleControlClass}
             />
             {generatorErrors.end_time && (
-              <p className="text-xs text-red-600 dark:text-red-400">
+              <p
+                id={`${formId}-generator-end_time-error`}
+                className="text-xs text-red-600 dark:text-red-400"
+              >
                 {generatorErrors.end_time}
               </p>
             )}
@@ -445,41 +560,67 @@ export function ScheduleForm({
         </div>
 
         {/* Session / break */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-2">
+          <div className={scheduleFieldClass}>
+            <label
+              htmlFor={`${formId}-generator-session_minutes`}
+              className={scheduleLabelClass}
+            >
               Session Length (minutes)
             </label>
             <input
+              id={`${formId}-generator-session_minutes`}
+              aria-invalid={Boolean(generatorErrors.session_minutes)}
+              aria-describedby={
+                generatorErrors.session_minutes
+                  ? `${formId}-generator-session_minutes-error`
+                  : undefined
+              }
               type="number"
               min="1"
               step="1"
               value={generatorSessionMinutes}
               onChange={(e) => setGeneratorSessionMinutes(e.target.value)}
               aria-label="Generator session length in minutes"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+              className={scheduleControlClass}
             />
             {generatorErrors.session_minutes && (
-              <p className="text-xs text-red-600 dark:text-red-400">
+              <p
+                id={`${formId}-generator-session_minutes-error`}
+                className="text-xs text-red-600 dark:text-red-400"
+              >
                 {generatorErrors.session_minutes}
               </p>
             )}
           </div>
-          <div className="space-y-1">
-            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+          <div className={scheduleFieldClass}>
+            <label
+              htmlFor={`${formId}-generator-break_minutes`}
+              className={scheduleLabelClass}
+            >
               Break Between Sessions (minutes)
             </label>
             <input
+              id={`${formId}-generator-break_minutes`}
+              aria-invalid={Boolean(generatorErrors.break_minutes)}
+              aria-describedby={
+                generatorErrors.break_minutes
+                  ? `${formId}-generator-break_minutes-error`
+                  : undefined
+              }
               type="number"
               min="0"
               step="1"
               value={generatorBreakMinutes}
               onChange={(e) => setGeneratorBreakMinutes(e.target.value)}
               aria-label="Generator break in minutes"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+              className={scheduleControlClass}
             />
             {generatorErrors.break_minutes && (
-              <p className="text-xs text-red-600 dark:text-red-400">
+              <p
+                id={`${formId}-generator-break_minutes-error`}
+                className="text-xs text-red-600 dark:text-red-400"
+              >
                 {generatorErrors.break_minutes}
               </p>
             )}
@@ -487,37 +628,60 @@ export function ScheduleForm({
         </div>
 
         {/* Defaults */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-3 md:grid-cols-2">
+          <div className={scheduleFieldClass}>
+            <label
+              htmlFor={`${formId}-generator-capacity`}
+              className={scheduleLabelClass}
+            >
               Default Capacity
             </label>
             <input
+              id={`${formId}-generator-capacity`}
+              aria-invalid={Boolean(generatorErrors.capacity)}
+              aria-describedby={
+                generatorErrors.capacity
+                  ? `${formId}-generator-capacity-error`
+                  : undefined
+              }
               type="number"
               min="1"
               step="1"
               value={generatorCapacity}
               onChange={(e) => setGeneratorCapacity(e.target.value)}
               aria-label="Generator default capacity"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+              className={scheduleControlClass}
             />
             {generatorErrors.capacity && (
-              <p className="text-xs text-red-600 dark:text-red-400">
+              <p
+                id={`${formId}-generator-capacity-error`}
+                className="text-xs text-red-600 dark:text-red-400"
+              >
                 {generatorErrors.capacity}
               </p>
             )}
           </div>
-          <div className="space-y-1">
-            <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+          <div className={scheduleFieldClass}>
+            <label
+              htmlFor={`${formId}-generator-location`}
+              className={scheduleLabelClass}
+            >
               Default Location
             </label>
             <input
+              id={`${formId}-generator-location`}
+              aria-invalid={Boolean(generatorErrors.location)}
+              aria-describedby={
+                generatorErrors.location
+                  ? `${formId}-generator-location-error`
+                  : undefined
+              }
               type="text"
               placeholder="Room 102 or Online Zoom Link (optional)"
               value={generatorLocation}
               onChange={(e) => setGeneratorLocation(e.target.value)}
               aria-label="Generator default location"
-              className="block min-h-[44px] w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+              className={scheduleControlClass}
             />
           </div>
         </div>
@@ -543,7 +707,7 @@ export function ScheduleForm({
 
       {/* Recurring Schedule Slot Cards */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Weekly Recurring Timetable
@@ -557,8 +721,18 @@ export function ScheduleForm({
             onClick={addScheduleSlot}
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/60 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             Add Slot
           </button>
@@ -586,18 +760,32 @@ export function ScheduleForm({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={scheduleTimeGridClass}>
                 {/* Day Selection */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+                <div className={scheduleFieldClass}>
+                  <label
+                    htmlFor={`${formId}-slot-${idx}-day_of_week`}
+                    className={scheduleLabelClass}
+                  >
                     Day of Week
                   </label>
                   <select
+                    id={`${formId}-slot-${idx}-day_of_week`}
+                    aria-invalid={Boolean(slotError(idx, 'day_of_week'))}
+                    aria-describedby={
+                      slotError(idx, 'day_of_week')
+                        ? `${formId}-slot-${idx}-day_of_week-error`
+                        : undefined
+                    }
                     value={slot.day_of_week}
                     onChange={(e) =>
-                      updateScheduleSlot(idx, 'day_of_week', Number(e.target.value))
+                      updateScheduleSlot(
+                        idx,
+                        'day_of_week',
+                        Number(e.target.value),
+                      )
                     }
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className={scheduleControlClass}
                   >
                     {DAYS_OF_WEEK.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -605,82 +793,157 @@ export function ScheduleForm({
                       </option>
                     ))}
                   </select>
+                  {slotError(idx, 'day_of_week') && (
+                    <p
+                      id={`${formId}-slot-${idx}-day_of_week-error`}
+                      className="text-xs text-red-600 dark:text-red-400"
+                    >
+                      {slotError(idx, 'day_of_week')}
+                    </p>
+                  )}
                 </div>
 
                 {/* Start Time */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+                <div className={scheduleFieldClass}>
+                  <label
+                    htmlFor={`${formId}-slot-${idx}-start_time`}
+                    className={scheduleLabelClass}
+                  >
                     Start Time
                   </label>
                   <input
+                    id={`${formId}-slot-${idx}-start_time`}
+                    aria-invalid={Boolean(slotError(idx, 'start_time'))}
+                    aria-describedby={
+                      slotError(idx, 'start_time')
+                        ? `${formId}-slot-${idx}-start_time-error`
+                        : undefined
+                    }
                     type="time"
                     value={slot.start_time}
-                    onChange={(e) => updateScheduleSlot(idx, 'start_time', e.target.value)}
+                    onChange={(e) =>
+                      updateScheduleSlot(idx, 'start_time', e.target.value)
+                    }
                     required
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className={scheduleControlClass}
                   />
+                  {slotError(idx, 'start_time') && (
+                    <p
+                      id={`${formId}-slot-${idx}-start_time-error`}
+                      className="text-xs text-red-600 dark:text-red-400"
+                    >
+                      {slotError(idx, 'start_time')}
+                    </p>
+                  )}
                 </div>
 
                 {/* End Time */}
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+                <div className={scheduleFieldClass}>
+                  <label
+                    htmlFor={`${formId}-slot-${idx}-end_time`}
+                    className={scheduleLabelClass}
+                  >
                     End Time
                   </label>
                   <input
+                    id={`${formId}-slot-${idx}-end_time`}
+                    aria-invalid={Boolean(slotError(idx, 'end_time'))}
+                    aria-describedby={
+                      slotError(idx, 'end_time')
+                        ? `${formId}-slot-${idx}-end_time-error`
+                        : undefined
+                    }
                     type="time"
                     value={slot.end_time}
-                    onChange={(e) => updateScheduleSlot(idx, 'end_time', e.target.value)}
+                    onChange={(e) =>
+                      updateScheduleSlot(idx, 'end_time', e.target.value)
+                    }
                     required
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className={scheduleControlClass}
                   />
+                  {slotError(idx, 'end_time') && (
+                    <p
+                      id={`${formId}-slot-${idx}-end_time-error`}
+                      className="text-xs text-red-600 dark:text-red-400"
+                    >
+                      {slotError(idx, 'end_time')}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={scheduleTimeGridClass}>
                 {/* Capacity (required positive integer, validated by the schema) */}
-                <div className="space-y-1">
+                <div className={scheduleFieldClass}>
                   <label
-                    htmlFor={`slot-capacity-${idx}`}
-                    className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase"
+                    htmlFor={`${formId}-slot-${idx}-capacity`}
+
+                    className={scheduleLabelClass}
                   >
                     Capacity
                   </label>
                   <input
-                    id={`slot-capacity-${idx}`}
+                    id={`${formId}-slot-${idx}-capacity`}
+                    aria-invalid={Boolean(slotError(idx, 'capacity'))}
+                    aria-describedby={
+                      slotError(idx, 'capacity')
+                        ? `${formId}-slot-${idx}-capacity-error`
+                        : undefined
+                    }
+
                     type="number"
                     min="1"
                     step="1"
                     value={slot.capacity}
-                    onChange={(e) => updateScheduleSlot(idx, 'capacity', e.target.value)}
+                    onChange={(e) =>
+                      updateScheduleSlot(idx, 'capacity', e.target.value)
+                    }
                     required
                     aria-label={`Capacity for slot ${idx + 1}`}
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none"
+                    className={scheduleControlClass}
                   />
-                  {state.errors?.[`schedules.${idx}.capacity`]?.[0] && (
-                    <p className="text-xs text-red-600 dark:text-red-400">
-                      {state.errors[`schedules.${idx}.capacity`][0]}
+                  {slotError(idx, 'capacity') && (
+                    <p
+                      id={`${formId}-slot-${idx}-capacity-error`}
+                      className="text-xs text-red-600 dark:text-red-400"
+                    >
+                      {slotError(idx, 'capacity')}
                     </p>
                   )}
-                  {!state.errors?.[`schedules.${idx}.capacity`]?.[0] &&
-                    state.errors?.schedules?.[0] && (
-                      <p className="text-xs text-red-600 dark:text-red-400">
-                        {state.errors.schedules[0]}
-                      </p>
-                    )}
                 </div>
 
                 {/* Location optional input */}
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="min-w-0 space-y-1 md:col-span-2">
+                  <label
+                    htmlFor={`${formId}-slot-${idx}-location`}
+                    className={scheduleLabelClass}
+                  >
                     Location
                   </label>
                   <input
+                    id={`${formId}-slot-${idx}-location`}
+                    aria-invalid={Boolean(slotError(idx, 'location'))}
+                    aria-describedby={
+                      slotError(idx, 'location')
+                        ? `${formId}-slot-${idx}-location-error`
+                        : undefined
+                    }
                     type="text"
                     placeholder="Room 102 or Online Zoom Link (optional)"
                     value={slot.location || ''}
-                    onChange={(e) => updateScheduleSlot(idx, 'location', e.target.value)}
-                    className="block min-h-[44px] w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+                    onChange={(e) =>
+                      updateScheduleSlot(idx, 'location', e.target.value)
+                    }
+                    className={scheduleControlClass}
                   />
+                  {slotError(idx, 'location') && (
+                    <p
+                      id={`${formId}-slot-${idx}-location-error`}
+                      className="text-xs text-red-600 dark:text-red-400"
+                    >
+                      {slotError(idx, 'location')}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -702,7 +965,7 @@ export function ScheduleForm({
       </div>
 
       {/* Form Action Controls */}
-      <div className="pt-3 flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
         <button
           type="button"
           onClick={onBack}
