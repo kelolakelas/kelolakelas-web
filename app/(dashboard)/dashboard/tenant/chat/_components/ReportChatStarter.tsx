@@ -17,9 +17,15 @@ export async function ReportChatStarter() {
 
   if (result.error) {
     return (
-      <section aria-label="Chat dari laporan" className="rounded-2xl border border-gray-200 bg-white p-4">
+      <section
+        aria-label="Chat dari laporan"
+        className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm sm:p-6 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+      >
         <h2 className="text-lg font-bold">Chat dari laporan student</h2>
-        <p role="alert" className="mt-2 text-sm text-gray-600">
+        <p
+          role="alert"
+          className="mt-2 text-sm text-gray-600 dark:text-gray-400"
+        >
           {result.message}
         </p>
       </section>
