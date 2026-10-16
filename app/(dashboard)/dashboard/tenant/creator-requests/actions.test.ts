@@ -16,7 +16,7 @@ describe('requestCreator authorization and validation', () => {
     fetchMock.mockResolvedValue({ status: 201 });
     expect((await requestCreator(state, form())).status).toBe(201);
     expect(fetchMock).toHaveBeenCalledWith('http://gateway/api/v1/creator-requests', expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${token({ tenant_id: 'tenant-a' })}`, 'X-Tenant-ID': 'tenant-a' }) }));
-    expect(revalidate).toHaveBeenCalledWith('/dashboard/tenant/creator-requests');
+    expect(revalidate).toHaveBeenCalledWith('/dashboard/tenant/members');
   });
   it('never forwards a parent or platform session without tenant context', async () => {
     cookieGet.mockImplementation((name: string) => name === 'tenant_id' ? undefined : { value: 'platform-token' });

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { getUserIdFromToken } from '@/lib/auth-session';
 import { InviteMemberModal } from './_components/InviteMemberModal';
+import { OwnerAccountRequests } from './_components/OwnerAccountRequests';
 import { MembersSkeleton } from './_components/MembersSkeleton';
 import { MembersTable } from './_components/MembersTable';
 import { PendingInvitations, PendingInvitationsSkeleton } from './_components/PendingInvitations';
@@ -79,6 +80,10 @@ async function MembersContent({ searchParams }: Props) {
 
         <InviteMemberModal roles={roles} />
       </div>
+
+      <Suspense fallback={null}>
+        <OwnerAccountRequests />
+      </Suspense>
 
       {/* Members Table & Mobile Card View */}
       <MembersTable members={membersRead.members} roles={roles} currentUserId={currentUserId} />

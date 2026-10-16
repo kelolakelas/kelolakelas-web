@@ -25,10 +25,10 @@ export async function requestCreator(_previous: CreatorActionState, form: FormDa
       body: JSON.stringify({ target_email: email.trim(), reason: reason.trim() }), cache: 'no-store',
     });
     if (response.status === 201) {
-      revalidatePath('/dashboard/tenant/creator-requests');
-      return { status: 201, message: 'Creator request submitted.' };
+      revalidatePath('/dashboard/tenant/members');
+      return { status: 201, message: 'Owner Account Request submitted.' };
     }
-    return { status: response.status, message: response.status === 403 ? 'Access denied. Active Creator membership required.' : response.status === 409 ? 'A pending request already exists or the target is already a Creator.' : response.status === 401 ? 'Session expired. Sign in again.' : response.status === 400 ? 'Invalid target or reason.' : 'Could not submit request. Try again.' };
+    return { status: response.status, message: response.status === 403 ? 'Access denied. Active owner account membership required.' : response.status === 409 ? 'A pending request already exists or the target is already an owner account.' : response.status === 401 ? 'Session expired. Sign in again.' : response.status === 400 ? 'Invalid target or reason.' : 'Could not submit request. Try again.' };
   } catch {
     return { status: 503, message: 'Could not submit request. Try again.' };
   }

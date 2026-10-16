@@ -60,11 +60,11 @@ export async function readCreatorRequests(platform: boolean): Promise<RequestRes
       headers: { Authorization: `Bearer ${token}`, ...(platform ? {} : { 'X-Tenant-ID': tenant! }) },
       cache: 'no-store',
     });
-    if (!response.ok) return { status: response.status, data: [], message: response.status === 403 ? 'Access denied.' : response.status === 401 ? 'Session expired. Sign in again.' : 'Could not load Creator requests. Try again.' };
+    if (!response.ok) return { status: response.status, data: [], message: response.status === 403 ? 'Access denied.' : response.status === 401 ? 'Session expired. Sign in again.' : 'Could not load Owner Account Requests. Try again.' };
     const body: unknown = await response.json();
     if (!body || typeof body !== 'object' || !('status' in body) || body.status !== 'success' || !('data' in body) || !Array.isArray(body.data)) throw new Error('Invalid Creator request response');
     return { status: 200, data: body.data as CreatorRequest[], message: '' };
   } catch {
-    return { status: 503, data: [], message: 'Could not load Creator requests. Try again.' };
+    return { status: 503, data: [], message: 'Could not load Owner Account Requests. Try again.' };
   }
 }
