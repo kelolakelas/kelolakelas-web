@@ -21,32 +21,53 @@ import { getScheduleTeachers } from '../_actions/classActions';
 
 it('applies membership id to initial, added and generated slots and preserves it after save failure', async () => {
   const id = 'f231dcfe-a8d2-4b2a-b682-43fe0fbb7022';
-  vi.mocked(getScheduleTeachers).mockResolvedValueOnce({ state: 'ok', teachers: [{ id, name: 'Teacher One' }] });
+  vi.mocked(getScheduleTeachers).mockResolvedValueOnce({
+    state: 'ok',
+    teachers: [{ id, name: 'Teacher One' }],
+  });
   actionState.current = { success: false, message: 'Unable to save schedules' };
   const { container } = renderForm();
   await screen.findByRole('option', { name: 'Teacher One' });
-  fireEvent.change(screen.getByLabelText('Teacher for all slots'), { target: { value: id } });
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'), {
+    target: { value: id },
+  });
   generate();
   fireEvent.click(screen.getByRole('button', { name: 'Add Slot' }));
-  const payload = JSON.parse((container.querySelector('[name="schedules"]') as HTMLInputElement).value);
+  const payload = JSON.parse(
+    (container.querySelector('[name="schedules"]') as HTMLInputElement).value,
+  );
   expect(payload).toHaveLength(6);
-  expect(payload.every((slot: { tutor_id: string }) => slot.tutor_id === id)).toBe(true);
+  expect(
+    payload.every((slot: { tutor_id: string }) => slot.tutor_id === id),
+  ).toBe(true);
   expect(screen.getByText('Unable to save schedules')).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Teacher for all slots'), { target: { value: '' } });
-  expect((container.querySelector('[name="schedules"]') as HTMLInputElement).value).not.toContain('tutor_id');
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'), {
+    target: { value: '' },
+  });
+  expect(
+    (container.querySelector('[name="schedules"]') as HTMLInputElement).value,
+  ).not.toContain('tutor_id');
 });
 
 it.each([
   [{ state: 'ok', teachers: [] }, 'No active Teacher members.'],
   [{ state: 'forbidden' }, 'You do not have permission to read members.'],
   [{ state: 'error' }, 'Unable to load teachers.'],
-] as const)('explains unavailable teacher list: %j', async (result, message) => {
-  vi.mocked(getScheduleTeachers).mockResolvedValueOnce(result as Awaited<ReturnType<typeof getScheduleTeachers>>);
-  renderForm();
-  await screen.findByText(new RegExp(message));
-  expect((screen.getByLabelText('Teacher for all slots') as HTMLSelectElement).disabled).toBe(true);
-  expect(screen.getByText(/will not appear in any Teacher/)).toBeTruthy();
-});
+] as const)(
+  'explains unavailable teacher list: %j',
+  async (result, message) => {
+    vi.mocked(getScheduleTeachers).mockResolvedValueOnce(
+      result as Awaited<ReturnType<typeof getScheduleTeachers>>,
+    );
+    renderForm();
+    await screen.findByText(new RegExp(message));
+    expect(
+      (screen.getByLabelText('Teacher for all slots') as HTMLSelectElement)
+        .disabled,
+    ).toBe(true);
+    expect(screen.getByText(/will not appear in any Teacher/)).toBeTruthy();
+  },
+);
 
 import type { ClassEntity } from '../_lib/schema';
 
@@ -78,7 +99,7 @@ function renderForm() {
       createdClass={GROUP_CLASS}
       onScheduleSuccess={() => {}}
       onBack={() => {}}
-    />
+    />,
   );
 }
 
@@ -103,16 +124,17 @@ describe('ScheduleForm weekly slot generator', () => {
     renderForm();
 
     expect(
-      screen.getByRole('heading', { name: 'Weekly Slot Generator' })
+      screen.getByRole('heading', { name: 'Weekly Slot Generator' }),
     ).toBeTruthy();
     expect(
-      (screen.getByLabelText('Generate on Monday') as HTMLInputElement).checked
+      (screen.getByLabelText('Generate on Monday') as HTMLInputElement).checked,
     ).toBe(true);
     expect(
-      (screen.getByLabelText('Generate on Tuesday') as HTMLInputElement).checked
+      (screen.getByLabelText('Generate on Tuesday') as HTMLInputElement)
+        .checked,
     ).toBe(true);
     expect(
-      (screen.getByLabelText('Generate on Sunday') as HTMLInputElement).checked
+      (screen.getByLabelText('Generate on Sunday') as HTMLInputElement).checked,
     ).toBe(false);
     // The manual slot list is unchanged: one default slot plus Add Slot.
     expect(slotCount()).toBe(1);
@@ -139,7 +161,7 @@ describe('ScheduleForm weekly slot generator', () => {
     generate();
     expect(slotCount()).toBe(5);
     expect(screen.getByRole('status').textContent).toBe(
-      'All generated slots already exist. No duplicate slots were added.'
+      'All generated slots already exist. No duplicate slots were added.',
     );
   });
 
@@ -168,7 +190,7 @@ describe('ScheduleForm weekly slot generator', () => {
 
     // Edit: the capacity input of the first slot stays a plain editable field.
     const capacity = screen.getByLabelText(
-      'Capacity for slot 1'
+      'Capacity for slot 1',
     ) as HTMLInputElement;
     fireEvent.change(capacity, { target: { value: '25' } });
     expect(capacity.value).toBe('25');
@@ -183,12 +205,14 @@ describe('ScheduleForm weekly slot generator', () => {
 
     fireEvent.change(
       screen.getByLabelText('Generator session length in minutes'),
-      { target: { value: '' } }
+      { target: { value: '' } },
     );
 
     generate();
 
-    expect(screen.getByText('Session length must be greater than 0')).toBeTruthy();
+    expect(
+      screen.getByText('Session length must be greater than 0'),
+    ).toBeTruthy();
     expect(slotCount()).toBe(1);
     expect(screen.queryByRole('status')).toBeNull();
   });
@@ -219,7 +243,7 @@ describe('ScheduleForm weekly slot generator', () => {
     generate();
 
     expect(
-      screen.getByText('End time must be strictly after start time')
+      screen.getByText('End time must be strictly after start time'),
     ).toBeTruthy();
     expect(slotCount()).toBe(1);
     expect(screen.queryByRole('status')).toBeNull();
@@ -230,13 +254,13 @@ describe('ScheduleForm weekly slot generator', () => {
 
     fireEvent.change(
       screen.getByLabelText('Generator session length in minutes'),
-      { target: { value: '300' } }
+      { target: { value: '300' } },
     );
 
     generate();
 
     expect(screen.getByRole('status').textContent).toBe(
-      'No session fits the selected time range. Adjust the hours, session length, or break.'
+      'No session fits the selected time range. Adjust the hours, session length, or break.',
     );
     expect(slotCount()).toBe(1);
   });
@@ -258,7 +282,7 @@ describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
     const cards = screen.getAllByText(/Slot #\d+/);
     const card = cards[slotIndex].closest('div')?.parentElement as HTMLElement;
     const inputs = Array.from(
-      card.querySelectorAll('input[type="time"]')
+      card.querySelectorAll('input[type="time"]'),
     ) as HTMLInputElement[];
     return { start: inputs[0], end: inputs[1] };
   }
@@ -289,7 +313,7 @@ describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
     expect(alerts[1].textContent).toContain('Overlaps with slot #1');
     // Advisory only: the hidden payload and the submit button are untouched.
     expect(
-      screen.getByRole('button', { name: 'Save Schedules ✓' })
+      screen.getByRole('button', { name: 'Save Schedules ✓' }),
     ).toBeTruthy();
   });
 
@@ -324,4 +348,54 @@ describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(slotCount()).toBe(1);
   });
+});
+
+it('labels every slot control and uses distinct IDs when create and editor coexist', () => {
+  const first = renderForm();
+  const second = renderForm();
+  for (const { container } of [first, second]) {
+    for (const control of container.querySelectorAll(
+      'select, input:not([type="hidden"]):not([type="checkbox"])',
+    )) {
+      expect(control.id).toBeTruthy();
+      expect(
+        container.querySelector(`label[for="${control.id}"]`),
+      ).toBeTruthy();
+    }
+  }
+  const ids = [...document.querySelectorAll('[id]')].map(
+    (element) => element.id,
+  );
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
+it('associates generator and saved slot errors with their controls', () => {
+  actionState.current = {
+    success: false,
+    message: 'Check slots',
+    errors: { 'schedules.0.end_time': ['End must follow start'] },
+  };
+  const { container } = renderForm();
+  const end = screen
+    .getAllByLabelText('End Time', { selector: 'input' })
+    .at(-1)!;
+  expect(end.getAttribute('aria-invalid')).toBe('true');
+  expect(
+    document.getElementById(end.getAttribute('aria-describedby')!)?.textContent,
+  ).toBe('End must follow start');
+  fireEvent.change(screen.getByLabelText('Generator end time'), {
+    target: { value: '07:00' },
+  });
+  generate();
+  const generatorEnd = screen.getByLabelText('Generator end time');
+  expect(generatorEnd.getAttribute('aria-invalid')).toBe('true');
+  expect(
+    document.getElementById(generatorEnd.getAttribute('aria-describedby')!)
+      ?.textContent,
+  ).toBeTruthy();
+  expect(
+    JSON.parse(
+      (container.querySelector('[name="schedules"]') as HTMLInputElement).value,
+    ),
+  ).toHaveLength(1);
 });

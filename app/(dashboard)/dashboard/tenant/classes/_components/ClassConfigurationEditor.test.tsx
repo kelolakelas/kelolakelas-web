@@ -308,3 +308,25 @@ it('rereads stored details after an uncertain class save without showing success
   expect(screen.getByText(/Saved class:/).textContent).toContain('Algebra');
   expect(screen.queryByText('Class details saved.')).toBeNull();
 });
+
+it('links invalid saved schedule fields to their errors without making a request', async () => {
+  render(
+    <ClassConfigurationEditor
+      classRecord={record}
+      categories={[category]}
+      schedules={[slot]}
+      permissions={permissions}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('End time'), {
+    target: { value: '08:00:00' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save Schedule Change' }));
+  const control = screen.getByLabelText(/^End time/);
+  expect(control.getAttribute('aria-invalid')).toBe('true');
+  expect(
+    document.getElementById(control.getAttribute('aria-describedby')!)
+      ?.textContent,
+  ).toBeTruthy();
+  expect(actions.changeClassSchedule).not.toHaveBeenCalled();
+});
