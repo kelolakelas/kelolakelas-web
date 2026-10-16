@@ -1,9 +1,9 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createCategory, type ActionResponse } from '../_actions/classActions';
-import type { Category } from '../_lib/schema';
+import { createCategorySchema, type Category } from '../_lib/schema';
 
 // Standard submit button utilizing React 19's useFormStatus
 function SubmitCategoryButton() {
@@ -43,6 +43,7 @@ function SubmitCategoryButton() {
 
 interface CategoryFormProps {
   existingCategories: Category[];
+  draft?: boolean;
   onSelectCategory: (category: Category) => void;
 }
 
@@ -51,7 +52,8 @@ const initialActionState: ActionResponse<Category> = {
   message: '',
 };
 
-export function CategoryForm({ existingCategories, onSelectCategory }: CategoryFormProps) {
+export function CategoryForm({ existingCategories, onSelectCategory, draft = false }: CategoryFormProps) {
+  const [draftError, setDraftError] = useState('');
   const [state, formAction] = useActionState(createCategory, initialActionState);
 
   useEffect(() => {
@@ -96,7 +98,35 @@ export function CategoryForm({ existingCategories, onSelectCategory }: CategoryF
       )}
 
       {/* Option B: Create new category inline */}
-      <form action={formAction} className="space-y-4">
+      <form
+        action={formAction}
+        onSubmit={
+          draft
+            ? (event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                const parsed = createCategorySchema.safeParse({
+                  name: form.get('name'),
+                  description: form.get('description') || undefined,
+                });
+                if (parsed.success) {
+                  setDraftError('');
+                  onSelectCategory({
+                    ...parsed.data,
+                    id: 'draft-category',
+                    tenant_id: '',
+                    created_at: '',
+                  });
+                } else
+                  setDraftError(
+                    parsed.error.issues[0]?.message ||
+                      'Check the category fields.',
+                  );
+              }
+            : undefined
+        }
+        className="space-y-4"
+      >
         <div>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {existingCategories.length > 0
@@ -108,6 +138,11 @@ export function CategoryForm({ existingCategories, onSelectCategory }: CategoryF
           </p>
         </div>
 
+        {draftError && (
+          <p role="alert" className="text-sm text-red-700">
+            {draftError}
+          </p>
+        )}
         {/* Global Error Banner */}
         {!state.success && state.message && (
           <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/50 p-3 text-xs text-red-700 dark:text-red-300">

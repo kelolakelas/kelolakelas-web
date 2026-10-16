@@ -8,6 +8,7 @@ import {
   findOverlappingSlotPairs,
   generateWeeklySlots,
   weeklySlotGeneratorSchema,
+  createScheduleSchema,
   type ClassEntity,
   type ScheduleItemInput,
 } from '../_lib/schema';
@@ -71,6 +72,8 @@ const DAYS_OF_WEEK = [
 
 interface ScheduleFormProps {
   createdClass: ClassEntity;
+  onDraftSubmit?: (slots: ScheduleItemInput[]) => void;
+  pending?: boolean;
   onScheduleSuccess: () => void;
   onBack: () => void;
 }
@@ -84,7 +87,10 @@ export function ScheduleForm({
   createdClass,
   onScheduleSuccess,
   onBack,
+  onDraftSubmit,
+  pending = false,
 }: ScheduleFormProps) {
+  const [draftError, setDraftError] = useState('');
   const [schedules, setSchedules] = useState<ScheduleSlotDraft[]>([
     {
       day_of_week: 1,
@@ -275,7 +281,32 @@ export function ScheduleForm({
   }, [overlappingPairs]);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form
+      action={formAction}
+      onSubmit={
+        onDraftSubmit
+          ? (event) => {
+              event.preventDefault();
+              const parsed = createScheduleSchema.safeParse({
+                class_id: createdClass.id,
+                schedules: schedules.map((slot) => ({
+                  ...slot,
+                  ...(tutorId ? { tutor_id: tutorId } : {}),
+                })),
+              });
+              if (parsed.success) {
+                setDraftError('');
+                onDraftSubmit(parsed.data.schedules);
+              } else
+                setDraftError(
+                  parsed.error.issues[0]?.message ||
+                    'Check the schedule slots.',
+                );
+            }
+          : undefined
+      }
+      className="space-y-5"
+    >
       {/* Created Class Details Header */}
       <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3 text-xs">
         <div>
@@ -322,7 +353,12 @@ export function ScheduleForm({
         {!tutorId && <p className="text-xs text-amber-700 dark:text-amber-300">These schedules will be unassigned and will not appear in any Teacher’s Sesi Saya.</p>}
       </div>
 
-      {/* Global Error Notice */}
+      {draftError && (
+        <p role="alert" className="text-sm text-red-700">
+          {draftError}
+        </p>
+      )}
+        {/* Global Error Notice */}
       {!state.success && state.message && (
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/50 p-3 text-xs text-red-700 dark:text-red-300">
           {state.message}
@@ -674,7 +710,17 @@ export function ScheduleForm({
         >
           ← Back
         </button>
-        <SubmitScheduleButton />
+        {onDraftSubmit ? (
+          <button
+            type="submit"
+            disabled={pending}
+            className="min-h-[44px] rounded-xl bg-emerald-600 px-5 py-2 text-white disabled:opacity-50"
+          >
+            {pending ? 'Saving Class…' : 'Save Complete Class ✓'}
+          </button>
+        ) : (
+          <SubmitScheduleButton />
+        )}
       </div>
     </form>
   );

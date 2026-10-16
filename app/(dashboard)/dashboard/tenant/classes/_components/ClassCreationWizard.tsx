@@ -1,7 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import type { Category, ClassEntity } from '../_lib/schema';
+import { useEffect, useRef, useState } from 'react';
+import type { Category, ClassEntity, ScheduleItemInput } from '../_lib/schema';
+import type { ClassCreationInput } from '../_lib/class-creation';
+import type { ScheduleTeachersRead } from '../_lib/teachers';
+import {
+  createClassConfiguration,
+  getScheduleTeachers,
+} from '../_actions/classActions';
 import { CategoryForm } from './CategoryForm';
 import { ClassForm } from './ClassForm';
 import { ScheduleForm } from './ScheduleForm';
@@ -11,18 +17,6 @@ interface ClassCreationWizardProps {
   onComplete?: () => void;
 }
 
-/**
- * Final wizard step for a private class.
- *
- * The academic service binds `enrollment_id` as required on every schedule of
- * a private class, so a private class cannot have its schedules created from
- * this wizard — the schedules are created per enrollment once a student is
- * enrolled. Rendering a slot form here would only end in the endpoint's 400,
- * so this step explains that and finishes the wizard without a request.
- *
- * Exported for direct render testing: the wizard keeps the step behind its
- * open-modal click handler, which static markup rendering cannot reach.
- */
 export function PrivateClassScheduleNotice({
   className: name,
   onFinish,
@@ -34,7 +28,9 @@ export function PrivateClassScheduleNotice({
     <div className="space-y-5">
       <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-4 py-3 text-xs">
         <div>
-          <span className="text-gray-500 dark:text-gray-400 block">Class Configured:</span>
+          <span className="text-gray-500 dark:text-gray-400 block">
+            Draft Class:
+          </span>
           <span className="font-bold text-emerald-800 dark:text-emerald-300 text-sm">
             {name}
           </span>
@@ -47,9 +43,10 @@ export function PrivateClassScheduleNotice({
       <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-4 text-xs text-blue-800 dark:text-blue-300 space-y-2">
         <p className="font-semibold">No timetable needed yet.</p>
         <p>
-          A private class gets its schedule per student. Once a student is enrolled,
-          create the lessons for that enrollment from the enrollment — including the
-          capacity of one. Nothing was sent to the schedules endpoint in this step.
+          A private class gets its schedule per student. Once a student is
+          enrolled, create the lessons for that enrollment from the enrollment —
+          including the capacity of one. Save below to create the category,
+          class and teacher assignment together.
         </p>
       </div>
 
@@ -59,8 +56,312 @@ export function PrivateClassScheduleNotice({
           onClick={onFinish}
           className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
         >
-          Finish Class Setup ✓
+          Save Complete Class ✓
         </button>
+      </div>
+    </div>
+  );
+}
+
+function WizardDraft({
+  existingCategories,
+  onClose,
+  onSaved,
+}: {
+  existingCategories: Category[];
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [category, setCategory] = useState<Category | null>(null);
+  const [classDraft, setClassDraft] = useState<ClassEntity | null>(null);
+  const [teacherId, setTeacherId] = useState('');
+  const [teachers, setTeachers] = useState<ScheduleTeachersRead | null>(null);
+  const [pending, setPending] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [message, setMessage] = useState('');
+  const dialog = useRef<HTMLDivElement>(null);
+  const busy = useRef(false);
+  const attempt = useRef<{ key: string; payload: ClassCreationInput } | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    getScheduleTeachers().then(
+      (result) => {
+        if (active) setTeachers(result);
+      },
+      () => {
+        if (active) setTeachers({ state: 'error' });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    const root = dialog.current;
+    const target = Array.from(
+      root?.querySelectorAll<HTMLElement>(
+        'input:not([type="hidden"]),button,select',
+      ) ?? [],
+    ).find((el) => !el.closest('[hidden]') && !el.matches(':disabled'));
+    (target ?? root)?.focus();
+  }, [step]);
+  const save = async (slots: ScheduleItemInput[] = []) => {
+    if (busy.current || !category || !classDraft) return;
+    if (!attempt.current) {
+      const { name, type, price, description } = classDraft;
+      attempt.current = {
+        key: crypto.randomUUID(),
+        payload: {
+          ...(category.id === 'draft-category'
+            ? {
+                category: {
+                  name: category.name,
+                  description: category.description ?? undefined,
+                },
+              }
+            : { category_id: category.id }),
+          class: { name, type, price, description: description ?? undefined },
+          teacher_ids: [
+            ...new Set([
+              teacherId,
+              ...slots.flatMap((slot) =>
+                slot.tutor_id ? [slot.tutor_id] : [],
+              ),
+            ]),
+          ],
+          schedules: type === 'private' ? [] : slots,
+        },
+      };
+    }
+    busy.current = true;
+    setPending(true);
+    setMessage('');
+    try {
+      const result = await createClassConfiguration(
+        attempt.current.payload,
+        attempt.current.key,
+      );
+      if (result.success) {
+        onSaved(result.message);
+        return;
+      }
+      setMessage(result.message);
+      // A rejected replay cannot prove that an earlier unknown attempt did not commit.
+      const keepOriginal = uncertain || Boolean(result.retrySameRequest);
+      setUncertain(keepOriginal);
+      if (!keepOriginal) attempt.current = null;
+    } catch {
+      setMessage(
+        'Class setup could not be confirmed. Retry the same request to check its result.',
+      );
+      setUncertain(true);
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-3 sm:p-6">
+      <div
+        ref={dialog}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="class-wizard-title"
+        aria-busy={pending}
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !busy.current) {
+            event.preventDefault();
+            onClose();
+          }
+          if (event.key === 'Tab') {
+            const controls = Array.from(
+              dialog.current?.querySelectorAll<HTMLElement>(
+                'button,input:not([type="hidden"]),textarea,select,[tabindex="0"]',
+              ) ?? [],
+            ).filter(
+              (el) => !el.closest('[hidden]') && !el.matches(':disabled'),
+            );
+            if (controls.length === 0) {
+              event.preventDefault();
+              dialog.current?.focus();
+              return;
+            }
+            const first = controls[0],
+              last = controls.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }
+        }}
+        className="my-auto w-full max-w-2xl space-y-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl sm:p-6 dark:border-gray-800 dark:bg-gray-900"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="class-wizard-title" className="text-lg font-bold">
+            Class Creation Wizard
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            aria-label="Close modal"
+            className="min-h-[44px] min-w-[44px] rounded-xl border disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          Category, class details and schedules stay in this draft until you
+          save the complete class.
+        </p>
+        <ol
+          aria-label="Class creation steps"
+          className="flex justify-between gap-2 text-sm"
+        >
+          {['Category', 'Class Details', 'Review & Schedules'].map(
+            (label, index) => (
+              <li
+                key={label}
+                aria-current={step === index + 1 ? 'step' : undefined}
+                className={step === index + 1 ? 'font-bold text-blue-600' : ''}
+              >
+                {index + 1}. {label}
+              </li>
+            ),
+          )}
+        </ol>
+        {message && (
+          <p
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+          >
+            {message}
+          </p>
+        )}
+        {uncertain && (
+          <div className="space-y-3">
+            <p className="text-sm">
+              Your draft is preserved. Retry the original request before making
+              another class. You can also close and check the class list.
+            </p>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void save()}
+              className="min-h-[44px] rounded-xl bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+            >
+              {pending ? 'Checking…' : 'Retry Same Request'}
+            </button>
+          </div>
+        )}
+        <fieldset
+          disabled={pending || uncertain}
+          className="min-w-0 space-y-4 disabled:opacity-60"
+        >
+          <div hidden={step !== 1}>
+            <CategoryForm
+              draft
+              existingCategories={existingCategories}
+              onSelectCategory={(selected) => {
+                setCategory(selected);
+                setStep(2);
+                setMessage('');
+              }}
+            />
+          </div>
+          {category && (
+            <div hidden={step !== 2}>
+              <div className="mb-4 space-y-2">
+                <label
+                  htmlFor="class-teacher"
+                  className="block text-sm font-semibold"
+                >
+                  Assigned Teacher
+                </label>
+                <select
+                  id="class-teacher"
+                  value={teacherId}
+                  onChange={(event) => setTeacherId(event.target.value)}
+                  disabled={teachers?.state !== 'ok'}
+                  className="min-h-[44px] w-full rounded-xl border bg-white px-3 dark:bg-gray-900"
+                >
+                  <option value="">Select an active Teacher</option>
+                  {teachers?.state === 'ok' &&
+                    teachers.teachers.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  {!teachers
+                    ? 'Loading teachers…'
+                    : teachers.state === 'forbidden'
+                      ? 'You do not have permission to read members. Ask a tenant administrator.'
+                      : teachers.state === 'error'
+                        ? 'Unable to load teachers. Close and reopen to retry.'
+                        : teachers.teachers.length === 0
+                          ? 'No active Teacher members. Add or activate a Teacher in Members first.'
+                          : 'Choose the Teacher assigned to this class.'}
+                </p>
+              </div>
+              <ClassForm
+                draft
+                selectedCategory={category}
+                onClassCreated={(draft) => {
+                  if (!teacherId) {
+                    setMessage('Select an active Teacher before continuing.');
+                    return;
+                  }
+                  setClassDraft(draft);
+                  setStep(3);
+                  setMessage('');
+                }}
+                onBack={() => setStep(1)}
+              />
+            </div>
+          )}
+          {classDraft && (
+            <div hidden={step !== 3}>
+              {classDraft.type === 'private' && (
+                <>
+                  <PrivateClassScheduleNotice
+                    className={classDraft.name}
+                    onFinish={() => void save()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="min-h-[44px] rounded-xl border px-4"
+                  >
+                    ← Back
+                  </button>
+                </>
+              )}
+              <div hidden={classDraft.type === 'private'}>
+                <ScheduleForm
+                  createdClass={classDraft}
+                  onDraftSubmit={(slots) => void save(slots)}
+                  pending={pending}
+                  onScheduleSuccess={() => {}}
+                  onBack={() => setStep(2)}
+                />
+              </div>
+            </div>
+          )}
+        </fieldset>
+        {pending && (
+          <p role="status" className="text-sm">
+            Saving complete class…
+          </p>
+        )}
       </div>
     </div>
   );
@@ -71,150 +372,43 @@ export function ClassCreationWizard({
   onComplete,
 }: ClassCreationWizardProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [createdClass, setCreatedClass] = useState<ClassEntity | null>(null);
-
-  const handleOpen = () => {
-    setStep(1);
-    setSelectedCategory(null);
-    setCreatedClass(null);
-    setIsOpen(true);
-  };
-
-  const handleClose = () => {
+  const [saved, setSaved] = useState('');
+  const trigger = useRef<HTMLButtonElement>(null);
+  const close = () => {
     setIsOpen(false);
-    setStep(1);
-    setSelectedCategory(null);
-    setCreatedClass(null);
+    trigger.current?.focus();
   };
-
-  const handleCategorySelected = (category: Category) => {
-    setSelectedCategory(category);
-    setStep(2);
-  };
-
-  const handleClassCreated = (newClass: ClassEntity) => {
-    setCreatedClass(newClass);
-    setStep(3);
-  };
-
-  const handleScheduleComplete = () => {
-    handleClose();
-    if (onComplete) {
-      onComplete();
-    }
-  };
-
   return (
     <>
-      {/* Trigger Button */}
       <button
+        ref={trigger}
         type="button"
-        onClick={handleOpen}
-        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        onClick={() => {
+          setSaved('');
+          setIsOpen(true);
+        }}
+        className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
       >
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-        <span>Create New Class</span>
+        Create New Class
       </button>
-
-      {/* Modal Overlay */}
+      {saved && (
+        <p
+          role="status"
+          className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+        >
+          {saved}
+        </p>
+      )}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-2xl border border-gray-200 dark:border-gray-800 space-y-6 my-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                  Class Creation Wizard
-                </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Set up academic categories, course details, and recurring timetables in 3 easy steps.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Stepper Progress Bar (Mobile-First responsive indicator) */}
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                {/* Step 1 Indicator */}
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    step >= 1 ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-800'
-                  }`}
-                />
-                {/* Step 2 Indicator */}
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    step >= 2 ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-800'
-                  }`}
-                />
-                {/* Step 3 Indicator */}
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    step >= 3 ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-800'
-                  }`}
-                />
-              </div>
-
-              <div className="flex justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-0.5">
-                <span className={step === 1 ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}>
-                  1. Category
-                </span>
-                <span className={step === 2 ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}>
-                  2. Class Details
-                </span>
-                <span className={step === 3 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}>
-                  3. Schedules
-                </span>
-              </div>
-            </div>
-
-            {/* Step Body Content */}
-            <div className="py-2">
-              {step === 1 && (
-                <CategoryForm
-                  existingCategories={existingCategories}
-                  onSelectCategory={handleCategorySelected}
-                />
-              )}
-
-              {step === 2 && selectedCategory && (
-                <ClassForm
-                  selectedCategory={selectedCategory}
-                  onClassCreated={handleClassCreated}
-                  onBack={() => setStep(1)}
-                />
-              )}
-
-              {step === 3 && createdClass && (
-                createdClass.type === 'private' ? (
-                  <PrivateClassScheduleNotice
-                    className={createdClass.name}
-                    onFinish={handleScheduleComplete}
-                  />
-                ) : (
-                  <ScheduleForm
-                    createdClass={createdClass}
-                    onScheduleSuccess={handleScheduleComplete}
-                    onBack={() => setStep(2)}
-                  />
-                )
-              )}
-            </div>
-          </div>
-        </div>
+        <WizardDraft
+          existingCategories={existingCategories}
+          onClose={close}
+          onSaved={(message) => {
+            setSaved(message);
+            close();
+            onComplete?.();
+          }}
+        />
       )}
     </>
   );

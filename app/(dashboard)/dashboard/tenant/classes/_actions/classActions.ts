@@ -1,5 +1,6 @@
 'use server';
 
+import { classCreationSchema, type ClassCreationInput, type ClassCreationResult } from '../_lib/class-creation';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
@@ -86,6 +87,7 @@ export interface ActionResponse<T = unknown> {
   message: string;
   errors?: Record<string, string[]>;
   data?: T;
+  retrySameRequest?: boolean;
 }
 
 export async function updateCategory(categoryId: string, formData: FormData): Promise<ActionResponse> {
@@ -610,6 +612,84 @@ export async function updateClass(
       message:
         getGatewayConfigurationErrorMessage(error) ||
         'An unexpected network or server error occurred. Please try again.',
+    };
+  }
+}
+
+/** Final wizard mutation. The gateway/backend remain the authorization authority. */
+export async function createClassConfiguration(
+  input: ClassCreationInput,
+  key: string,
+): Promise<ActionResponse<ClassCreationResult>> {
+  const parsed = classCreationSchema.safeParse(input);
+  if (!parsed.success || !/^[a-zA-Z0-9-]{1,128}$/.test(key))
+    return {
+      success: false,
+      message: 'Check the category, class, teachers and schedule fields.',
+    };
+  try {
+    const auth = await getAuthHeaders();
+    if (!(auth as Record<string, string>).Authorization)
+      return {
+        success: false,
+        message: 'Your session has expired. Please sign in again.',
+      };
+    const payload = {
+      ...parsed.data,
+      schedules: parsed.data.schedules.map((slot) => ({
+        ...slot,
+        start_time:
+          slot.start_time.length === 5
+            ? `${slot.start_time}:00`
+            : slot.start_time,
+        end_time:
+          slot.end_time.length === 5 ? `${slot.end_time}:00` : slot.end_time,
+      })),
+    };
+    const response = await fetch(
+      `${getGatewayBaseUrl()}/api/v1/classes/with-category`,
+      {
+        method: 'POST',
+        headers: { ...auth, 'Idempotency-Key': key },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+      },
+    );
+    const result = await response.json().catch(() => null);
+    if (
+      !response.ok ||
+      result?.status !== 'success' ||
+      typeof result.data?.class?.id !== 'string' ||
+      typeof result.data?.class?.name !== 'string'
+    ) {
+      const messages: Record<number, string> = {
+        401: 'Your session has expired. Please sign in again.',
+        403: 'You do not have permission to save this class configuration.',
+        409: 'This retry key belongs to a different request. Reopen the class list to check the saved class.',
+      };
+      return {
+        success: false,
+        message:
+          messages[response.status] ||
+          (response.status === 400 && typeof result?.message === 'string' ? result.message : null) ||
+          'Class setup could not be confirmed. Retry the same request to check its result.',
+        retrySameRequest:
+          response.status >= 500 || response.ok || response.status === 409,
+      };
+    }
+    revalidatePath('/dashboard/tenant/classes');
+    revalidatePath('/dashboard/tenant/sessions');
+    return {
+      success: true,
+      message: `Class "${result.data.class.name}" saved with its complete configuration.`,
+      data: result.data,
+    };
+  } catch {
+    return {
+      success: false,
+      message:
+        'Class setup could not be confirmed. Retry the same request to check its result.',
+      retrySameRequest: true,
     };
   }
 }
