@@ -7,6 +7,7 @@ import { CategoryControl } from './CategoryControl';
 import { AssignTeacherForm } from './AssignTeacherForm';
 import { ClassCreationWizard } from './ClassCreationWizard';
 import { ClassEditModal } from './ClassEditModal';
+import { DeleteClassButton } from './DeleteClassButton';
 import {
   ClassPublicationButton,
   ClassStatusBadges,
@@ -248,6 +249,7 @@ export function ClassListTable({
                   <ClassPublicationButton classId={cls.id} record={cls} />
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(!classPermissions || classPermissions.some(permission=>['class:update','schedule:create','schedule:update','schedule:delete'].includes(permission))) && <ClassEditModal classRecord={cls} categories={categories} schedules={schedules} permissions={classPermissions} />}
+                    {classPermissions?.includes('class:delete') && <DeleteClassButton classId={cls.id} className={cls.name} />}
                   </div>
                 </div>
               </div>
@@ -324,6 +326,7 @@ export function ClassListTable({
                       <div className="flex items-center gap-2">
                         <ClassPublicationButton classId={cls.id} record={cls} />
                         {(!classPermissions || classPermissions.some(permission=>['class:update','schedule:create','schedule:update','schedule:delete'].includes(permission))) && <ClassEditModal classRecord={cls} categories={categories} schedules={schedules} permissions={classPermissions} />}
+                        {classPermissions?.includes('class:delete') && <DeleteClassButton classId={cls.id} className={cls.name} />}
                           </div>
                     </td>
                   </tr>
