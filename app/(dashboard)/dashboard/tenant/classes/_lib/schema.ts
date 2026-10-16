@@ -150,6 +150,9 @@ export const createClassSchema = z.object({
  * into an opaque backend error.
  */
 export const updateClassSchema = z.strictObject({
+  is_published: z.boolean().optional(),
+  enrollment_status: z.enum(['open','closed','full','archived']).optional(),
+  teacher_ids: z.array(z.string().uuid()).min(1).optional(),
   class_id: z.string().trim().min(1, 'Please select a valid class'),
   category_id: classCategoryField,
   name: classNameField,
@@ -494,6 +497,7 @@ export interface Category {
 }
 
 export interface ClassEntity {
+  teacher_ids?: string[];
   id: string;
   tenant_id: string;
   category_id: string;

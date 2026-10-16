@@ -200,12 +200,13 @@ describe('ClassListTable classes tab', () => {
     expect(html).toContain('Matematika Dasar');
   });
 
-  it('keeps the private class row free of the add-schedule action', () => {
+  it('uses Edit in both layouts without a separate Add Schedule action', () => {
     const html = renderTable({ classes: [CLASS, PRIVATE_CLASS] });
 
     // The same group row is rendered once for mobile and once for desktop.
     // Neither markup copy of the private row should have the action.
     const actions = html.split('Add Schedule').length - 1;
-    expect(actions).toBe(2);
+    expect(actions).toBe(0);
+    expect(html).toContain('Edit');
   });
 });

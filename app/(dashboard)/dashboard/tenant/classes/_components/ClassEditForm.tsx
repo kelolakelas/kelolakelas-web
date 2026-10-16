@@ -2,7 +2,11 @@
 
 import { useActionState, useEffect, useId, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { updateClass, type ActionResponse } from '../_actions/classActions';
+import {
+  updateClass,
+  getScheduleTeachers,
+  type ActionResponse,
+} from '../_actions/classActions';
 import type { Category, ClassEntity } from '../_lib/schema';
 import { editableDescriptionText } from '@/lib/class-edit';
 
@@ -42,15 +46,16 @@ interface ClassEditFormProps {
   categories: Category[];
   /** Called after a successful save so the caller can close the modal. */
   onUpdated?: () => void;
+  canCreateCategory?: boolean;
+  onSettled?: (success: boolean) => void;
 }
 
 /**
  * Form for editing the attributes a tenant may change on an existing class.
  *
  * The field set and validation deliberately mirror the creation wizard for the
- * attributes that are editable. Class type is immutable on the backend and is
- * therefore not rendered at all, and capacity is not part of the class update
- * contract, so neither is submitted — the update endpoint treats an omitted
+ * attributes that are editable. Class type is shown read-only; capacity belongs to schedule versions.
+ * Neither is submitted as a class attribute — the update endpoint treats an omitted
  * field as "leave unchanged".
  *
  * Price is a text input rather than a number input because tenants type grouped
@@ -60,6 +65,8 @@ export function ClassEditForm({
   classRecord,
   categories,
   onUpdated,
+  canCreateCategory = true,
+  onSettled,
 }: ClassEditFormProps) {
   const initialActionState: ActionResponse<ClassEntity> = {
     success: false,
@@ -75,15 +82,36 @@ export function ClassEditForm({
   const [name, setName] = useState(classRecord.name);
   const [price, setPrice] = useState(String(classRecord.price));
   const [description, setDescription] = useState(
-    editableDescriptionText(classRecord.description)
+    editableDescriptionText(classRecord.description),
   );
   const [categoryId, setCategoryId] = useState(classRecord.category_id);
+  const [newCategory, setNewCategory] = useState(false);
+  const [published, setPublished] = useState(classRecord.is_published ?? false);
+  const [status, setStatus] = useState(classRecord.enrollment_status ?? 'open');
+  const [teacherIds, setTeacherIds] = useState(classRecord.teacher_ids ?? []);
+  const [teachersChanged, setTeachersChanged] = useState(false);
+  const [teachers, setTeachers] = useState<
+    import('../_lib/teachers').ScheduleTeachersRead | null
+  >(null);
+  useEffect(() => {
+    let active = true;
+    getScheduleTeachers().then(
+      (result) => {
+        if (active) setTeachers(result);
+      },
+      () => {
+        if (active) setTeachers({ state: 'error' });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
-    if (state.success) {
-      onUpdated?.();
-    }
-  }, [state.success, onUpdated]);
+    if (state.message) onSettled?.(state.success);
+    if (state.success) onUpdated?.();
+  }, [state, onUpdated, onSettled]);
 
   const nameError = state.errors?.name?.[0];
   const priceError = state.errors?.price?.[0];
@@ -93,6 +121,121 @@ export function ClassEditForm({
   return (
     <form action={formAction} className="space-y-4" noValidate>
       <input type="hidden" name="class_id" value={classRecord.id} />
+      <label className="block text-sm">
+        Class Type
+        <input
+          aria-label="Class Type"
+          readOnly
+          value={classRecord.type}
+          className="mt-1 block w-full rounded border bg-gray-100 p-2 dark:bg-gray-800"
+        />
+      </label>
+      <p className="text-xs">
+        Class type cannot change because schedules and enrollments follow the
+        original type. Private schedules remain managed per enrollment.
+      </p>
+      <input type="hidden" name="new_category" value={String(newCategory)} />
+      {canCreateCategory && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={newCategory}
+            onChange={(event) => setNewCategory(event.target.checked)}
+          />
+          Create a new category for this class
+        </label>
+      )}
+      {newCategory && (
+        <div className="space-y-2 rounded-xl border p-3">
+          <label className="block text-sm">
+            New Category Name
+            <input
+              name="category_name"
+              required
+              className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+            />
+          </label>
+          <label className="block text-sm">
+            New Category Description
+            <textarea
+              name="category_description"
+              className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+            />
+          </label>
+        </div>
+      )}
+      <input type="hidden" name="is_published" value={String(published)} />
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={published}
+          onChange={(event) => setPublished(event.target.checked)}
+        />
+        Published in public catalog
+      </label>
+      <label className="block text-sm">
+        Enrollment Status
+        <select
+          name="enrollment_status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value as typeof status)}
+          className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+        >
+          {['open', 'closed', 'full', 'archived'].map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm">
+        Assigned Teachers
+        <select
+          multiple
+          aria-label="Assigned Teachers"
+          disabled={teachers?.state !== 'ok'}
+          value={teacherIds}
+          onChange={(event) => {
+            setTeachersChanged(true);
+            setTeacherIds(
+              Array.from(
+                event.target.selectedOptions,
+                (option) => option.value,
+              ),
+            );
+          }}
+          className="mt-1 block w-full rounded border p-2 dark:bg-gray-900"
+        >
+          {teachers?.state === 'ok' &&
+            teachers.teachers.map((teacher) => (
+              <option key={teacher.id} value={teacher.id}>
+                {teacher.name}
+              </option>
+            ))}
+          {teacherIds
+            .filter(
+              (id) =>
+                teachers?.state !== 'ok' ||
+                !teachers.teachers.some((teacher) => teacher.id === id),
+            )
+            .map((id) => (
+              <option key={id} value={id}>
+                Previously assigned Teacher (unavailable)
+              </option>
+            ))}
+        </select>
+      </label>
+      {teachersChanged && (
+        <input
+          type="hidden"
+          name="teacher_ids"
+          value={JSON.stringify(teacherIds)}
+        />
+      )}
+      {teachers && teachers.state !== 'ok' && (
+        <p role="alert" className="text-sm">
+          Teacher options are unavailable. Existing assignments are retained;
+          reopen to retry.
+        </p>
+      )}
 
       <div>
         <label
@@ -133,11 +276,14 @@ export function ClassEditForm({
         <select
           id={`${fieldId}-category`}
           name="category_id"
+          disabled={newCategory}
           required
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
           aria-invalid={categoryError ? true : undefined}
-          aria-describedby={categoryError ? `${fieldId}-category-error` : undefined}
+          aria-describedby={
+            categoryError ? `${fieldId}-category-error` : undefined
+          }
           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         >
           <option value="">Select a category</option>

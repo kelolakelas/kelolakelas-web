@@ -50,6 +50,7 @@ import {
   updateClassPublicationSchema,
   updateClassSchema,
   type ClassEntity,
+  type ClassSchedule,
   type CreateScheduleInput,
 } from '../_lib/schema';
 
@@ -546,11 +547,43 @@ export async function updateClassPublication(
  */
 export async function updateClass(
   _prevState: ActionResponse<ClassEntity>,
-  formData: FormData
+  formData: FormData,
 ): Promise<ActionResponse<ClassEntity>> {
+  const newCategory = formData.get('new_category') === 'true';
+  let category: { name: string; description?: string } | undefined;
+  if (newCategory) {
+    const parsed = createCategorySchema.safeParse({
+      name: formData.get('category_name'),
+      description: formData.get('category_description') || undefined,
+    });
+    if (!parsed.success)
+      return {
+        success: false,
+        message: 'Check the new category fields.',
+        errors: { category_id: [parsed.error.issues[0].message] },
+      };
+    category = parsed.data;
+  }
+  let teacherIds: unknown;
+  if (formData.has('teacher_ids')) {
+    try {
+      teacherIds = JSON.parse(String(formData.get('teacher_ids')));
+    } catch {
+      return { success: false, message: 'Invalid teacher assignments.' };
+    }
+  }
   const validation = updateClassSchema.safeParse({
+    ...(formData.has('is_published')
+      ? { is_published: formData.get('is_published') === 'true' }
+      : {}),
+    ...(formData.has('enrollment_status')
+      ? { enrollment_status: formData.get('enrollment_status') }
+      : {}),
+    ...(teacherIds !== undefined ? { teacher_ids: teacherIds } : {}),
     class_id: formData.get('class_id')?.toString() || '',
-    category_id: formData.get('category_id')?.toString() || '',
+    category_id: newCategory
+      ? 'draft-category'
+      : formData.get('category_id')?.toString() || '',
     name: formData.get('name')?.toString() || '',
     // The price field keeps the tenant's raw typing so `Rp 150.000` is
     // normalised by the schema instead of being coerced here and lost.
@@ -571,7 +604,10 @@ export async function updateClass(
     };
   }
 
-  const { class_id: classId, ...payload } = validation.data;
+  const { class_id: classId, category_id, ...details } = validation.data;
+  const payload = category
+    ? { ...details, category }
+    : { ...details, category_id };
 
   try {
     const baseUrl = getGatewayBaseUrl();
@@ -583,7 +619,7 @@ export async function updateClass(
         headers,
         body: JSON.stringify(payload),
         cache: 'no-store',
-      }
+      },
     );
 
     const result = await response.json().catch(() => ({}));
@@ -593,7 +629,7 @@ export async function updateClass(
         success: false,
         message: classUpdateErrorMessage(
           response.status,
-          typeof result.message === 'string' ? result.message : undefined
+          typeof result.message === 'string' ? result.message : undefined,
         ),
       };
     }
@@ -690,6 +726,143 @@ export async function createClassConfiguration(
       message:
         'Class setup could not be confirmed. Retry the same request to check its result.',
       retrySameRequest: true,
+    };
+  }
+}
+
+/** Re-read every page after an editor operation; an unavailable read is never an empty-success. */
+export async function readClassConfiguration(
+  classId: string,
+): Promise<
+  ActionResponse<{
+    class: ClassEntity;
+    schedules: ClassSchedule[];
+    categories: import('../_lib/schema').Category[];
+  }>
+> {
+  if (!categoryIdSchema.safeParse(classId).success)
+    return { success: false, message: 'Invalid class.' };
+  try {
+    const headers = await getAuthHeaders();
+    const read = async <T>(resource: string) => {
+      const items: T[] = [];
+      for (let page = 1; page <= 1000; page++) {
+        const response = await fetch(
+          `${getGatewayBaseUrl()}/api/v1/${resource}?page=${page}&page_size=100`,
+          { headers, cache: 'no-store' },
+        );
+        const result = await response.json();
+        if (
+          !response.ok ||
+          result.status !== 'success' ||
+          (!Array.isArray(result.data) && !Array.isArray(result.data?.items))
+        )
+          throw new Error('read failed');
+        const normalized = normalizeListEnvelope<T>(result.data);
+        items.push(...normalized.items);
+        if (page >= normalized.pagination.total_pages) return items;
+        if (normalized.items.length === 0) throw new Error('incomplete read');
+      }
+      throw new Error('incomplete read');
+    };
+    const [classes, schedules, categories] = await Promise.all([
+      read<ClassEntity>('classes'),
+      read<ClassSchedule>('schedules'),
+      read<import('../_lib/schema').Category>('categories'),
+    ]);
+    const record = classes.find((item) => item.id === classId);
+    if (!record)
+      return {
+        success: false,
+        message: 'Class is no longer available. Refresh the class list.',
+      };
+    return {
+      success: true,
+      message: 'Saved configuration reloaded.',
+      data: {
+        class: record,
+        schedules: schedules.filter((item) => item.class_id === classId),
+        categories,
+      },
+    };
+  } catch {
+    return {
+      success: false,
+      message:
+        'The saved configuration could not be reloaded. Close and reopen to check it before another change.',
+    };
+  }
+}
+
+export async function changeClassSchedule(
+  scheduleId: string,
+  input: import('../_lib/schema').ScheduleItemInput,
+  effectiveDate: string,
+): Promise<ActionResponse> {
+  const validation = createScheduleSchema.safeParse({
+    class_id: scheduleId,
+    schedules: [input],
+  });
+  if (
+    !categoryIdSchema.safeParse(scheduleId).success ||
+    !validation.success ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) ||
+    !Number.isFinite(Date.parse(`${effectiveDate}T00:00:00Z`))
+  )
+    return {
+      success: false,
+      message: 'Check the schedule fields and effective date.',
+    };
+  const slot = validation.data.schedules[0];
+  return mutateEditorSchedule('PUT', '/api/v1/schedules/permanent', {
+    old_schedule_id: scheduleId,
+    new_day_of_week: slot.day_of_week,
+    new_start_time: slot.start_time,
+    new_end_time: slot.end_time,
+    new_capacity: slot.capacity,
+    new_location: slot.location ?? '',
+    new_tutor_id: slot.tutor_id ?? '00000000-0000-0000-0000-000000000000',
+    effective_date: `${effectiveDate}T00:00:00Z`,
+  });
+}
+export async function deleteClassSchedule(
+  scheduleId: string,
+): Promise<ActionResponse> {
+  if (!categoryIdSchema.safeParse(scheduleId).success)
+    return { success: false, message: 'Invalid schedule.' };
+  return mutateEditorSchedule('DELETE', `/api/v1/schedules/${scheduleId}`);
+}
+async function mutateEditorSchedule(
+  method: string,
+  path: string,
+  payload?: unknown,
+): Promise<ActionResponse> {
+  try {
+    const response = await fetch(`${getGatewayBaseUrl()}${path}`, {
+      method,
+      headers: await getAuthHeaders(),
+      cache: 'no-store',
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.status !== 'success')
+      return {
+        success: false,
+        message:
+          response.status === 403
+            ? 'You do not have permission for this schedule operation.'
+            : typeof result?.message === 'string'
+              ? result.message
+              : 'The operation could not be confirmed. Reload the saved configuration before trying again.',
+      };
+    revalidatePath('/dashboard/tenant/classes');
+    revalidatePath('/dashboard/tenant/sessions');
+    return { success: true, message: 'Schedule operation saved.' };
+  } catch {
+    return {
+      success: false,
+      message:
+        'The operation could not be confirmed. Reload the saved configuration before trying again.',
     };
   }
 }

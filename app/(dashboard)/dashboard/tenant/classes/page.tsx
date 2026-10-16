@@ -20,7 +20,9 @@ export const metadata: Metadata = {
  * Async content component wrapped in Suspense boundary for Partial Prerendering (PPR).
  */
 async function ClassesContent() {
-  const { canUpdate, canDelete } = categoryWritePermissions(await readTenantNav());
+  const nav = await readTenantNav();
+  const { canUpdate, canDelete } = categoryWritePermissions(nav);
+  const permissions = nav.state === 'ok' ? nav.membership?.permissions ?? [] : [];
   const [categories, classes, schedules] = await Promise.all([
     getCategories(),
     getClasses(),
@@ -49,6 +51,7 @@ async function ClassesContent() {
         categories={categories}
         classes={classes}
         schedules={schedules}
+        classPermissions={permissions}
         canUpdateCategory={canUpdate}
         canDeleteCategory={canDelete}
       />
