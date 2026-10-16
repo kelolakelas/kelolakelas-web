@@ -832,6 +832,54 @@ export async function deleteClassSchedule(
     return { success: false, message: 'Invalid schedule.' };
   return mutateEditorSchedule('DELETE', `/api/v1/schedules/${scheduleId}`);
 }
+
+/** Existing academic policy authorizes and soft-deletes the tenant-owned class. */
+export async function deleteClass(classId: string): Promise<ActionResponse> {
+  if (!categoryIdSchema.safeParse(classId).success)
+    return { success: false, message: 'Invalid class.' };
+  try {
+    const headers = new Headers(await getAuthHeaders());
+    if (!headers.has('Authorization'))
+      return {
+        success: false,
+        message: 'Your session has expired. Sign in again.',
+      };
+    const response = await fetch(
+      `${getGatewayBaseUrl()}/api/v1/classes/${classId}`,
+      {
+        method: 'DELETE',
+        headers,
+        cache: 'no-store',
+      },
+    );
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.status !== 'success') {
+      const messages: Record<number, string> = {
+        401: 'Your session has expired. Sign in again.',
+        403: 'You do not have permission to delete this class.',
+        404: 'This class is no longer available. Close this dialog and reload the list.',
+        409: 'This class has active enrollments and cannot be deleted. The class remains available.',
+        503: 'Permission could not be verified. Try again later.',
+      };
+      return {
+        success: false,
+        message:
+          messages[response.status] ??
+          'The deletion could not be confirmed. Check the class list before trying again.',
+      };
+    }
+    revalidatePath('/dashboard/tenant/classes');
+    revalidatePath('/dashboard/tenant/sessions');
+    revalidatePath('/kelas');
+    return { success: true, message: 'Class deleted.' };
+  } catch {
+    return {
+      success: false,
+      message:
+        'The deletion could not be confirmed. Check the class list before trying again.',
+    };
+  }
+}
 async function mutateEditorSchedule(
   method: string,
   path: string,

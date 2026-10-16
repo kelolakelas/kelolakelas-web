@@ -210,3 +210,11 @@ describe('ClassListTable classes tab', () => {
     expect(html).toContain('Edit');
   });
 });
+
+it('shows class deletion in both layouts only with the explicit class:delete permission', () => {
+  const allowed = renderTable({ classPermissions: ['class:delete'] });
+  expect(allowed.match(/aria-label="Delete class Matematika Dasar"/g)).toHaveLength(2);
+  expect(renderTable({ classPermissions: ['class:read', 'class:update'] })).not.toContain('aria-label="Delete class');
+  expect(renderTable({ classPermissions: [] })).not.toContain('aria-label="Delete class');
+  expect(renderTable()).not.toContain('aria-label="Delete class');
+});
