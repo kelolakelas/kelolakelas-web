@@ -1,50 +1,112 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { ChatInbox } from './ChatInbox';
 import type { ChatConversation, ChatMessage } from '@/lib/chat';
 
 vi.mock('@/lib/chat-actions', () => ({
-  listChatConversations: vi.fn(), listChatMessages: vi.fn(), markChatRead: vi.fn(),
-  sendChatMessage: vi.fn(), issueChatTicket: vi.fn(), createStaffChat: vi.fn(),
+  listChatConversations: vi.fn(),
+  listChatMessages: vi.fn(),
+  markChatRead: vi.fn(),
+  sendChatMessage: vi.fn(),
+  issueChatTicket: vi.fn(),
+  createStaffChat: vi.fn(),
   getChatConversation: vi.fn(),
 }));
-import { getChatConversation, issueChatTicket, listChatConversations, listChatMessages, markChatRead, sendChatMessage } from '@/lib/chat-actions';
+import {
+  getChatConversation,
+  issueChatTicket,
+  listChatConversations,
+  listChatMessages,
+  markChatRead,
+  sendChatMessage,
+} from '@/lib/chat-actions';
 
-const room: ChatConversation = { id: 'ab321b1a-63b2-4d3a-8b56-acc739170972', kind: 'staff', context: {}, last_message: null, last_message_at: null, unread_count: 0 };
+const room: ChatConversation = {
+  id: 'ab321b1a-63b2-4d3a-8b56-acc739170972',
+  kind: 'staff',
+  context: {},
+  last_message: null,
+  last_message_at: null,
+  unread_count: 0,
+};
 beforeEach(() => {
-  vi.mocked(listChatConversations).mockResolvedValue({ data: [room], error: null });
+  vi.mocked(listChatConversations).mockResolvedValue({
+    data: [room],
+    error: null,
+  });
   vi.mocked(listChatMessages).mockResolvedValue({ data: [], error: null });
   vi.mocked(markChatRead).mockResolvedValue({ data: null, error: null });
-  vi.mocked(sendChatMessage).mockResolvedValue({ data: null, error: 'Layanan chat sedang tidak tersedia.' });
-  vi.mocked(getChatConversation).mockResolvedValue({ data: null, error: 'Percakapan tidak ditemukan.' });
+  vi.mocked(sendChatMessage).mockResolvedValue({
+    data: null,
+    error: 'Layanan chat sedang tidak tersedia.',
+  });
+  vi.mocked(getChatConversation).mockResolvedValue({
+    data: null,
+    error: 'Percakapan tidak ditemukan.',
+  });
 });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('chat fallback', () => {
-  it('renders disconnected status and loads messages without a socket', async () => {
-    render(<ChatInbox initial={[room]} userId="me" tenant={false} />);
-    expect(screen.getByRole('status').textContent).toContain('Terputus');
-    fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
-    await waitFor(() => expect(listChatConversations).toHaveBeenCalled());
-    fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), { target: { value: '<b>text</b>\nsecond line' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Kirim' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Gagal dikirim/ })).toBeTruthy());
-    expect(screen.getByText(/<b>text<\/b>/)).toBeTruthy();
-    expect(sendChatMessage).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: /Gagal dikirim/ }));
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(sendChatMessage).mock.calls[0][2]).toBe(vi.mocked(sendChatMessage).mock.calls[1][2]);
-  });
+  it.each([false, true])(
+    'renders fallback send/retry for tenant=%s',
+    async (tenant) => {
+      render(<ChatInbox initial={[room]} userId="me" tenant={tenant} />);
+      expect(
+        screen.getByRole('status', { name: 'Koneksi chat' }).textContent
+      ).toContain('Terputus');
+      fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
+      await waitFor(() => expect(listChatConversations).toHaveBeenCalled());
+      fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), {
+        target: { value: '<b>text</b>\nsecond line' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Kirim' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Gagal dikirim/ })
+        ).toBeTruthy()
+      );
+      expect(screen.getByText(/<b>text<\/b>/)).toBeTruthy();
+      expect(sendChatMessage).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: /Gagal dikirim/ }));
+      await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(2));
+      expect(vi.mocked(sendChatMessage).mock.calls[0][2]).toBe(
+        vi.mocked(sendChatMessage).mock.calls[1][2]
+      );
+    }
+  );
 
   it('clears a failed send alert after retry succeeds, even without a socket', async () => {
     render(<ChatInbox initial={[room]} userId="me" tenant={false} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), { target: { value: 'Retry me' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), {
+      target: { value: 'Retry me' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Kirim' }));
     await screen.findByRole('alert');
     const clientId = vi.mocked(sendChatMessage).mock.calls[0][2];
-    const confirmed: ChatMessage = { id: 'server', conversation_id: room.id, sender_user_id: 'me', sender_kind: 'parent', body: 'Retry me', client_message_id: clientId, created_at: '2026-09-29T02:20:40+07:00' };
-    vi.mocked(sendChatMessage).mockResolvedValue({ data: confirmed, error: null });
+    const confirmed: ChatMessage = {
+      id: 'server',
+      conversation_id: room.id,
+      sender_user_id: 'me',
+      sender_kind: 'parent',
+      body: 'Retry me',
+      client_message_id: clientId,
+      created_at: '2026-09-29T02:20:40+07:00',
+    };
+    vi.mocked(sendChatMessage).mockResolvedValue({
+      data: confirmed,
+      error: null,
+    });
     fireEvent.click(screen.getByRole('button', { name: /Gagal dikirim/ }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(screen.queryByRole('button', { name: /Gagal dikirim/ })).toBeNull();
@@ -59,20 +121,29 @@ describe('chat fallback', () => {
       onopen: (() => void) | null = null;
       onclose: (() => void) | null = null;
       close() {}
-      constructor() { socketState.opened = () => this.onopen?.(); }
+      constructor() {
+        socketState.opened = () => this.onopen?.();
+      }
     }
     process.env.NEXT_PUBLIC_CHAT_WS_URL = 'ws://localhost:8000';
     vi.stubGlobal('WebSocket', TestSocket);
-    vi.mocked(issueChatTicket).mockResolvedValue({ data: { ticket: 'ticket', expires_at: '' }, error: null });
+    vi.mocked(issueChatTicket).mockResolvedValue({
+      data: { ticket: 'ticket', expires_at: '' },
+      error: null,
+    });
     try {
       render(<ChatInbox initial={[room]} userId="me" tenant={false} />);
       await waitFor(() => expect(socketState.opened).toBeDefined());
-      fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), { target: { value: 'Failure' } });
+      fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), {
+        target: { value: 'Failure' },
+      });
       fireEvent.click(screen.getByRole('button', { name: 'Kirim' }));
       await screen.findByRole('alert');
       socketState.opened?.();
       await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
-      expect(screen.getByRole('status').textContent).toBe('Terhubung');
+      expect(
+        screen.getByRole('status', { name: 'Koneksi chat' }).textContent
+      ).toBe('Terhubung');
     } finally {
       cleanup();
       vi.stubGlobal('WebSocket', originalWebSocket);
@@ -83,12 +154,21 @@ describe('chat fallback', () => {
 
   it('clears a stale alert after a successful manual refresh but retains a partial refresh failure', async () => {
     render(<ChatInbox initial={[room]} userId="me" tenant={false} />);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), { target: { value: 'Failure' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pesan' }), {
+      target: { value: 'Failure' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Kirim' }));
     await screen.findByRole('alert');
-    vi.mocked(listChatMessages).mockResolvedValueOnce({ data: null, error: 'Pesan gagal dimuat.' });
+    vi.mocked(listChatMessages).mockResolvedValueOnce({
+      data: null,
+      error: 'Pesan gagal dimuat.',
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Pesan gagal dimuat.'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Pesan gagal dimuat.'
+      )
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
@@ -105,36 +185,77 @@ describe('chat deep-link (KEL-124)', () => {
   };
 
   it('selects the linked conversation instead of the first row', async () => {
-    vi.mocked(listChatConversations).mockResolvedValue({ data: [room, requested], error: null });
-    render(<ChatInbox initial={[room, requested]} userId="me" tenant={false} initialConversationId={requested.id} />);
+    vi.mocked(listChatConversations).mockResolvedValue({
+      data: [room, requested],
+      error: null,
+    });
+    render(
+      <ChatInbox
+        initial={[room, requested]}
+        userId="me"
+        tenant={false}
+        initialConversationId={requested.id}
+      />
+    );
 
     // The heading names the active room: the entry button's target, not the
     // default first row.
-    expect(screen.getByRole('heading', { name: 'Matematika Private' })).toBeTruthy();
-    await waitFor(() => expect(listChatMessages).toHaveBeenCalledWith(requested.id));
+    expect(
+      screen.getByRole('heading', { name: 'Matematika Private' })
+    ).toBeTruthy();
+    await waitFor(() =>
+      expect(listChatMessages).toHaveBeenCalledWith(requested.id)
+    );
     expect(getChatConversation).not.toHaveBeenCalled();
   });
 
   it('fetches a just-created conversation missing from the first list read', async () => {
-    vi.mocked(listChatConversations).mockResolvedValue({ data: [room], error: null });
-    vi.mocked(getChatConversation).mockResolvedValue({ data: requested, error: null });
-    render(<ChatInbox initial={[room]} userId="me" tenant={false} initialConversationId={requested.id} />);
+    vi.mocked(listChatConversations).mockResolvedValue({
+      data: [room],
+      error: null,
+    });
+    vi.mocked(getChatConversation).mockResolvedValue({
+      data: requested,
+      error: null,
+    });
+    render(
+      <ChatInbox
+        initial={[room]}
+        userId="me"
+        tenant={false}
+        initialConversationId={requested.id}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Muat ulang' }));
 
-    await waitFor(() => expect(getChatConversation).toHaveBeenCalledWith(requested.id));
+    await waitFor(() =>
+      expect(getChatConversation).toHaveBeenCalledWith(requested.id)
+    );
     await screen.findByRole('heading', { name: 'Matematika Private' });
   });
 
   it('falls back to no selection when the linked conversation cannot be read', async () => {
-    vi.mocked(listChatConversations).mockResolvedValue({ data: [room], error: null });
-    render(<ChatInbox initial={[room]} userId="me" tenant={false} initialConversationId={requested.id} />);
+    vi.mocked(listChatConversations).mockResolvedValue({
+      data: [room],
+      error: null,
+    });
+    render(
+      <ChatInbox
+        initial={[room]}
+        userId="me"
+        tenant={false}
+        initialConversationId={requested.id}
+      />
+    );
 
     // The missing room has no selectable row, so the detail pane keeps the
     // neutral prompt instead of rendering a room the member cannot read.
     // (In the real flow the entry button only navigates on success, so this
     // covers stale links, not denials — those surface inline on the button.)
-    expect(screen.getByRole('heading', { name: 'Pilih percakapan' })).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: 'Pilih percakapan' })
+    ).toBeTruthy();
   });
 });
 
@@ -168,20 +289,32 @@ describe('system notifications (KEL-157)', () => {
       client_message_id: 'system-key-1',
       created_at: '2026-09-29T02:20:40+07:00',
     };
-    vi.mocked(listChatMessages).mockResolvedValue({ data: [systemMessage], error: null });
+    vi.mocked(listChatMessages).mockResolvedValue({
+      data: [systemMessage],
+      error: null,
+    });
     render(<ChatInbox initial={[notification]} userId="me" tenant={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Notifikasi sistem/ }));
-    await waitFor(() => expect(markChatRead).toHaveBeenCalledWith(notificationId));
+    await waitFor(() =>
+      expect(markChatRead).toHaveBeenCalledWith(notificationId)
+    );
     await screen.findByText('Jadwal kelas berubah menjadi jam 10.');
     expect(screen.getByText('Sistem')).toBeTruthy();
-    await waitFor(() => expect(screen.queryByText('2 belum dibaca')).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByText('2 belum dibaca')).toBeNull()
+    );
     expect(screen.queryByRole('textbox', { name: 'Pesan' })).toBeNull();
     expect(screen.getByText(/satu arah/)).toBeTruthy();
   });
 
   it('renders unknown conversation kinds and senders without throwing', async () => {
-    const alien = { ...room, id: 'e6321b1a-63b2-4d3a-8b56-acc739170975', kind: 'reminder', context: {} };
+    const alien = {
+      ...room,
+      id: 'e6321b1a-63b2-4d3a-8b56-acc739170975',
+      kind: 'reminder',
+      context: {},
+    };
     const alienMessage: ChatMessage = {
       id: 'f7321b1a-63b2-4d3a-8b56-acc739170976',
       conversation_id: alien.id,
@@ -191,16 +324,89 @@ describe('system notifications (KEL-157)', () => {
       client_message_id: 'alien-key',
       created_at: '2026-09-29T02:20:40+07:00',
     };
-    vi.mocked(listChatMessages).mockResolvedValue({ data: [alienMessage], error: null });
+    vi.mocked(listChatMessages).mockResolvedValue({
+      data: [alienMessage],
+      error: null,
+    });
     render(<ChatInbox initial={[alien]} userId="me" tenant={false} />);
 
     // List header ("Percakapan"), row button, and detail heading all share
     // the fallback text when the kind is unknown.
     expect(screen.getAllByText('Percakapan')).toHaveLength(3);
-    expect(screen.getAllByRole('heading', { name: 'Percakapan' })).toHaveLength(2);
+    expect(screen.getAllByRole('heading', { name: 'Percakapan' })).toHaveLength(
+      2
+    );
     fireEvent.click(screen.getByRole('button', { name: /Percakapan/ }));
     await screen.findByText('Pesan asing');
     expect(screen.getByText('Pengirim tidak dikenal')).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Pesan' })).toBeTruthy();
+  });
+});
+
+describe('inbox loading, empty state and pagination (KEL-202)', () => {
+  it('announces loading until the selected room resolves, then shows the empty prompt', async () => {
+    let finish!: (value: { data: ChatMessage[]; error: null }) => void;
+    vi.mocked(listChatMessages).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    render(<ChatInbox initial={[room]} userId="me" tenant />);
+    expect(screen.getByText('Memuat pesan…')).toBeTruthy();
+    expect(
+      screen.getByRole('list', { name: 'Pesan' }).getAttribute('aria-busy')
+    ).toBe('true');
+    finish({ data: [], error: null });
+    await screen.findByText('Belum ada pesan. Mulai percakapan di bawah.');
+    expect(
+      screen.getByRole('list', { name: 'Pesan' }).getAttribute('tabindex')
+    ).toBe('0');
+    expect(screen.getByRole('textbox', { name: 'Pesan' })).toBeTruthy();
+  });
+
+  it('keeps the empty inbox usable without a composer', () => {
+    render(<ChatInbox initial={[]} userId="me" tenant={false} />);
+    expect(screen.getByText(/Belum ada percakapan/)).toBeTruthy();
+    expect(
+      screen.getByText('Pilih percakapan untuk membaca pesan.')
+    ).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Muat ulang' })).toBeTruthy();
+  });
+
+  it('loads older messages with the oldest cursor and preserves long text', async () => {
+    const rows: ChatMessage[] = Array.from({ length: 100 }, (_, index) => ({
+      id: `message-${index}`,
+      conversation_id: room.id,
+      sender_user_id: 'other',
+      sender_kind: 'parent',
+      body: index === 0 ? 'x'.repeat(2000) : `Message ${index}`,
+      client_message_id: `client-${index}`,
+      created_at: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+    }));
+    vi.mocked(listChatMessages)
+      .mockResolvedValueOnce({ data: rows, error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            ...rows[0],
+            id: 'older',
+            client_message_id: 'older',
+            body: 'Older message',
+            created_at: '2025-12-31T23:59:00Z',
+          },
+        ],
+        error: null,
+      });
+    render(<ChatInbox initial={[room]} userId="me" tenant />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Muat pesan lama' })
+    );
+    await screen.findByText('Older message');
+    expect(listChatMessages).toHaveBeenLastCalledWith(room.id, 'message-0');
+    expect(screen.getByText('x'.repeat(2000))).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Muat pesan lama' })
+    ).toBeNull();
   });
 });
