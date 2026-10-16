@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createClass, type ActionResponse } from '../_actions/classActions';
-import type { Category, ClassEntity } from '../_lib/schema';
+import { createClassSchema, type Category, type ClassEntity } from '../_lib/schema';
 
 function SubmitClassButton() {
   const { pending } = useFormStatus();
@@ -42,6 +42,7 @@ function SubmitClassButton() {
 
 interface ClassFormProps {
   selectedCategory: Category;
+  draft?: boolean;
   onClassCreated: (createdClass: ClassEntity) => void;
   onBack: () => void;
 }
@@ -51,7 +52,8 @@ const initialActionState: ActionResponse<ClassEntity> = {
   message: '',
 };
 
-export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFormProps) {
+export function ClassForm({ selectedCategory, onClassCreated, onBack, draft = false }: ClassFormProps) {
+  const [draftError, setDraftError] = useState('');
   const [classType, setClassType] = useState<'private' | 'group'>('group');
   const [state, formAction] = useActionState(createClass, initialActionState);
 
@@ -62,7 +64,37 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
   }, [state, onClassCreated]);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form
+      action={formAction}
+      onSubmit={
+        draft
+          ? (event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const parsed = createClassSchema.safeParse({
+                category_id: selectedCategory.id,
+                name: form.get('name'),
+                type: classType,
+                price: form.get('price'),
+                description: form.get('description') || undefined,
+              });
+              if (parsed.success) {
+                setDraftError('');
+                onClassCreated({
+                  ...parsed.data,
+                  id: 'draft-class',
+                  tenant_id: '',
+                  created_at: '',
+                });
+              } else
+                setDraftError(
+                  parsed.error.issues[0]?.message || 'Check the class fields.',
+                );
+            }
+          : undefined
+      }
+      className="space-y-5"
+    >
       {/* Category Indicator Banner */}
       <div className="flex items-center justify-between rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-4 py-3 text-xs">
         <div>
@@ -82,7 +114,12 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
 
       <input type="hidden" name="category_id" value={selectedCategory.id} />
 
-      {/* Global Error Notice */}
+      {draftError && (
+        <p role="alert" className="text-sm text-red-700">
+          {draftError}
+        </p>
+      )}
+        {/* Global Error Notice */}
       {!state.success && state.message && (
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/50 p-3 text-xs text-red-700 dark:text-red-300">
           {state.message}
@@ -211,7 +248,16 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack }: ClassFor
         >
           ← Back
         </button>
-        <SubmitClassButton />
+        {draft ? (
+          <button
+            type="submit"
+            className="min-h-[44px] rounded-xl bg-blue-600 px-4 py-2 text-white"
+          >
+            Next: Review &amp; Schedules →
+          </button>
+        ) : (
+          <SubmitClassButton />
+        )}
       </div>
     </form>
   );

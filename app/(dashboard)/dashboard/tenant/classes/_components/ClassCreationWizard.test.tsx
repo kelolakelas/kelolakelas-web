@@ -46,7 +46,7 @@ describe('PrivateClassScheduleNotice (private wizard step)', () => {
     expect(html).toContain('Fisika Privat');
     expect(html).toContain('private');
     expect(html).toContain('No timetable needed yet.');
-    expect(html).toContain('Finish Class Setup');
+    expect(html).toContain('Save Complete Class');
     // The slot form of the group path must not be part of this step.
     expect(html).not.toContain('Weekly Recurring Timetable');
     expect(html).not.toContain('Add Slot');
