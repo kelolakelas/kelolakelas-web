@@ -82,6 +82,10 @@ function WizardDraft({
   const [message, setMessage] = useState('');
   const dialog = useRef<HTMLDivElement>(null);
   const busy = useRef(false);
+  const errorAlert = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (message && !pending) errorAlert.current?.focus();
+  }, [message, pending]);
   const attempt = useRef<{ key: string; payload: ClassCreationInput } | null>(
     null,
   );
@@ -155,7 +159,7 @@ function WizardDraft({
       if (!keepOriginal) attempt.current = null;
     } catch {
       setMessage(
-        'Class setup could not be confirmed. Retry the same request to check its result.',
+        'The connection was interrupted. The save result is unknown. Retry the same request to check whether it was saved.',
       );
       setUncertain(true);
     } finally {
@@ -237,14 +241,6 @@ function WizardDraft({
             ),
           )}
         </ol>
-        {message && (
-          <p
-            role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-          >
-            {message}
-          </p>
-        )}
         {uncertain && (
           <div className="space-y-3">
             <p className="text-sm">
@@ -357,6 +353,17 @@ function WizardDraft({
             </div>
           )}
         </fieldset>
+        {message && (
+          <p
+            ref={errorAlert}
+            tabIndex={-1}
+            role="alert"
+            aria-atomic="true"
+            className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+          >
+            {message}
+          </p>
+        )}
         {pending && (
           <p role="status" className="text-sm">
             Saving complete class…

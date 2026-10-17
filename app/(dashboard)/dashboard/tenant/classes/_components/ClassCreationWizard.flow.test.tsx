@@ -205,7 +205,10 @@ describe('local class creation draft', () => {
     fireEvent.click(
       screen.getByRole('button', { name: /Save Complete Class/ }),
     );
-    await screen.findByText('Permission denied.');
+    const alert = await screen.findByText('Permission denied.');
+    await waitFor(() => expect(document.activeElement).toBe(alert));
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(alert.closest('fieldset')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /← Back/ }));
     expect(
       (screen.getByLabelText(/^Class \/ Course Name/) as HTMLInputElement)
@@ -264,4 +267,23 @@ describe('local class creation draft', () => {
     );
     await waitFor(() => expect(selected).toHaveBeenCalledWith(existing));
   });
+});
+
+it('keeps the original draft/key after an interrupted action and rejects duplicate retries while pending', async () => {
+  actions.createClassConfiguration.mockRejectedValueOnce(new Error('network'));
+  open(); category(); await details();
+  fireEvent.click(screen.getByRole('button', {name: /Save Complete Class/}));
+  const alert = await screen.findByRole('alert');
+  await waitFor(() => expect(document.activeElement).toBe(alert));
+  expect(alert.textContent).toContain('connection was interrupted');
+  const original = actions.createClassConfiguration.mock.calls[0];
+  let resolve!: (value: unknown) => void;
+  actions.createClassConfiguration.mockReturnValueOnce(new Promise(r => {resolve = r;}));
+  fireEvent.click(screen.getByRole('button', {name: 'Retry Same Request'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Checking…'}));
+  expect(actions.createClassConfiguration).toHaveBeenCalledTimes(2);
+  expect(actions.createClassConfiguration.mock.calls[1]).toEqual(original);
+  resolve({success: false, message: 'Still unavailable.', retrySameRequest:true});
+  await screen.findByText('Still unavailable.');
+  expect((screen.getByLabelText(/^Class \/ Course Name/, {selector:'input'}) as HTMLInputElement).value).toBe('Draft class');
 });

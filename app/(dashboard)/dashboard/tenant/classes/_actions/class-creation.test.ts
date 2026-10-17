@@ -115,3 +115,38 @@ it('validates categories, assignment and private slots before any network write'
     );
   expect(fetchMock).not.toHaveBeenCalled();
 });
+
+it.each([
+  [400, /Check the category/], [401, /session has expired/],
+  [403, /permissions/], [409, /different request/], [429, /Too many requests/],
+  [500, /server could not confirm/], [502, /could not be reached/],
+  [503, /membership check is unavailable/], [504, /timed out/],
+  [200, /incomplete or unreadable/],
+])('gives actionable safe guidance for %s and propagates the available reference', async (status, message) => {
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({status: 'error', message: 'SQL password=secret stack trace'}), {status, headers: {'X-Request-ID': 'request-123'}}));
+  const result = await createClassConfiguration(payload, 'retry-123');
+  expect(result.success).toBe(false);
+  expect(result.message).toMatch(message);
+  expect(result.message).toContain('Reference: request-123');
+  expect(result.message).not.toMatch(/SQL|password|stack trace/);
+  expect(revalidate).not.toHaveBeenCalled();
+});
+it.each(['__proto__', 'toString'])('does not treat inherited properties as known errors (%s)', async (message) => {
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({message}), {status:400}));
+  expect((await createClassConfiguration(payload, 'retry-123')).message).toMatch(/^Check the category/);
+});
+it('maps known inactive teacher rejection without forwarding arbitrary validation details', async () => {
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({message: 'substitute tutor must be an active member of this tenant'}), {status: 400}));
+  const result = await createClassConfiguration(payload, 'retry-123');
+  expect(result).toMatchObject({success:false, retrySameRequest:false});
+  expect(result.message).toMatch(/Choose an active teacher/);
+});
+it('names locally invalid fields before a request and suppresses invalid reference values', async () => {
+  const result = await createClassConfiguration({...payload, schedules: [{...payload.schedules[0], capacity: 0}]}, 'retry-123');
+  expect(result.message).toContain('schedule times, capacity and teachers');
+  expect(fetchMock).not.toHaveBeenCalled();
+  fetchMock.mockResolvedValue(new Response('<html>upstream trace</html>', {status:503, headers:{'X-Request-ID':'<unsafe>'}}));
+  const failed = await createClassConfiguration(payload, 'retry-123');
+  expect(failed.message).toContain('required service');
+  expect(failed.message).not.toMatch(/unsafe|upstream trace|Reference:/);
+});

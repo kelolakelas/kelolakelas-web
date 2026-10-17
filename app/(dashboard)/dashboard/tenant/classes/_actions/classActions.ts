@@ -1,6 +1,7 @@
 'use server';
 
 import { classCreationSchema, type ClassCreationInput, type ClassCreationResult } from '../_lib/class-creation';
+import { classCreationFailure } from '../_lib/class-creation-errors';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
@@ -662,11 +663,19 @@ export async function createClassConfiguration(
   key: string,
 ): Promise<ActionResponse<ClassCreationResult>> {
   const parsed = classCreationSchema.safeParse(input);
-  if (!parsed.success || !/^[a-zA-Z0-9-]{1,128}$/.test(key))
+  if (!parsed.success)
     return {
       success: false,
-      message: 'Check the category, class, teachers and schedule fields.',
+      message: `Check ${[...new Set(parsed.error.issues.map((issue) => {
+        const field = issue.path[0];
+        return field === 'teacher_ids' ? 'teacher assignments' :
+          field === 'schedules' ? 'schedule times, capacity and teachers' :
+          field === 'class' ? `class ${String(issue.path[1] ?? 'details')}` : 'category selection and details';
+      }))].join('; ')} before saving.`,
+      retrySameRequest: false,
     };
+  if (!/^[a-zA-Z0-9-]{1,128}$/.test(key))
+    return { success: false, message: 'Reopen the class wizard to start a valid save request.', retrySameRequest: false };
   try {
     const auth = await getAuthHeaders();
     if (!(auth as Record<string, string>).Authorization)
@@ -702,20 +711,7 @@ export async function createClassConfiguration(
       typeof result.data?.class?.id !== 'string' ||
       typeof result.data?.class?.name !== 'string'
     ) {
-      const messages: Record<number, string> = {
-        401: 'Your session has expired. Please sign in again.',
-        403: 'You do not have permission to save this class configuration.',
-        409: 'This retry key belongs to a different request. Reopen the class list to check the saved class.',
-      };
-      return {
-        success: false,
-        message:
-          messages[response.status] ||
-          (response.status === 400 && typeof result?.message === 'string' ? result.message : null) ||
-          'Class setup could not be confirmed. Retry the same request to check its result.',
-        retrySameRequest:
-          response.status >= 500 || response.ok || response.status === 409,
-      };
+      return classCreationFailure(response.status, result?.message, response.headers.get('X-Request-ID'));
     }
     revalidatePath('/dashboard/tenant/classes');
     revalidatePath('/dashboard/tenant/sessions');
@@ -728,7 +724,7 @@ export async function createClassConfiguration(
     return {
       success: false,
       message:
-        'Class setup could not be confirmed. Retry the same request to check its result.',
+        'The connection was interrupted or the request timed out. The save result is unknown. Retry the same request to check whether it was saved.',
       retrySameRequest: true,
     };
   }
