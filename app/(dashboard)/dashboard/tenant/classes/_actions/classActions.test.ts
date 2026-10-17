@@ -46,6 +46,27 @@ it('loads all member pages, filters active Teacher and uses membership rather th
   expect(fetchMock.mock.calls[1][0]).toContain('page=2');
 });
 
+it('includes system Creator once across pages and excludes inactive and custom Creator roles', async () => {
+  const creator = { ...teacherMember, id: CLASS_ID, first_name: 'Owner', role: { id: 'creator-role', name: 'Creator', is_system_role: true } };
+  fetchMock = vi.fn()
+    .mockResolvedValueOnce(success({ items: [creator, { ...creator, id: 'inactive-owner', status: 'inactive' }, { ...creator, id: 'custom-owner', role: { ...creator.role, is_system_role: false } }], pagination: { page: 1, total_pages: 2 } }))
+    .mockResolvedValueOnce(success({ items: [creator, teacherMember], pagination: { page: 2, total_pages: 2 } }));
+  vi.stubGlobal('fetch', fetchMock);
+  expect(await getScheduleTeachers()).toEqual({ state: 'ok', teachers: [
+    { id: CLASS_ID, name: 'Owner One' }, { id: TEACHER_ID, name: 'Teacher One' },
+  ] });
+  expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer session-token' });
+  expect(fetchMock.mock.calls[1][0]).toContain('page=2');
+});
+
+it('discards loaded Creator choices if a later member page fails', async () => {
+  fetchMock = vi.fn()
+    .mockResolvedValueOnce(success({ items: [{ ...teacherMember, role: { id: 'creator', name: 'Creator', is_system_role: true } }], pagination: { page: 1, total_pages: 2 } }))
+    .mockResolvedValueOnce(failure(500));
+  vi.stubGlobal('fetch', fetchMock);
+  expect(await getScheduleTeachers()).toEqual({ state: 'error' });
+});
+
 it.each([403, 500])('reports member read failure %s', async (status) => {
   installFetch(failure(status));
   expect(await getScheduleTeachers()).toEqual({ state: status === 403 ? 'forbidden' : 'error' });
