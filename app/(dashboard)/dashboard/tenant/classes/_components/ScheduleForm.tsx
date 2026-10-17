@@ -252,6 +252,7 @@ export function ScheduleForm({
         end_time: slot.end_time,
         capacity: String(slot.capacity),
         location: slot.location ?? '',
+        ...(tutorId ? { tutor_id: tutorId } : {}),
       })),
     ]);
   };
@@ -260,6 +261,7 @@ export function ScheduleForm({
     setSchedules((prev) => [
       ...prev,
       {
+        ...(tutorId ? { tutor_id: tutorId } : {}),
         day_of_week: 3, // default Wednesday
         start_time: '14:00',
         end_time: '15:30',
@@ -279,6 +281,7 @@ export function ScheduleForm({
     field: K,
     value: ScheduleSlotDraft[K],
   ) => {
+    if (field === 'tutor_id' && value !== tutorId) setTutorId('');
     setSchedules((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
@@ -325,12 +328,20 @@ export function ScheduleForm({
         onDraftSubmit
           ? (event) => {
               event.preventDefault();
+              if (schedules.some((slot) =>
+                !slot.tutor_id || teacherRead?.state !== 'ok' ||
+                !teacherRead.teachers.some((teacher) => teacher.id === slot.tutor_id)
+              )) {
+                setDraftError('Select an active Teacher for every slot.');
+                setDraftErrors(Object.fromEntries(schedules.flatMap((slot, index) =>
+                  !slot.tutor_id || teacherRead?.state !== 'ok' || !teacherRead.teachers.some((teacher) => teacher.id === slot.tutor_id)
+                    ? [[`schedules.${index}.tutor_id`, 'Select an active Teacher for this slot.']] : []
+                )));
+                return;
+              }
               const parsed = createScheduleSchema.safeParse({
                 class_id: createdClass.id,
-                schedules: schedules.map((slot) => ({
-                  ...slot,
-                  ...(tutorId ? { tutor_id: tutorId } : {}),
-                })),
+                schedules,
               });
               if (parsed.success) {
                 setDraftError('');
@@ -378,7 +389,6 @@ export function ScheduleForm({
           schedules.map((slot) => ({
             ...slot,
             capacity: Number(slot.capacity),
-            ...(tutorId ? { tutor_id: tutorId } : {}),
           })),
         )}
       />
@@ -394,7 +404,11 @@ export function ScheduleForm({
           id={`${formId}-teacher`}
           aria-describedby={`${formId}-teacher-help`}
           value={tutorId}
-          onChange={(event) => setTutorId(event.target.value)}
+          onChange={(event) => {
+            const value = event.target.value;
+            setTutorId(value);
+            setSchedules((previous) => previous.map((slot) => ({...slot, tutor_id: value || undefined})));
+          }}
           disabled={
             teacherRead?.state !== 'ok' || teacherRead.teachers.length === 0
           }
@@ -422,7 +436,7 @@ export function ScheduleForm({
                   ? 'No active Teacher members. Add or activate a Teacher in Members first.'
                   : 'The selected Teacher applies to every manual and generated slot.'}
         </p>
-        {!tutorId && (
+        {!onDraftSubmit && schedules.some((slot) => !slot.tutor_id) && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
             These schedules will be unassigned and will not appear in any
             Teacher’s Sesi Saya.
@@ -758,6 +772,28 @@ export function ScheduleForm({
                     ✕
                   </button>
                 )}
+              </div>
+
+              <div className={scheduleFieldClass}>
+                <label htmlFor={`${formId}-slot-${idx}-teacher`} className={scheduleLabelClass}>
+                  Teacher for slot {idx + 1}
+                </label>
+                <select
+                  id={`${formId}-slot-${idx}-teacher`}
+                  value={slot.tutor_id ?? ''}
+                  required={Boolean(onDraftSubmit)}
+                  disabled={teacherRead?.state !== 'ok'}
+                  aria-invalid={Boolean(slotError(idx, 'tutor_id'))}
+                  aria-describedby={slotError(idx, 'tutor_id') ? `${formId}-slot-${idx}-teacher-error` : undefined}
+                  onChange={(event) => updateScheduleSlot(idx, 'tutor_id', event.target.value || undefined)}
+                  className={scheduleControlClass}
+                >
+                  <option value="">Select an active Teacher</option>
+                  {teacherRead?.state === 'ok' && teacherRead.teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
+                  ))}
+                </select>
+                {slotError(idx, 'tutor_id') && <p id={`${formId}-slot-${idx}-teacher-error`} className="text-xs text-red-600 dark:text-red-400">{slotError(idx, 'tutor_id')}</p>}
               </div>
 
               <div className={scheduleTimeGridClass}>

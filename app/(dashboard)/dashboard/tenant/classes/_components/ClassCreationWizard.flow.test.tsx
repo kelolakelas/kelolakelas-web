@@ -50,12 +50,6 @@ const category = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Create Category' }));
 };
 async function details(privateClass = false) {
-  await waitFor(() =>
-    expect(screen.getByRole('option', { name: 'Teacher One' })).toBeTruthy(),
-  );
-  fireEvent.change(screen.getByLabelText('Assigned Teacher'), {
-    target: { value: teacher },
-  });
   fireEvent.change(screen.getByLabelText(/^Class \/ Course Name/), {
     target: { value: 'Draft class' },
   });
@@ -68,6 +62,8 @@ async function details(privateClass = false) {
   if (privateClass)
     fireEvent.click(screen.getByRole('button', { name: /Private 1-on-1/ }));
   fireEvent.click(screen.getByRole('button', { name: /Next: Review/ }));
+  await screen.findAllByRole('option', { name: 'Teacher One' });
+  fireEvent.change(screen.getByLabelText(privateClass ? 'Assigned Teacher' : 'Teacher for all slots'), {target: {value: teacher}});
 }
 const noMutations = () => {
   for (const key of [
@@ -95,7 +91,7 @@ describe('local class creation draft', () => {
         .value,
     ).toBe('Draft class');
     expect(
-      (screen.getByLabelText('Assigned Teacher') as HTMLSelectElement).value,
+      (screen.getByLabelText('Teacher for all slots') as HTMLSelectElement).value,
     ).toBe(teacher);
     fireEvent.click(screen.getByRole('button', { name: 'Change Category' }));
     expect(
@@ -288,4 +284,55 @@ it('keeps the original draft/key after an interrupted action and rejects duplica
   resolve({success: false, message: 'Still unavailable.', retrySameRequest:true});
   await screen.findByText('Still unavailable.');
   expect((screen.getByLabelText(/^Class \/ Course Name/, {selector:'input'}) as HTMLInputElement).value).toBe('Draft class');
+});
+
+const teacherB = 'd2ce6ae3-6441-426b-b517-c14516aa6fca';
+const teacherC = '2de113bf-c15e-43bd-97b2-c612e01ca9a2';
+it('saves A/B from slots, clears stale bulk, and removes unused teachers from the payload', async () => {
+  actions.getScheduleTeachers.mockResolvedValue({state:'ok', teachers:[
+    {id:teacher,name:'Teacher One'}, {id:teacherB,name:'Teacher Two'}, {id:teacherC,name:'Teacher Three'}
+  ]});
+  open(); category(); await details();
+  expect(screen.queryByLabelText('Assigned Teacher')).toBeNull();
+  fireEvent.click(screen.getByRole('button', {name:'Add Slot'}));
+  fireEvent.change(screen.getByLabelText('Teacher for slot 2'), {target:{value:teacherB}});
+  expect((screen.getByLabelText('Teacher for all slots') as HTMLSelectElement).value).toBe('');
+  expect((screen.getByLabelText('Teacher for slot 1') as HTMLSelectElement).value).toBe(teacher);
+  fireEvent.click(screen.getByRole('button', {name:/Save Complete Class/}));
+  await waitFor(() => expect(actions.createClassConfiguration).toHaveBeenCalledTimes(1));
+  const payload = actions.createClassConfiguration.mock.calls[0][0];
+  expect(payload.teacher_ids).toEqual([teacher, teacherB]);
+  expect(payload.schedules.map((s:{tutor_id:string})=>s.tutor_id)).toEqual([teacher,teacherB]);
+});
+it('bulk C replaces overrides and applies to new/generated slots; removal drops unused B', async () => {
+  actions.createClassConfiguration.mockResolvedValue({success:false,message:'Correctable error.'});
+  actions.getScheduleTeachers.mockResolvedValue({state:'ok', teachers:[
+    {id:teacher,name:'Teacher One'}, {id:teacherB,name:'Teacher Two'}, {id:teacherC,name:'Teacher Three'}
+  ]});
+  open(); category(); await details();
+  fireEvent.click(screen.getByRole('button', {name:'Add Slot'}));
+  fireEvent.change(screen.getByLabelText('Teacher for slot 2'), {target:{value:teacherB}});
+  fireEvent.click(screen.getByLabelText('Remove slot 2'));
+  fireEvent.click(screen.getByRole('button', {name:/Save Complete Class/}));
+  await screen.findByText('Correctable error.');
+  expect(actions.createClassConfiguration.mock.calls[0][0].teacher_ids).toEqual([teacher]);
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'), {target:{value:teacherC}});
+  fireEvent.click(screen.getByRole('button', {name:'Generate Slots'}));
+  fireEvent.click(screen.getByRole('button', {name:'Add Slot'}));
+  fireEvent.click(screen.getByRole('button', {name:/Save Complete Class/}));
+  await waitFor(() => expect(actions.createClassConfiguration).toHaveBeenCalledTimes(2));
+  const payload=actions.createClassConfiguration.mock.calls[1][0];
+  expect(payload.teacher_ids).toEqual([teacherC]);
+  expect(payload.schedules.every((s:{tutor_id:string})=>s.tutor_id===teacherC)).toBe(true);
+});
+it('requires a teacher for every group slot before a write, and allows correcting it', async () => {
+  open(); category(); await details();
+  fireEvent.change(screen.getByLabelText('Teacher for slot 1'), {target:{value:''}});
+  fireEvent.submit(screen.getByRole('button', {name:/Save Complete Class/}).closest('form')!);
+  expect(actions.createClassConfiguration).not.toHaveBeenCalled();
+  expect(screen.getByText('Select an active Teacher for every slot.')).toBeTruthy();
+  expect(screen.getByLabelText('Teacher for slot 1').getAttribute('aria-invalid')).toBe('true');
+  fireEvent.change(screen.getByLabelText('Teacher for slot 1'), {target:{value:teacher}});
+  fireEvent.click(screen.getByRole('button', {name:/Save Complete Class/}));
+  await waitFor(() => expect(actions.createClassConfiguration).toHaveBeenCalledTimes(1));
 });

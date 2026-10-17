@@ -27,7 +27,7 @@ it('applies membership id to initial, added and generated slots and preserves it
   });
   actionState.current = { success: false, message: 'Unable to save schedules' };
   const { container } = renderForm();
-  await screen.findByRole('option', { name: 'Teacher One' });
+  await screen.findAllByRole('option', { name: 'Teacher One' });
   fireEvent.change(screen.getByLabelText('Teacher for all slots'), {
     target: { value: id },
   });
@@ -294,7 +294,7 @@ describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
   function setSlotDay(slotIndex: number, day: string) {
     const cards = screen.getAllByText(/Slot #\d+/);
     const card = cards[slotIndex].closest('div')?.parentElement as HTMLElement;
-    const select = card.querySelector('select') as HTMLSelectElement;
+    const select = card.querySelector('select[id$="day_of_week"]') as HTMLSelectElement;
     fireEvent.change(select, { target: { value: day } });
   }
 

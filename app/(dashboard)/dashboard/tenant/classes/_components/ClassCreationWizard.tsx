@@ -114,6 +114,10 @@ function WizardDraft({
   }, [step]);
   const save = async (slots: ScheduleItemInput[] = []) => {
     if (busy.current || !category || !classDraft) return;
+    if (!attempt.current && classDraft.type === 'private' && !teacherId) {
+      setMessage('Select an active Teacher before saving this private class.');
+      return;
+    }
     if (!attempt.current) {
       const { name, type, price, description } = classDraft;
       attempt.current = {
@@ -128,14 +132,9 @@ function WizardDraft({
               }
             : { category_id: category.id }),
           class: { name, type, price, description: description ?? undefined },
-          teacher_ids: [
-            ...new Set([
-              teacherId,
-              ...slots.flatMap((slot) =>
-                slot.tutor_id ? [slot.tutor_id] : [],
-              ),
-            ]),
-          ],
+          teacher_ids: type === 'private'
+            ? [teacherId]
+            : [...new Set(slots.flatMap((slot) => slot.tutor_id ? [slot.tutor_id] : []))],
           schedules: type === 'private' ? [] : slots,
         },
       };
@@ -277,48 +276,10 @@ function WizardDraft({
           </div>
           {category && (
             <div hidden={step !== 2}>
-              <div className="mb-4 space-y-2">
-                <label
-                  htmlFor="class-teacher"
-                  className="block text-sm font-semibold"
-                >
-                  Assigned Teacher
-                </label>
-                <select
-                  id="class-teacher"
-                  value={teacherId}
-                  onChange={(event) => setTeacherId(event.target.value)}
-                  disabled={teachers?.state !== 'ok'}
-                  className="min-h-[44px] w-full rounded-xl border bg-white px-3 dark:bg-gray-900"
-                >
-                  <option value="">Select an active Teacher</option>
-                  {teachers?.state === 'ok' &&
-                    teachers.teachers.map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>
-                        {teacher.name}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-gray-600 dark:text-gray-300">
-                  {!teachers
-                    ? 'Loading teachers…'
-                    : teachers.state === 'forbidden'
-                      ? 'You do not have permission to read members. Ask a tenant administrator.'
-                      : teachers.state === 'error'
-                        ? 'Unable to load teachers. Close and reopen to retry.'
-                        : teachers.teachers.length === 0
-                          ? 'No active Teacher members. Add or activate a Teacher in Members first.'
-                          : 'Choose the Teacher assigned to this class.'}
-                </p>
-              </div>
               <ClassForm
                 draft
                 selectedCategory={category}
                 onClassCreated={(draft) => {
-                  if (!teacherId) {
-                    setMessage('Select an active Teacher before continuing.');
-                    return;
-                  }
                   setClassDraft(draft);
                   setStep(3);
                   setMessage('');
@@ -331,6 +292,40 @@ function WizardDraft({
             <div hidden={step !== 3}>
               {classDraft.type === 'private' && (
                 <>
+                  <div className="mb-4 space-y-2">
+                    <label
+                      htmlFor="class-teacher"
+                      className="block text-sm font-semibold"
+                    >
+                      Assigned Teacher
+                    </label>
+                    <select
+                      id="class-teacher"
+                      value={teacherId}
+                      onChange={(event) => setTeacherId(event.target.value)}
+                      disabled={teachers?.state !== 'ok'}
+                      className="min-h-[44px] w-full rounded-xl border bg-white px-3 dark:bg-gray-900"
+                    >
+                      <option value="">Select an active Teacher</option>
+                      {teachers?.state === 'ok' &&
+                        teachers.teachers.map((teacher) => (
+                          <option key={teacher.id} value={teacher.id}>
+                            {teacher.name}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {!teachers
+                        ? 'Loading teachers…'
+                        : teachers.state === 'forbidden'
+                          ? 'You do not have permission to read members. Ask a tenant administrator.'
+                          : teachers.state === 'error'
+                            ? 'Unable to load teachers. Close and reopen to retry.'
+                            : teachers.teachers.length === 0
+                              ? 'No active Teacher members. Add or activate a Teacher in Members first.'
+                              : 'Choose the Teacher assigned to this class.'}
+                    </p>
+                  </div>
                   <PrivateClassScheduleNotice
                     className={classDraft.name}
                     onFinish={() => void save()}
