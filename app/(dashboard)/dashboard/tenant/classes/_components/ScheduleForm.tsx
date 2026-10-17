@@ -105,7 +105,7 @@ export function ScheduleForm({
   const formId = useId();
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [draftError, setDraftError] = useState('');
-  const [schedules, setSchedules] = useState<ScheduleSlotDraft[]>([
+  const [schedules, setSchedules] = useState<ScheduleSlotDraft[]>(() => onDraftSubmit ? [] : [
     {
       day_of_week: 1,
       start_time: '09:00',
@@ -272,7 +272,7 @@ export function ScheduleForm({
   };
 
   const removeScheduleSlot = (index: number) => {
-    if (schedules.length <= 1) return;
+    if (!onDraftSubmit && schedules.length <= 1) return;
     setSchedules((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -316,6 +316,15 @@ export function ScheduleForm({
     return bySlot;
   }, [overlappingPairs]);
 
+  const draftValidation = createScheduleSchema.safeParse({
+    class_id: createdClass.id,
+    schedules,
+  });
+  const draftTeachersValid = teacherRead?.state === 'ok' &&
+    schedules.every((slot) => Boolean(slot.tutor_id) &&
+      teacherRead.teachers.some((teacher) => teacher.id === slot.tutor_id));
+  const canSaveDraft = draftValidation.success && draftTeachersValid;
+
   const slotError = (index: number, field: string) =>
     draftErrors[`schedules.${index}.${field}`] ||
     state.errors?.[`schedules.${index}.${field}`]?.[0] ||
@@ -339,10 +348,7 @@ export function ScheduleForm({
                 )));
                 return;
               }
-              const parsed = createScheduleSchema.safeParse({
-                class_id: createdClass.id,
-                schedules,
-              });
+              const parsed = draftValidation;
               if (parsed.success) {
                 setDraftError('');
                 setDraftErrors({});
@@ -753,6 +759,14 @@ export function ScheduleForm({
         </div>
 
         <div className="space-y-3">
+          {schedules.length === 0 && (
+            <p
+              role="status"
+              className="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300"
+            >
+              No timetable slots yet. Add a slot or use Generate Slots to build your timetable.
+            </p>
+          )}
           {schedules.map((slot, idx) => (
             <div
               key={idx}
@@ -762,7 +776,7 @@ export function ScheduleForm({
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Slot #{idx + 1}
                 </span>
-                {schedules.length > 1 && (
+                {(schedules.length > 1 || onDraftSubmit) && (
                   <button
                     type="button"
                     onClick={() => removeScheduleSlot(idx)}
@@ -1000,6 +1014,16 @@ export function ScheduleForm({
         </div>
       </div>
 
+      {onDraftSubmit && schedules.length > 0 && !canSaveDraft && (
+        <p
+          id={`${formId}-draft-help`}
+          role="status"
+          className="text-sm text-amber-700 dark:text-amber-300"
+        >
+          Complete every slot with a valid time range, capacity and active Teacher before saving.
+        </p>
+      )}
+
       {/* Form Action Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
         <button
@@ -1012,7 +1036,11 @@ export function ScheduleForm({
         {onDraftSubmit ? (
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !canSaveDraft}
+            aria-describedby={
+              schedules.length > 0 && !canSaveDraft
+                ? `${formId}-draft-help` : undefined
+            }
             className="min-h-[44px] rounded-xl bg-emerald-600 px-5 py-2 text-white disabled:opacity-50"
           >
             {pending ? 'Saving Class…' : 'Save Complete Class ✓'}

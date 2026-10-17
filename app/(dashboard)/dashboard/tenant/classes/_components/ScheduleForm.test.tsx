@@ -399,3 +399,50 @@ it('associates generator and saved slot errors with their controls', () => {
     ),
   ).toHaveLength(1);
 });
+
+const draftTeacher = 'f231dcfe-a8d2-4b2a-b682-43fe0fbb7022';
+it('starts a new group empty and gates save across add, invalid fields, removal and pending', async () => {
+  vi.mocked(getScheduleTeachers).mockResolvedValueOnce({state:'ok',teachers:[{id:draftTeacher,name:'Draft Teacher'}]});
+  const submit=vi.fn();
+  const props={createdClass:GROUP_CLASS,onDraftSubmit:submit,onScheduleSuccess:()=>{},onBack:()=>{}};
+  const view=render(<ScheduleForm {...props}/>);
+  const save=()=>screen.getByRole('button',{name:/Save Complete Class|Saving Class/}) as HTMLButtonElement;
+  expect(screen.getByText(/No timetable slots yet/)).toBeTruthy();
+  expect(screen.queryByText('Slot #1')).toBeNull();
+  expect(save().disabled).toBe(true);
+  await screen.findByRole('option',{name:'Draft Teacher'});
+  fireEvent.click(screen.getByRole('button',{name:'Add Slot'}));
+  expect(save().disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Teacher for slot 1'),{target:{value:draftTeacher}});
+  expect(save().disabled).toBe(false);
+  const capacity=screen.getByLabelText('Capacity for slot 1');
+  for (const value of ['', '0', '1.5']) {
+    fireEvent.change(capacity,{target:{value}}); expect(save().disabled).toBe(true);
+  }
+  fireEvent.change(capacity,{target:{value:'10'}});
+  const end=screen.getAllByLabelText('End Time',{selector:'input'}).at(-1)!;
+  fireEvent.change(end,{target:{value:'13:00'}}); expect(save().disabled).toBe(true);
+  fireEvent.change(end,{target:{value:'15:30'}}); expect(save().disabled).toBe(false);
+  view.rerender(<ScheduleForm {...props} pending/>); expect(save().disabled).toBe(true);
+  view.rerender(<ScheduleForm {...props}/>);
+  fireEvent.click(save()); expect(submit).toHaveBeenCalledTimes(1);
+  expect(submit.mock.calls[0][0][0]).toMatchObject({tutor_id:draftTeacher,capacity:10});
+  fireEvent.click(screen.getByLabelText('Remove slot 1'));
+  expect(screen.getByText(/No timetable slots yet/)).toBeTruthy(); expect(save().disabled).toBe(true);
+  fireEvent.submit(save().closest('form')!); expect(submit).toHaveBeenCalledTimes(1);
+});
+it('generates into an empty group only when the generator produces valid slots', async () => {
+  vi.mocked(getScheduleTeachers).mockResolvedValueOnce({state:'ok',teachers:[{id:draftTeacher,name:'Draft Teacher'}]});
+  render(<ScheduleForm createdClass={GROUP_CLASS} onDraftSubmit={vi.fn()} onScheduleSuccess={()=>{}} onBack={()=>{}}/>);
+  await screen.findByRole('option',{name:'Draft Teacher'});
+  const save=screen.getByRole('button',{name:/Save Complete Class/}) as HTMLButtonElement;
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'),{target:{value:draftTeacher}});
+  fireEvent.change(screen.getByLabelText('Generator end time'),{target:{value:'07:00'}}); generate();
+  expect(save.disabled).toBe(true); expect(screen.queryByText('Slot #1')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Generator end time'),{target:{value:'08:30'}}); generate();
+  expect(save.disabled).toBe(true); expect(screen.getByText(/No session fits/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Generator end time'),{target:{value:'12:00'}}); generate();
+  expect(slotCount()).toBe(4); expect(save.disabled).toBe(false);
+  for (let index=4;index>0;index--) fireEvent.click(screen.getByLabelText(`Remove slot ${index}`));
+  expect(screen.getByText(/No timetable slots yet/)).toBeTruthy(); expect(save.disabled).toBe(true);
+});

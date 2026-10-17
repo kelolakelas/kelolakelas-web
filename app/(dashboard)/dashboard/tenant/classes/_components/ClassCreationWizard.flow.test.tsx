@@ -63,6 +63,7 @@ async function details(privateClass = false) {
     fireEvent.click(screen.getByRole('button', { name: /Private 1-on-1/ }));
   fireEvent.click(screen.getByRole('button', { name: /Next: Review/ }));
   await screen.findAllByRole('option', { name: 'Teacher One' });
+  if (!privateClass) fireEvent.click(screen.getByRole('button', {name:'Add Slot'}));
   fireEvent.change(screen.getByLabelText(privateClass ? 'Assigned Teacher' : 'Teacher for all slots'), {target: {value: teacher}});
 }
 const noMutations = () => {
@@ -234,6 +235,9 @@ describe('local class creation draft', () => {
   });
   it('keeps generator, overlap guidance and the slot teacher picker in the final draft', async () => {
     open(); category(); await details();
+    fireEvent.change(screen.getByLabelText('Day of Week'), {target:{value:'1'}});
+    fireEvent.change(screen.getAllByLabelText('Start Time', {selector:'input'}).at(-1)!, {target:{value:'09:00'}});
+    fireEvent.change(screen.getAllByLabelText('End Time', {selector:'input'}).at(-1)!, {target:{value:'10:30'}});
     fireEvent.click(screen.getByRole('button', { name: 'Generate Slots' }));
     expect(screen.getByRole('status').textContent).toContain('Added');
     expect(screen.getAllByRole('alert').some(alert => alert.textContent?.includes('overlap'))).toBe(true);
@@ -335,4 +339,24 @@ it('requires a teacher for every group slot before a write, and allows correctin
   fireEvent.change(screen.getByLabelText('Teacher for slot 1'), {target:{value:teacher}});
   fireEvent.click(screen.getByRole('button', {name:/Save Complete Class/}));
   await waitFor(() => expect(actions.createClassConfiguration).toHaveBeenCalledTimes(1));
+});
+
+it('switches private to group into an empty timetable and preserves explicit slots across later type changes', async () => {
+  open(); category(); await details(true);
+  fireEvent.click(screen.getByRole('button', {name:/← Back/}));
+  fireEvent.click(screen.getByRole('button', {name:/Group Class/}));
+  fireEvent.click(screen.getByRole('button', {name:/Next: Review/}));
+  expect(screen.getByText(/No timetable slots yet/)).toBeTruthy();
+  expect((screen.getByRole('button',{name:/Save Complete Class/}) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'Add Slot'}));
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'),{target:{value:teacher}});
+  const snapshot=(document.querySelector('[name="schedules"]') as HTMLInputElement).value;
+  fireEvent.click(screen.getByRole('button',{name:/← Back/}));
+  fireEvent.click(screen.getByRole('button',{name:/Private 1-on-1/}));
+  fireEvent.click(screen.getByRole('button',{name:/Next: Review/}));
+  fireEvent.click(screen.getByRole('button',{name:/← Back/}));
+  fireEvent.click(screen.getByRole('button',{name:/Group Class/}));
+  fireEvent.click(screen.getByRole('button',{name:/Next: Review/}));
+  expect((document.querySelector('[name="schedules"]') as HTMLInputElement).value).toBe(snapshot);
+  noMutations();
 });

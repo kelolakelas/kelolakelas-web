@@ -64,6 +64,7 @@ describe.skipIf(!process.env.KEL197_INTEGRATION_CONFIG)(
         fireEvent.click(screen.getByRole('button', { name: /Private 1-on-1/ }));
       fireEvent.click(screen.getByRole('button', { name: /Next: Review/ }));
       await screen.findAllByRole('option', { name: 'Teacher One' });
+      if (!privateClass) fireEvent.click(screen.getByRole('button', {name:'Add Slot'}));
       fireEvent.change(screen.getByLabelText(privateClass ? 'Assigned Teacher' : 'Teacher for all slots'), {target: {value: config.teacher}});
     };
     it('cancel at each draft step writes nothing to the database', async () => {
