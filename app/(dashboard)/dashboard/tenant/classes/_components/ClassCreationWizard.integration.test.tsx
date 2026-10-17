@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cleanup,
+  configure,
   fireEvent,
   render,
   screen,
@@ -12,6 +13,7 @@ import {
 const config: Record<string, string> = process.env.KEL197_INTEGRATION_CONFIG
   ? JSON.parse(readFileSync(process.env.KEL197_INTEGRATION_CONFIG, 'utf8'))
   : {};
+if (config.gateway) { configure({asyncUtilTimeout: 10000}); vi.setConfig({testTimeout: 30000}); }
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({
     get: (key: string) =>
@@ -52,10 +54,6 @@ describe.skipIf(!process.env.KEL197_INTEGRATION_CONFIG)(
       fireEvent.click(screen.getByRole('button', { name: 'Create Category' }));
     };
     const details = async (privateClass = false) => {
-      await screen.findByRole('option', { name: 'Teacher One' });
-      fireEvent.change(screen.getByLabelText('Assigned Teacher'), {
-        target: { value: config.teacher },
-      });
       fireEvent.change(screen.getByLabelText(/^Class \/ Course Name/), {
         target: { value: 'Integration class' },
       });
@@ -65,6 +63,8 @@ describe.skipIf(!process.env.KEL197_INTEGRATION_CONFIG)(
       if (privateClass)
         fireEvent.click(screen.getByRole('button', { name: /Private 1-on-1/ }));
       fireEvent.click(screen.getByRole('button', { name: /Next: Review/ }));
+      await screen.findAllByRole('option', { name: 'Teacher One' });
+      fireEvent.change(screen.getByLabelText(privateClass ? 'Assigned Teacher' : 'Teacher for all slots'), {target: {value: config.teacher}});
     };
     it('cancel at each draft step writes nothing to the database', async () => {
       const before = await counts();
@@ -116,6 +116,22 @@ describe.skipIf(!process.env.KEL197_INTEGRATION_CONFIG)(
           method: 'POST',
         });
       }
+    });
+    it.skipIf(!config.teacher2)('persists two distinct tutors from the group timetable without extra teachers', async () => {
+      renderWizard(); category(); await details();
+      fireEvent.click(screen.getByRole('button', {name:'Add Slot'}));
+      fireEvent.change(screen.getByLabelText('Teacher for slot 2'), {target:{value:config.teacher2}});
+      expect((screen.getByLabelText('Teacher for all slots') as HTMLSelectElement).value).toBe('');
+      const before = await counts();
+      fireEvent.click(screen.getByRole('button', {name:/Save Complete Class/}));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      const after=await counts();
+      expect(after.class_teachers-before.class_teachers).toBe(2);
+      expect(after.class_schedules-before.class_schedules).toBe(2);
+      const response=await fetch(`${config.gateway}/api/v1/schedules`,{headers:{Authorization:`Bearer ${config.token}`}});
+      const result=await response.json();
+      const slots=result.data.items.slice(-2);
+      expect(new Set(slots.map((slot:{tutor_id:string})=>slot.tutor_id))).toEqual(new Set([config.teacher,config.teacher2]));
     });
     it('private final saves category/class/teacher without schedules or sessions', async () => {
       const before = await counts();

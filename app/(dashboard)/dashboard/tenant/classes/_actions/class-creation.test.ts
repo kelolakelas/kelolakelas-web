@@ -150,3 +150,11 @@ it('names locally invalid fields before a request and suppresses invalid referen
   expect(failed.message).toContain('required service');
   expect(failed.message).not.toMatch(/unsafe|upstream trace|Reference:/);
 });
+
+it('rejects missing slot tutors and unrelated group teachers at the server action boundary', async () => {
+  for (const invalid of [
+    {...payload, schedules: [{...payload.schedules[0], tutor_id: undefined}]},
+    {...payload, teacher_ids: [...payload.teacher_ids, 'd2ce6ae3-6441-426b-b517-c14516aa6fca']},
+  ]) expect((await createClassConfiguration(invalid, 'teacher-validation')).success).toBe(false);
+  expect(fetchMock).not.toHaveBeenCalled();
+});

@@ -38,6 +38,19 @@ export const classCreationSchema = z
         message:
           'Group classes require slots; private classes schedule after enrollment.',
       });
+    if (value.class.type === 'group') {
+      value.schedules.forEach((slot, index) => {
+        if (!slot.tutor_id) ctx.addIssue({
+          code: 'custom', path: ['schedules', index, 'tutor_id'],
+          message: 'Select an active Teacher for this slot.',
+        });
+      });
+      const tutors = new Set(value.schedules.flatMap((slot) => slot.tutor_id ? [slot.tutor_id] : []));
+      if (value.teacher_ids.some((id) => !tutors.has(id))) ctx.addIssue({
+        code: 'custom', path: ['teacher_ids'],
+        message: 'Group teachers must match the schedule teachers.',
+      });
+    }
     if (
       value.schedules.some(
         (slot) =>
