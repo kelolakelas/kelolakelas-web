@@ -14,6 +14,7 @@ export async function getScheduleTeachers(): Promise<ScheduleTeachersRead> {
   try {
     const headers = await getAuthHeaders();
     const teachers: ScheduleTeacher[] = [];
+    const seenMemberships = new Set<string>();
     for (let page = 1; ; page++) {
       const response = await fetch(`${getGatewayBaseUrl()}/api/v1/members?page=${page}&page_size=100`, {
         headers, cache: 'no-store',
@@ -29,7 +30,10 @@ export async function getScheduleTeachers(): Promise<ScheduleTeachersRead> {
         const parsed = memberSchema.safeParse(raw);
         if (!parsed.success) return { state: 'error' };
         const member = parsed.data;
-        if (member.status === 'active' && member.role?.name === 'Teacher') {
+        const eligibleRole = member.role?.name === 'Teacher' ||
+          (member.role?.name === 'Creator' && member.role.is_system_role === true);
+        if (member.status === 'active' && eligibleRole && !seenMemberships.has(member.id)) {
+          seenMemberships.add(member.id);
           teachers.push({ id: member.id, name: `${member.first_name} ${member.last_name}`.trim() || member.email });
         }
       }
