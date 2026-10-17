@@ -209,6 +209,8 @@ describe('local class creation draft', () => {
     await waitFor(() => expect(document.activeElement).toBe(alert));
     expect(alert.getAttribute('role')).toBe('alert');
     expect(alert.closest('fieldset')).toBeNull();
+    fireEvent.keyDown(alert, {key: 'Tab'});
+    expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Close modal'}));
     fireEvent.click(screen.getByRole('button', { name: /← Back/ }));
     expect(
       (screen.getByLabelText(/^Class \/ Course Name/) as HTMLInputElement)
