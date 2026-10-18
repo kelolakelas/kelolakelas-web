@@ -282,7 +282,7 @@ describe('ScheduleForm same-day overlap warnings (KEL-176)', () => {
     const cards = screen.getAllByText(/Slot #\d+/);
     const card = cards[slotIndex].closest('div')?.parentElement as HTMLElement;
     const inputs = Array.from(
-      card.querySelectorAll('input[type="time"]'),
+      card.querySelectorAll('input[id$="start_time"], input[id$="end_time"]'),
     ) as HTMLInputElement[];
     return { start: inputs[0], end: inputs[1] };
   }
