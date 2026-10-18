@@ -1,10 +1,12 @@
 'use client';
 
+import { useScheduleTeachers } from './useScheduleTeachers';
+import { TeacherLoadStatus } from './TeacherLoadStatus';
+
 import { useActionState, useEffect, useId, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   updateClass,
-  getScheduleTeachers,
   type ActionResponse,
 } from '../_actions/classActions';
 import type { Category, ClassEntity } from '../_lib/schema';
@@ -90,23 +92,7 @@ export function ClassEditForm({
   const [status, setStatus] = useState(classRecord.enrollment_status ?? 'open');
   const [teacherIds, setTeacherIds] = useState(classRecord.teacher_ids ?? []);
   const [teachersChanged, setTeachersChanged] = useState(false);
-  const [teachers, setTeachers] = useState<
-    import('../_lib/teachers').ScheduleTeachersRead | null
-  >(null);
-  useEffect(() => {
-    let active = true;
-    getScheduleTeachers().then(
-      (result) => {
-        if (active) setTeachers(result);
-      },
-      () => {
-        if (active) setTeachers({ state: 'error' });
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { read: teachers, loading: teachersLoading, retry: retryTeachers } = useScheduleTeachers();
 
   useEffect(() => {
     if (state.message) onSettled?.(state.success);
@@ -230,12 +216,9 @@ export function ClassEditForm({
           value={JSON.stringify(teacherIds)}
         />
       )}
-      {teachers && teachers.state !== 'ok' && (
-        <p role="alert" className="text-sm">
-          Teacher options are unavailable. Existing assignments are retained;
-          reopen to retry.
-        </p>
-      )}
+      <TeacherLoadStatus read={teachers} loading={teachersLoading} retry={retryTeachers} />
+      {teachers?.state === 'ok' && teacherIds.some(id => !teachers.teachers.some(teacher => teacher.id === id)) && <p role="alert">A previously assigned Teacher is no longer eligible. Existing assignments are retained; choose active Teachers when changing assignments.</p>}
+
 
       <div>
         <label

@@ -378,3 +378,16 @@ describe('createClass', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+it('restarts member pagination from page one after a later page fails, without returning a partial list', async () => {
+  fetchMock = vi.fn()
+    .mockResolvedValueOnce(success({items:[teacherMember],pagination:{page:1,total_pages:2}}))
+    .mockResolvedValueOnce(failure(503))
+    .mockResolvedValueOnce(success({items:[teacherMember],pagination:{page:1,total_pages:2}}))
+    .mockResolvedValueOnce(success({items:[teacherMember],pagination:{page:2,total_pages:2}}));
+  vi.stubGlobal('fetch',fetchMock);
+  expect(await getScheduleTeachers()).toEqual({state:'error'});
+  // Retry reloads the full snapshot and still deduplicates memberships across pages.
+  expect(await getScheduleTeachers()).toEqual({state:'ok',teachers:[{id:TEACHER_ID,name:'Teacher One'}]});
+  expect(fetchMock.mock.calls.map(call=>new URL(call[0]).searchParams.get('page'))).toEqual(['1','2','1','2']);
+});

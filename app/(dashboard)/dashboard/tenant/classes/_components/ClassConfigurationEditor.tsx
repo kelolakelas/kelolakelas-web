@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useScheduleTeachers } from './useScheduleTeachers';
+import { TeacherLoadStatus } from './TeacherLoadStatus';
+
+import { useCallback, useId, useRef, useState } from 'react';
 import {
   changeClassSchedule,
   deleteClassSchedule,
-  getScheduleTeachers,
   readClassConfiguration,
 } from '../_actions/classActions';
 import {
@@ -13,7 +15,6 @@ import {
   type ClassEntity,
   type ClassSchedule,
 } from '../_lib/schema';
-import type { ScheduleTeachersRead } from '../_lib/teachers';
 import {
   scheduleFieldClass,
   scheduleLabelClass,
@@ -67,26 +68,12 @@ function ScheduleVersionEditor({
       [today(), schedule.valid_from?.slice(0, 10) ?? ''].sort().at(-1) ??
       today(),
   );
-  const [teachers, setTeachers] = useState<ScheduleTeachersRead | null>(null);
+  const { read: teachers, loading: teachersLoading, retry: retryTeachers } = useScheduleTeachers();
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  useEffect(() => {
-    let active = true;
-    getScheduleTeachers().then(
-      (result) => {
-        if (active) setTeachers(result);
-      },
-      () => {
-        if (active) setTeachers({ state: 'error' });
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, []);
   const editable = permissions.includes('schedule:update');
   const historic = Boolean(
     schedule.valid_until && schedule.valid_until.slice(0, 10) < today(),
@@ -390,6 +377,9 @@ function ScheduleVersionEditor({
                 </span>
               )}
             </label>
+            <TeacherLoadStatus read={teachers} loading={teachersLoading} retry={retryTeachers} />
+            {teachers?.state === 'ok' && slot.tutor_id && !teachers.teachers.some(teacher => teacher.id === slot.tutor_id) && <p role="alert">The assigned Teacher is no longer eligible. Choose an active Teacher when changing the assignment.</p>}
+
             <label className={scheduleFieldClass}>
               <span className={scheduleLabelClass}>Effective from</span>
               <input
