@@ -1,12 +1,13 @@
 'use client';
 
+import { useScheduleTeachers } from './useScheduleTeachers';
+import { TeacherLoadStatus } from './TeacherLoadStatus';
+
 import { useEffect, useRef, useState } from 'react';
 import type { Category, ClassEntity, ScheduleItemInput } from '../_lib/schema';
 import type { ClassCreationInput } from '../_lib/class-creation';
-import type { ScheduleTeachersRead } from '../_lib/teachers';
 import {
   createClassConfiguration,
-  getScheduleTeachers,
 } from '../_actions/classActions';
 import { CategoryForm } from './CategoryForm';
 import { ClassForm } from './ClassForm';
@@ -76,7 +77,7 @@ function WizardDraft({
   const [category, setCategory] = useState<Category | null>(null);
   const [classDraft, setClassDraft] = useState<ClassEntity | null>(null);
   const [teacherId, setTeacherId] = useState('');
-  const [teachers, setTeachers] = useState<ScheduleTeachersRead | null>(null);
+  const { read: teachers, loading: teachersLoading, retry: retryTeachers } = useScheduleTeachers();
   const [pending, setPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [message, setMessage] = useState('');
@@ -90,20 +91,6 @@ function WizardDraft({
     null,
   );
   useEffect(() => {
-    let active = true;
-    getScheduleTeachers().then(
-      (result) => {
-        if (active) setTeachers(result);
-      },
-      () => {
-        if (active) setTeachers({ state: 'error' });
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
     const root = dialog.current;
     const target = Array.from(
       root?.querySelectorAll<HTMLElement>(
@@ -114,7 +101,7 @@ function WizardDraft({
   }, [step]);
   const save = async (slots: ScheduleItemInput[] = []) => {
     if (busy.current || !category || !classDraft) return;
-    if (!attempt.current && classDraft.type === 'private' && !teacherId) {
+    if (!attempt.current && classDraft.type === 'private' && (!teacherId || teachers?.state !== 'ok' || !teachers.teachers.some(teacher => teacher.id === teacherId))) {
       setMessage('Select an active Teacher before saving this private class.');
       return;
     }
@@ -301,6 +288,7 @@ function WizardDraft({
                     </label>
                     <select
                       id="class-teacher"
+                      aria-describedby="class-teacher-help"
                       value={teacherId}
                       onChange={(event) => setTeacherId(event.target.value)}
                       disabled={teachers?.state !== 'ok'}
@@ -314,17 +302,8 @@ function WizardDraft({
                           </option>
                         ))}
                     </select>
-                    <p className="text-xs text-gray-600 dark:text-gray-300">
-                      {!teachers
-                        ? 'Loading teachers…'
-                        : teachers.state === 'forbidden'
-                          ? 'You do not have permission to read members. Ask a tenant administrator.'
-                          : teachers.state === 'error'
-                            ? 'Unable to load teachers. Close and reopen to retry.'
-                            : teachers.teachers.length === 0
-                              ? 'No active Teacher members. Add or activate a Teacher in Members first.'
-                              : 'Choose the Teacher assigned to this class.'}
-                    </p>
+                    <TeacherLoadStatus id="class-teacher-help" read={teachers} loading={teachersLoading} retry={retryTeachers} readyMessage="Choose the Teacher assigned to this class." />
+                    {teachers?.state === 'ok' && teacherId && !teachers.teachers.some(teacher => teacher.id === teacherId) && <p role="alert">The selected Teacher is no longer eligible. Choose an active Teacher.</p>}
                   </div>
                   <PrivateClassScheduleNotice
                     className={classDraft.name}

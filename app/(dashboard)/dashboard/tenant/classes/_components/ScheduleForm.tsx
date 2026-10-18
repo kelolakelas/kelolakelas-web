@@ -1,10 +1,12 @@
 'use client';
 
+import { useScheduleTeachers } from './useScheduleTeachers';
+import { TeacherLoadStatus } from './TeacherLoadStatus';
+
 import { useActionState, useEffect, useId, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   createSchedule,
-  getScheduleTeachers,
   type ActionResponse,
 } from '../_actions/classActions';
 import {
@@ -16,7 +18,6 @@ import {
   scheduleTimeGridClass,
 } from './schedule-field-styles';
 import { ScheduleTimeInput } from './ScheduleTimeInput';
-import type { ScheduleTeachersRead } from '../_lib/teachers';
 import {
   findOverlappingSlotPairs,
   generateWeeklySlots,
@@ -118,24 +119,8 @@ export function ScheduleForm({
     },
   ]);
 
-  const [teacherRead, setTeacherRead] = useState<ScheduleTeachersRead | null>(
-    null,
-  );
+  const { read: teacherRead, loading: teachersLoading, retry: retryTeachers } = useScheduleTeachers();
   const [tutorId, setTutorId] = useState('');
-  useEffect(() => {
-    let active = true;
-    getScheduleTeachers().then(
-      (result) => {
-        if (active) setTeacherRead(result);
-      },
-      () => {
-        if (active) setTeacherRead({ state: 'error' });
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const [state, formAction] = useActionState(
     createSchedule,
@@ -431,20 +416,8 @@ export function ScheduleForm({
               </option>
             ))}
         </select>
-        <p
-          id={`${formId}-teacher-help`}
-          className="text-xs text-gray-600 dark:text-gray-300"
-        >
-          {!teacherRead
-            ? 'Loading teachers…'
-            : teacherRead.state === 'forbidden'
-              ? 'You do not have permission to read members. Ask a tenant administrator.'
-              : teacherRead.state === 'error'
-                ? 'Unable to load teachers. Close and reopen this form to try again.'
-                : teacherRead.teachers.length === 0
-                  ? 'No active Teacher members. Add or activate a Teacher in Members first.'
-                  : 'The selected Teacher applies to every manual and generated slot.'}
-        </p>
+        <TeacherLoadStatus id={`${formId}-teacher-help`} read={teacherRead} loading={teachersLoading} retry={retryTeachers} readyMessage="The selected Teacher applies to every manual and generated slot." />
+        {teacherRead?.state === 'ok' && schedules.some(slot => slot.tutor_id && !teacherRead.teachers.some(teacher => teacher.id === slot.tutor_id)) && <p role="alert">A selected Teacher is no longer eligible. Choose an active Teacher for that slot.</p>}
         {!onDraftSubmit && schedules.some((slot) => !slot.tutor_id) && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
             These schedules will be unassigned and will not appear in any

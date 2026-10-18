@@ -360,3 +360,47 @@ it('switches private to group into an empty timetable and preserves explicit slo
   expect((document.querySelector('[name="schedules"]') as HTMLInputElement).value).toBe(snapshot);
   noMutations();
 });
+
+it('retries the group teacher list in place without losing category, class or timetable drafts', async () => {
+  actions.getScheduleTeachers.mockResolvedValue({state:'error'});
+  open(); category();
+  fireEvent.change(screen.getByLabelText(/^Class \/ Course Name/), {target:{value:'Retry class'}});
+  fireEvent.change(screen.getByLabelText(/^Price/), {target:{value:'125000'}});
+  fireEvent.change(screen.getByLabelText(/^Class Summary/), {target:{value:'Preserve summary'}});
+  fireEvent.click(screen.getByRole('button', {name:/Next: Review/}));
+  await screen.findByRole('button',{name:'Retry teachers'});
+  fireEvent.click(screen.getByRole('button',{name:'Add Slot'}));
+  fireEvent.change(screen.getByLabelText('Location'),{target:{value:'Preserve Room'}});
+  const payload = () => (document.querySelector('[name="schedules"]') as HTMLInputElement).value;
+  const before=payload();
+  let resolve!: (value: {state:'ok';teachers:{id:string;name:string}[]}) => void;
+  actions.getScheduleTeachers.mockReturnValueOnce(new Promise(done=>{resolve=done}));
+  fireEvent.click(screen.getByRole('button',{name:'Retry teachers'}));
+  expect((screen.getByRole('button',{name:'Retry teachers'}) as HTMLButtonElement).disabled).toBe(true);
+  expect(payload()).toBe(before);
+  await waitFor(()=>expect(resolve).toBeTypeOf('function'));
+  resolve({state:'ok',teachers:[{id:teacher,name:'Teacher One'}]});
+  await screen.findAllByRole('option',{name:'Teacher One'});
+  expect(payload()).toBe(before);
+  fireEvent.change(screen.getByLabelText('Teacher for all slots'),{target:{value:teacher}});
+  fireEvent.click(screen.getByRole('button',{name:/Save Complete Class/}));
+  await waitFor(()=>expect(actions.createClassConfiguration).toHaveBeenCalledTimes(1));
+  expect(actions.createClassConfiguration.mock.calls[0][0]).toMatchObject({category:{name:'Draft category',description:'Category detail'},class:{name:'Retry class',price:125000,description:'Preserve summary'},teacher_ids:[teacher],schedules:[{location:'Preserve Room',tutor_id:teacher}]});
+});
+
+it('recovers a private class teacher read without discarding the local draft', async () => {
+  actions.getScheduleTeachers.mockResolvedValue({state:'error'});
+  open(); category();
+  fireEvent.change(screen.getByLabelText(/^Class \/ Course Name/),{target:{value:'Private retry'}});
+  fireEvent.change(screen.getByLabelText(/^Price/),{target:{value:'99000'}});
+  fireEvent.click(screen.getByRole('button',{name:/Private 1-on-1/}));
+  fireEvent.click(screen.getByRole('button',{name:/Next: Review/}));
+  const retry=await screen.findByRole('button',{name:'Retry teachers'});
+  actions.getScheduleTeachers.mockResolvedValue({state:'ok',teachers:[{id:teacher,name:'Teacher One'}]});
+  fireEvent.click(retry);
+  await screen.findByRole('option',{name:'Teacher One'});
+  fireEvent.change(screen.getByLabelText('Assigned Teacher'),{target:{value:teacher}});
+  fireEvent.click(screen.getByRole('button',{name:/Save Complete Class/}));
+  await waitFor(()=>expect(actions.createClassConfiguration).toHaveBeenCalledTimes(1));
+  expect(actions.createClassConfiguration.mock.calls[0][0]).toMatchObject({category:{name:'Draft category'},class:{name:'Private retry',type:'private',price:99000},teacher_ids:[teacher],schedules:[]});
+});

@@ -330,3 +330,21 @@ it('links invalid saved schedule fields to their errors without making a request
   ).toBeTruthy();
   expect(actions.changeClassSchedule).not.toHaveBeenCalled();
 });
+
+it('retains saved teacher assignment and edited fields across read retry, and reports newly ineligible membership', async () => {
+  actions.getScheduleTeachers.mockResolvedValue({state:'error'});
+  render(<ClassConfigurationEditor classRecord={record} categories={[category]} schedules={[slot]} permissions={permissions} />);
+  await screen.findAllByRole('button',{name:'Retry teachers'});
+  const saved = within(screen.getByRole('button',{name:'Save Schedule Change'}).closest('section')!);
+  fireEvent.change(saved.getByLabelText('Location'),{target:{value:'Draft Room'}});
+  actions.getScheduleTeachers.mockResolvedValue({state:'ok',teachers:[]});
+  // Class assignment and saved schedule each own an independent read.
+  for(const button of screen.getAllByRole('button',{name:'Retry teachers'})) fireEvent.click(button);
+  await screen.findByText(/The assigned Teacher is no longer eligible/);
+  expect((saved.getByLabelText('Location') as HTMLInputElement).value).toBe('Draft Room');
+  expect((saved.getByLabelText('Schedule Teacher') as HTMLSelectElement).value).toBe(teacher);
+  expect((screen.getByLabelText('Assigned Teachers') as HTMLSelectElement).value).toBe(teacher);
+  expect((saved.getByLabelText('Start time') as HTMLInputElement).value).toBe(slot.start_time);
+  expect(actions.changeClassSchedule).not.toHaveBeenCalled();
+  expect(actions.updateClass).not.toHaveBeenCalled();
+});
