@@ -18,8 +18,11 @@ import {
   scheduleFieldClass,
   scheduleLabelClass,
   scheduleControlClass,
+  scheduleDayControlClass,
+  scheduleDayControlStyle,
   scheduleTimeGridClass,
 } from './schedule-field-styles';
+import { ScheduleTimeInput } from './ScheduleTimeInput';
 import { ClassEditForm } from './ClassEditForm';
 import { ScheduleForm } from './ScheduleForm';
 
@@ -179,7 +182,8 @@ function ScheduleVersionEditor({
                       day_of_week: Number(event.target.value),
                     })
                   }
-                  className={scheduleControlClass}
+                  className={scheduleDayControlClass}
+                  style={scheduleDayControlStyle}
                 >
                   {dayNames.map((day, index) => (
                     <option key={day} value={index + 1}>
@@ -206,7 +210,7 @@ function ScheduleVersionEditor({
                 >
                   Start time
                 </span>
-                <input
+                <ScheduleTimeInput
                   id={`${formId}-start_time`}
                   aria-labelledby={`${formId}-start_time-label`}
                   aria-invalid={Boolean(fieldErrors.start_time)}
@@ -215,12 +219,10 @@ function ScheduleVersionEditor({
                       ? `${formId}-start_time-error`
                       : undefined
                   }
-                  type="time"
-                  step="1"
                   required
                   value={slot.start_time}
-                  onChange={(event) =>
-                    setSlot({ ...slot, start_time: event.target.value })
+                  onValueChange={(value) =>
+                    setSlot({ ...slot, start_time: value })
                   }
                   className={scheduleControlClass}
                 />
@@ -243,7 +245,7 @@ function ScheduleVersionEditor({
                 >
                   End time
                 </span>
-                <input
+                <ScheduleTimeInput
                   id={`${formId}-end_time`}
                   aria-labelledby={`${formId}-end_time-label`}
                   aria-invalid={Boolean(fieldErrors.end_time)}
@@ -252,12 +254,10 @@ function ScheduleVersionEditor({
                       ? `${formId}-end_time-error`
                       : undefined
                   }
-                  type="time"
-                  step="1"
                   required
                   value={slot.end_time}
-                  onChange={(event) =>
-                    setSlot({ ...slot, end_time: event.target.value })
+                  onValueChange={(value) =>
+                    setSlot({ ...slot, end_time: value })
                   }
                   className={scheduleControlClass}
                 />

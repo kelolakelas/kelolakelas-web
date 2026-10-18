@@ -11,8 +11,11 @@ import {
   scheduleFieldClass,
   scheduleLabelClass,
   scheduleControlClass,
+  scheduleDayControlClass,
+  scheduleDayControlStyle,
   scheduleTimeGridClass,
 } from './schedule-field-styles';
+import { ScheduleTimeInput } from './ScheduleTimeInput';
 import type { ScheduleTeachersRead } from '../_lib/teachers';
 import {
   findOverlappingSlotPairs,
@@ -524,7 +527,7 @@ export function ScheduleForm({
             >
               Start Time
             </label>
-            <input
+            <ScheduleTimeInput
               id={`${formId}-generator-start_time`}
               aria-invalid={Boolean(generatorErrors.start_time)}
               aria-describedby={
@@ -532,9 +535,8 @@ export function ScheduleForm({
                   ? `${formId}-generator-start_time-error`
                   : undefined
               }
-              type="time"
               value={generatorStart}
-              onChange={(e) => setGeneratorStart(e.target.value)}
+              onValueChange={setGeneratorStart}
               aria-label="Generator start time"
               className={scheduleControlClass}
             />
@@ -554,7 +556,7 @@ export function ScheduleForm({
             >
               End Time
             </label>
-            <input
+            <ScheduleTimeInput
               id={`${formId}-generator-end_time`}
               aria-invalid={Boolean(generatorErrors.end_time)}
               aria-describedby={
@@ -562,9 +564,8 @@ export function ScheduleForm({
                   ? `${formId}-generator-end_time-error`
                   : undefined
               }
-              type="time"
               value={generatorEnd}
-              onChange={(e) => setGeneratorEnd(e.target.value)}
+              onValueChange={setGeneratorEnd}
               aria-label="Generator end time"
               className={scheduleControlClass}
             />
@@ -835,7 +836,8 @@ export function ScheduleForm({
                         Number(e.target.value),
                       )
                     }
-                    className={scheduleControlClass}
+                    className={scheduleDayControlClass}
+                    style={scheduleDayControlStyle}
                   >
                     {DAYS_OF_WEEK.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -861,7 +863,7 @@ export function ScheduleForm({
                   >
                     Start Time
                   </label>
-                  <input
+                  <ScheduleTimeInput
                     id={`${formId}-slot-${idx}-start_time`}
                     aria-invalid={Boolean(slotError(idx, 'start_time'))}
                     aria-describedby={
@@ -869,10 +871,9 @@ export function ScheduleForm({
                         ? `${formId}-slot-${idx}-start_time-error`
                         : undefined
                     }
-                    type="time"
                     value={slot.start_time}
-                    onChange={(e) =>
-                      updateScheduleSlot(idx, 'start_time', e.target.value)
+                    onValueChange={(value) =>
+                      updateScheduleSlot(idx, 'start_time', value)
                     }
                     required
                     className={scheduleControlClass}
@@ -895,7 +896,7 @@ export function ScheduleForm({
                   >
                     End Time
                   </label>
-                  <input
+                  <ScheduleTimeInput
                     id={`${formId}-slot-${idx}-end_time`}
                     aria-invalid={Boolean(slotError(idx, 'end_time'))}
                     aria-describedby={
@@ -903,10 +904,9 @@ export function ScheduleForm({
                         ? `${formId}-slot-${idx}-end_time-error`
                         : undefined
                     }
-                    type="time"
                     value={slot.end_time}
-                    onChange={(e) =>
-                      updateScheduleSlot(idx, 'end_time', e.target.value)
+                    onValueChange={(value) =>
+                      updateScheduleSlot(idx, 'end_time', value)
                     }
                     required
                     className={scheduleControlClass}
