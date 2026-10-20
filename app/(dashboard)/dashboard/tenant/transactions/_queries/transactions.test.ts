@@ -12,7 +12,7 @@ import { getTenantTransactions } from './transactions';
  * The behaviours pinned here are the ones the acceptance criteria name:
  * authorization failures surface as `forbidden` (not as a technical error),
  * the list carries only the vocabulary the billing `List` handler
- * understands (always `date_by=paid_at`, strict `YYYY-MM-DD`, an explicit
+ * understands (a status-appropriate `date_by`, strict `YYYY-MM-DD`, an explicit
  * status so the export cannot disagree), rows that fail normalisation are
  * skipped rather than failing the list, and a hand-typed bad filter produces
  * `invalid_filter` without any request.
@@ -140,6 +140,7 @@ describe('getTenantTransactions', () => {
     expect(result.error).toBeNull();
     const params = new URLSearchParams(String(fetchMock.mock.calls[0][0]).split('?')[1]);
     expect(params.get('status')).toBe('pending');
+    expect(params.get('date_by')).toBe('created_at');
     expect(params.get('search')).toBe('order-9');
     expect(params.get('page')).toBe('2');
     expect(params.get('date_from')).toBe('2026-09-01');

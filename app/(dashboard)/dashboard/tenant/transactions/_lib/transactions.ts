@@ -14,9 +14,10 @@
  *   members) answers the paginated `{ items, pagination }` envelope. Filters
  *   are `status` (one of the values below), `search` (merchant order or
  *   payment intent substring), `date_from`/`date_to` as strict `YYYY-MM-DD`,
- *   and `date_by` (`created_at` or `paid_at`). This screen always sends
- *   `date_by=paid_at` because the tenant reconciles against the payment date
- *   (UTC-day semantics, ADR 0039).
+ *   and `date_by` (`created_at` or `paid_at`). Paid uses `paid_at` to
+ *   reconcile with the sales summary; other statuses
+ *   use `created_at` so rows without a payment date remain visible. Both use
+ *   inclusive UTC calendar days.
  * - `GET /api/v1/billing/transactions/export` accepts the same filters and
  *   streams the CSV. It defaults an absent `status` to `paid`, so this screen
  *   always sends an explicit status: the list and the download can never
@@ -190,13 +191,13 @@ export function parseTransactionFilters(
  * Shared filter parameters for the list and the CSV export.
  *
  * Both readers build from this one function, so the rows on screen and the
- * downloaded file always cover the same filter. `date_by=paid_at` is always
- * sent: the backend would otherwise filter on the creation date. Dates stay
+ * downloaded file always cover the same filter. Paid uses the payment date;
+ * every other status uses the creation date. Dates stay
  * plain `YYYY-MM-DD` because the service parses them strictly in that layout.
  */
 export function transactionFilterParams(filters: TransactionFilters): URLSearchParams {
   const params = new URLSearchParams({
-    date_by: 'paid_at',
+    date_by: filters.status === 'paid' ? 'paid_at' : 'created_at',
     status: filters.status,
     date_from: filters.date_from,
     date_to: filters.date_to,

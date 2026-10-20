@@ -17,7 +17,8 @@ vi.mock('./_components/TransactionFilterBar', () => ({
   TransactionFilterBar: () => <div>Filter transaksi</div>,
 }));
 
-import TenantTransactionsPage, { TransactionsView } from './page';
+import TenantTransactionsPage from './page';
+import { TransactionsView } from './_components/TransactionsView';
 import { defaultTransactionFilters } from './_lib/transactions';
 
 const ROW = {
@@ -83,6 +84,17 @@ describe('tenant transactions page (KEL-148)', () => {
     expect(output).toContain('Unduh CSV');
     expect(output).toContain('/dashboard/tenant/transactions/export?');
     expect(output).toContain('date_by=paid_at');
+  });
+
+  it('renders an unpaid row and exports by creation date', () => {
+    const filters = { ...FILTERS, status: 'pending' };
+    const output = renderToStaticMarkup(<TransactionsView
+      filters={filters} defaults={FILTERS} parsed={{ filters, error: null }}
+      result={ok([{ ...ROW, status: 'pending', paid_at: null }]) as never}
+    />);
+    expect(output).toContain('order-1');
+    expect(output).toContain('date_by=created_at');
+    expect(output).toContain('tanggal buat');
   });
 
   it('shows the forbidden panel without the table or download to members without billing:read', () => {
