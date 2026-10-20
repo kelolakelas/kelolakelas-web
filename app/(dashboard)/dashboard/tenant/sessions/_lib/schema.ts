@@ -165,6 +165,11 @@ export function canManageTenantSessions(nav: {
   );
 }
 
+/** The current substitute picker joins member IDs from the member:read endpoint. */
+export function canSelectSubstituteTutor(nav: Parameters<typeof canManageTenantSessions>[0]): boolean {
+  return canManageTenantSessions(nav) && nav.membership !== null && nav.membership.permissions.includes('member:read');
+}
+
 export const rescheduleSchema = z
   .object({
     session_id: z.string().refine(isSessionUuid, 'ID sesi tidak valid.'),
