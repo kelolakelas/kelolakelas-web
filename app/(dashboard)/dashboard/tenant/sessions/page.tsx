@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { readTenantNav } from '../_queries/membership';
 import {
   canManageTenantSessions,
+  canSelectSubstituteTutor,
   EMPTY_SESSION_FILTERS,
   parseSessionFilters,
   sessionCountLabel,
@@ -127,6 +128,7 @@ async function SessionsContent({ searchParams }: Props) {
   // Fail-closed: offered only on a confirmed membership with the
   // permission; an unreadable membership hides the mutations.
   const canManageSessions = canManageTenantSessions(nav);
+  const canSelectSubstitute = canSelectSubstituteTutor(nav);
 
   const isFiltered = filters.range !== 'today' || filters.class_id !== '';
 
@@ -180,6 +182,7 @@ async function SessionsContent({ searchParams }: Props) {
                 row={row}
                 canRecordAttendance={canRecordAttendance}
                 canManageSessions={canManageSessions}
+                canSelectSubstitute={canSelectSubstitute}
                 tutors={result.data.tutors}
                 idPrefix={`session-${index}`}
               />

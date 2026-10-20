@@ -49,12 +49,14 @@ function render(
   target: TutorSessionRow,
   canRecordAttendance = true,
   canManageSessions = true,
+  canSelectSubstitute = true,
 ): string {
   return renderToStaticMarkup(
     <SessionCard
       row={target}
       canRecordAttendance={canRecordAttendance}
       canManageSessions={canManageSessions}
+      canSelectSubstitute={canSelectSubstitute}
       tutors={[]}
       idPrefix="test"
     />
@@ -121,6 +123,22 @@ describe('SessionCard', () => {
     expect(html).not.toContain('Tutor pengganti');
     expect(html).toContain('role="alert"');
     expect(html).toContain('schedule:update');
+  });
+
+  it('keeps reschedule and attendance but explains unavailable substitute access for Teacher', () => {
+    const html = render(row(), true, true, false);
+    expect(html).toContain('Reschedule');
+    expect(html).toContain('Catat kehadiran');
+    expect(html).toContain('tidak memiliki izin memilih tutor pengganti');
+    expect(html).not.toContain('substitute-dialog');
+    expect(html).not.toContain('Daftar tutor belum dapat dimuat');
+  });
+
+  it('retains the substitute dialog for members with both permissions', () => {
+    const html = render(row(), true, true, true);
+    expect(html).toContain('Tutor pengganti');
+    expect(html).toContain('substitute-dialog');
+    expect(html).not.toContain('tidak memiliki izin memilih tutor pengganti');
   });
 
   it('hides both mutations on a cancelled session even with schedule:update', () => {

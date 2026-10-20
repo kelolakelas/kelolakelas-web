@@ -4,6 +4,7 @@ import {
   attendanceByEnrollment,
   attendanceStatusLabel,
   canManageTenantSessions,
+  canSelectSubstituteTutor,
   isValidCalendarDate,
   normalizeSessionAttendance,
   normalizeSessionAttendees,
@@ -453,6 +454,30 @@ describe('canManageTenantSessions', () => {
     expect(
       canManageTenantSessions({ state: 'ok', membership: { permissions: ['schedule:read'] } })
     ).toBe(false);
+  });
+});
+
+describe('canSelectSubstituteTutor (KEL-214)', () => {
+  it('keeps Teacher rescheduling while hiding the member-backed substitute picker', () => {
+    const nav = { state: 'ok', membership: { permissions: ['schedule:read', 'schedule:update'] } };
+    expect(canManageTenantSessions(nav)).toBe(true);
+    expect(canSelectSubstituteTutor(nav)).toBe(false);
+  });
+
+  it('allows the picker with both permissions, as on Owner/Creator', () => {
+    expect(canSelectSubstituteTutor({ state: 'ok', membership: { permissions: ['schedule:update', 'member:read'] } })).toBe(true);
+  });
+
+  it('fails closed without schedule:update or a confirmed membership', () => {
+    for (const nav of [
+      { state: 'ok', membership: { permissions: ['member:read'] } },
+      { state: 'ok', membership: null },
+      { state: 'api', membership: { permissions: ['schedule:update', 'member:read'] } },
+      { state: 'forbidden', membership: null },
+      { state: 'configuration', membership: null },
+    ]) {
+      expect(canSelectSubstituteTutor(nav)).toBe(false);
+    }
   });
 });
 

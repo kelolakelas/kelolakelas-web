@@ -112,12 +112,14 @@ export function SessionCard({
   row,
   canRecordAttendance,
   canManageSessions,
+  canSelectSubstitute,
   tutors,
   idPrefix,
 }: {
   row: TutorSessionRow;
   canRecordAttendance: boolean;
   canManageSessions: boolean;
+  canSelectSubstitute: boolean;
   tutors: TutorOption[];
   idPrefix: string;
 }) {
@@ -205,12 +207,18 @@ export function SessionCard({
         ) : canManageSessions ? (
           <div className="flex flex-wrap gap-3">
             <RescheduleDialog sessionId={session.id} sessionLabel={sessionLabel} idPrefix={idPrefix} />
-            <SubstituteTutorDialog
-              sessionId={session.id}
-              sessionLabel={sessionLabel}
-              tutors={tutors}
-              idPrefix={idPrefix}
-            />
+            {canSelectSubstitute ? (
+              <SubstituteTutorDialog
+                sessionId={session.id}
+                sessionLabel={sessionLabel}
+                tutors={tutors}
+                idPrefix={idPrefix}
+              />
+            ) : (
+              <p className="basis-full text-sm text-gray-500 dark:text-gray-400">
+                Anda tidak memiliki izin memilih tutor pengganti. Hubungi administrator tenant.
+              </p>
+            )}
           </div>
         ) : (
           <ScheduleForbiddenPanel />
