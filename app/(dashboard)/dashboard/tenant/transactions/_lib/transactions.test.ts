@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  TRANSACTION_STATUSES,
   defaultTransactionFilters,
   isValidTransactionDate,
   normalizeTenantTransaction,
@@ -20,7 +21,7 @@ import {
  * default view is `paid` over the last 30 UTC days (so it reconciles with the
  * sales summary), unparsable URL values produce `invalid_filter` instead of a
  * failed request, and the list and the CSV export always share the same
- * filter parameters (`date_by=paid_at`, strict `YYYY-MM-DD`, explicit
+ * filter parameters (status-appropriate `date_by`, strict `YYYY-MM-DD`, explicit
  * status).
  */
 
@@ -131,6 +132,17 @@ describe('transaction list/export queries (KEL-148)', () => {
     expect(params.get('date_to')).toBe('2026-09-27');
     expect(params.get('page')).toBe('2');
     expect(params.get('page_size')).toBe('20');
+  });
+
+  it.each(TRANSACTION_STATUSES)('uses the appropriate date basis for %s in list and CSV', (status) => {
+    const active = { ...filters, status };
+    const listed = new URLSearchParams(transactionListQuery(active));
+    const exported = new URLSearchParams(transactionExportQuery(active));
+    expect(listed.get('date_by')).toBe(status === 'paid' ? 'paid_at' : 'created_at');
+    for (const key of ['date_by', 'status', 'search', 'date_from', 'date_to']) {
+      expect(exported.get(key)).toBe(listed.get(key));
+    }
+    expect(transactionPageHref(active)).toContain(`status=${status}`);
   });
 
   it('covers the same filter in the export without pagination', () => {

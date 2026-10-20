@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { TENANT_TRANSACTIONS_PATH, TRANSACTION_STATUSES } from '../_lib/transactions';
 
 /**
- * Status, order-id, and paid-date filter for the transaction overview
+ * Status, order-id, and UTC-date filter for the transaction overview
  * (KEL-148).
  *
  * The form submits with `GET` to the same route, so the active filter lives
@@ -112,7 +112,7 @@ export function TransactionFilterBar({
             htmlFor="transaction-date-from"
             className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
           >
-            Dari tanggal bayar
+            Dari tanggal (UTC)
           </label>
           <input
             id="transaction-date-from"
@@ -129,7 +129,7 @@ export function TransactionFilterBar({
             htmlFor="transaction-date-to"
             className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
           >
-            Sampai tanggal bayar
+            Sampai tanggal (UTC)
           </label>
           <input
             id="transaction-date-to"
@@ -166,6 +166,9 @@ export function TransactionFilterBar({
           )}
         </div>
       </form>
+      <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+        Status paid memakai tanggal bayar; status lain memakai tanggal buat. Kedua tanggal termasuk dalam rentang (UTC).
+      </p>
     </div>
   );
 }

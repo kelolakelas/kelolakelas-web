@@ -90,6 +90,14 @@ describe('transaction export route (KEL-148)', () => {
     });
   });
 
+  it('forwards a pending export by creation date even if the URL asks for paid date', async () => {
+    await GET(request('status=pending&date_from=2026-10-20&date_to=2026-10-20&date_by=paid_at'));
+    const parsed = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(parsed.searchParams.get('date_by')).toBe('created_at');
+    expect(parsed.searchParams.get('status')).toBe('pending');
+    expect(parsed.searchParams.get('date_to')).toBe('2026-10-20');
+  });
+
   it('rejects an invalid filter without any upstream request', async () => {
     const response = await GET(request('status=all&date_from=2026-08-29&date_to=2026-09-27'));
 
