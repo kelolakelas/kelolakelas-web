@@ -318,3 +318,18 @@ describe('RejectScheduleRequestDialog with a recommendation (KEL-116)', () => {
     expect(ids).toContain(`desktop-reject-schedule-request-mode-recommend-${REQUEST_ID}`);
   });
 });
+
+
+it('reconciles navigation only after a confirmed successful decision', () => {
+  const dispatch = vi.spyOn(window, 'dispatchEvent');
+  const { rerender } = render(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Student" idPrefix="badge-test" />);
+  const invalidations = () => dispatch.mock.calls.filter(([event]) => event.type === 'kelolakelas:schedule-request-count-refresh').length;
+  expect(invalidations()).toBe(0);
+  mocks.approveState.current = { success: false, message: 'Belum terkonfirmasi' };
+  rerender(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Student" idPrefix="badge-test" />);
+  expect(invalidations()).toBe(0);
+  mocks.approveState.current = { success: true, message: 'Disetujui', paymentUrl: PAYMENT_URL };
+  rerender(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Student" idPrefix="badge-test" />);
+  expect(invalidations()).toBe(1);
+  dispatch.mockRestore();
+});
