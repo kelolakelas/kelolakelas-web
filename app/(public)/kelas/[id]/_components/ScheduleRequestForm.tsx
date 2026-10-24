@@ -6,6 +6,12 @@ import { useFormStatus } from 'react-dom';
 import { createScheduleRequest } from '../_actions/actions';
 import { PAYMENT_CHANNEL_OPTIONS, type EnrollmentActionState } from '@/lib/enrollment';
 import { scheduleRequestPaymentLabel } from '@/lib/schedule-request';
+import {
+  publicScheduleControlClass,
+  publicScheduleDayControlClass,
+  scheduleDayControlStyle,
+  scheduleFieldClass,
+} from '@/lib/schedule-field-styles';
 import { WEEKDAY_NAMES } from '@/lib/enrollment-schedule';
 import {
   validateScheduleSlotDrafts,
@@ -60,7 +66,7 @@ export function ScheduleRequestForm({
   initialStudentId?: string;
   resubmitFrom?: ScheduleRequest;
 }) {
-  const [state, formAction] = useActionState(createScheduleRequest, initialState);
+  const [state, formAction, pending] = useActionState(createScheduleRequest, initialState);
   const [selectedStudentId, setSelectedStudentId] = useState(resubmitFrom?.student_id || initialStudentId);
   const [syncedStudentId, setSyncedStudentId] = useState(initialStudentId);
 
@@ -89,6 +95,8 @@ export function ScheduleRequestForm({
   const slotPayload = JSON.stringify(
     drafts.map((draft) => ({ day_of_week: Number(draft.day_of_week), start_time: draft.start_time, end_time: draft.end_time }))
   );
+
+  const slotError = clientError || state.errors?.slots?.[0];
 
   return (
     <form
@@ -122,11 +130,7 @@ export function ScheduleRequestForm({
           )}
         </div>
       )}
-      {clientError && (
-        <p role="alert" className="rounded-2xl bg-[#fde8e7] p-3 text-sm font-medium text-[#8e2119]">
-          {clientError}
-        </p>
-      )}
+
 
       <div>
         <label htmlFor="schedule-request-student" className="text-sm font-bold">
@@ -182,13 +186,13 @@ export function ScheduleRequestForm({
         <FieldError errors={state.errors} name="payment_method" />
       </div>
 
-      <fieldset>
+      <fieldset disabled={pending} className="min-w-0">
         <legend className="text-sm font-bold">Slot jadwal yang diajukan</legend>
         <div className="mt-2 space-y-3">
           {drafts.map((draft, index) => (
             <div key={index} className="rounded-2xl border border-[#dfe3d7] bg-white p-3">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div>
+              <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+                <div className={scheduleFieldClass}>
                   <label htmlFor={`schedule-request-day-${index}`} className="text-sm font-bold">
                     Hari
                   </label>
@@ -196,7 +200,10 @@ export function ScheduleRequestForm({
                     id={`schedule-request-day-${index}`}
                     value={draft.day_of_week}
                     onChange={(event) => updateDraft(index, { day_of_week: event.target.value })}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] bg-white px-3"
+                    aria-invalid={!!slotError}
+                    aria-describedby="schedule-request-slot-help schedule-request-slot-error"
+                    className={publicScheduleDayControlClass}
+                    style={scheduleDayControlStyle}
                   >
                     {WEEKDAY_NAMES.map((name, dayIndex) => (
                       <option value={String(dayIndex + 1)} key={name}>
@@ -205,7 +212,7 @@ export function ScheduleRequestForm({
                     ))}
                   </select>
                 </div>
-                <div>
+                <div className={scheduleFieldClass}>
                   <label htmlFor={`schedule-request-start-${index}`} className="text-sm font-bold">
                     Jam mulai
                   </label>
@@ -215,10 +222,12 @@ export function ScheduleRequestForm({
                     value={draft.start_time}
                     onChange={(event) => updateDraft(index, { start_time: event.target.value })}
                     required
-                    className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3"
+                    aria-invalid={!!slotError}
+                    aria-describedby="schedule-request-slot-help schedule-request-slot-error"
+                    className={publicScheduleControlClass}
                   />
                 </div>
-                <div>
+                <div className={scheduleFieldClass}>
                   <label htmlFor={`schedule-request-end-${index}`} className="text-sm font-bold">
                     Jam selesai
                   </label>
@@ -228,7 +237,9 @@ export function ScheduleRequestForm({
                     value={draft.end_time}
                     onChange={(event) => updateDraft(index, { end_time: event.target.value })}
                     required
-                    className="mt-1 min-h-11 w-full rounded-xl border border-[#c8d0c5] px-3"
+                    aria-invalid={!!slotError}
+                    aria-describedby="schedule-request-slot-help schedule-request-slot-error"
+                    className={publicScheduleControlClass}
                   />
                 </div>
               </div>
@@ -251,8 +262,8 @@ export function ScheduleRequestForm({
         >
           Tambah slot
         </button>
-        <FieldError errors={state.errors} name="slots" />
-        <p className="mt-1 text-sm text-[#52615b]">Jam selesai harus setelah jam mulai pada setiap slot.</p>
+        <p id="schedule-request-slot-error" role={slotError ? 'alert' : undefined} className="mt-1 text-sm text-[#b42318]">{slotError}</p>
+        <p id="schedule-request-slot-help" className="mt-1 text-sm text-[#52615b]">Jam selesai harus setelah jam mulai pada setiap slot.</p>
       </fieldset>
 
       <div>
