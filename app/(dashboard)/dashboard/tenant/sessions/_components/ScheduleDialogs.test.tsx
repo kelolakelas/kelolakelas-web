@@ -105,7 +105,7 @@ describe('RescheduleDialog', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('tidak valid');
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect((screen.getByLabelText('Tanggal baru') as HTMLInputElement).value).toBe('2999-10-05');
+    expect(new FormData(screen.getByLabelText('Tanggal baru').closest('form')!).get('new_session_date')).toBe('2999-10-05');
     expect((screen.getByLabelText('Jam mulai baru') as HTMLInputElement).value).toBe('15:30');
     expect((screen.getByLabelText('Jam selesai baru') as HTMLInputElement).value).toBe('17:00');
     expect(

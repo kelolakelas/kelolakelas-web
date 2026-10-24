@@ -1,5 +1,7 @@
 'use client';
 
+import { DateInput } from '@/components/DateInput';
+
 import { useState, useTransition } from 'react';
 import { assignScheduleTeacher, getScheduleTeachers } from '../_actions/classActions';
 import type { ClassSchedule } from '../_lib/schema';
@@ -35,9 +37,9 @@ export function AssignTeacherForm({ schedule }: { schedule: ClassSchedule }) {
               {teachers.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
-          <label className="block text-xs">Mulai tanggal
-            <input required type="date" value={date} min={schedule.valid_from?.slice(0, 10)} max={schedule.valid_until?.slice(0, 10)} onChange={(event) => setDate(event.target.value)} className="block w-full rounded border p-2" />
-          </label>
+          <div className="block text-xs"><label htmlFor={`assign-date-${schedule.id}`}>Mulai tanggal</label>
+            <DateInput id={`assign-date-${schedule.id}`} label="Mulai tanggal" required value={date} min={schedule.valid_from?.slice(0, 10)} max={schedule.valid_until?.slice(0, 10)} onValueChange={setDate} className="w-full rounded border px-2" />
+          </div>
           <button disabled={pending || !teacher} className="min-h-[44px] text-sm text-blue-700 disabled:opacity-50">{pending ? 'Menyimpan...' : 'Simpan penugasan'}</button>
         </>}
       <button type="button" disabled={pending} onClick={() => setOpen(false)} className="min-h-[44px] px-3 text-sm">Batal</button>

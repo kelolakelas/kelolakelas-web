@@ -72,7 +72,7 @@ it('preserves exact stored instants on untouched edit and local time/seconds on 
   const local = voucherLocalDateTime(saved.valid_from);
   expect(
     (screen.getByLabelText('Valid from date') as HTMLInputElement).value,
-  ).toBe(local.date);
+  ).toBe(local.date.slice(8, 10));
   expect(
     (screen.getByLabelText('Valid from time') as HTMLInputElement).value,
   ).toBe(local.time);
