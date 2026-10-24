@@ -162,7 +162,7 @@ describe('EnrollmentPanel', () => {
   it('offers a labelled native keyboard-focusable channel group and no card fields', () => {
     renderGroup();
     const radios = screen.getAllByRole('radio') as HTMLInputElement[];
-    expect(radios.map((radio) => radio.value)).toEqual(['VC', 'VA', 'NQ']);
+    expect(radios.map((radio) => radio.value)).toEqual(['VC', 'VA', 'SP']);
     expect((screen.getByRole('group', { name: 'Metode pembayaran' }) as HTMLFieldSetElement).contains(radios[0])).toBe(true);
     expect(screen.getByRole('radio', { name: /Kartu kredit\/debit/ })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /Virtual Account/ })).toBeTruthy();
@@ -173,6 +173,12 @@ describe('EnrollmentPanel', () => {
     fireEvent.click(radios[1]);
     expect(radios[1].checked).toBe(true);
     expect(screen.queryByLabelText(/card number|cvv|cvc/i)).toBeNull();
+  });
+
+  it('preserves private request payment options while changing only new group QRIS routing', () => {
+    renderWithStudents([existingStudent]);
+    const picker = screen.getByRole('combobox', { name: 'Metode pembayaran' }) as HTMLSelectElement;
+    expect(Array.from(picker.options).map(option => option.value)).toEqual(['VC', 'VA', 'NQ']);
   });
 
   it('displays VA details after a successful checkout without leaving the page', () => {
@@ -284,9 +290,9 @@ describe('EnrollmentPanel preserves the last checkout submission after an error 
     // intent); the requirement is that the key then stays stable across the
     // failed submit and the retry.
     expect(payloadBefore.idempotency_key).toBeTruthy();
-    expect(payloadBefore).toMatchObject({ student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'NQ', voucher_code: 'HEMAT' });
+    expect(payloadBefore).toMatchObject({ student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'SP', voucher_code: 'HEMAT' });
 
-    await failThroughDispatch({ student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'NQ', voucher_code: 'HEMAT' });
+    await failThroughDispatch({ student_id: studentB.id, schedule_id: scheduleB.id, billing_cycle: 'quarterly', payment_method: 'SP', voucher_code: 'HEMAT' });
     view.rerender(
       <EnrollmentPanel classId={classId} classType="group" isParent students={[existingStudent, studentB]} schedules={[{ id: classId, label: 'Senin 09.00', available: true }, scheduleB]} idempotencyKey={key} />,
     );
@@ -498,6 +504,23 @@ describe('checkout recovery after reload (KEL-216)', () => {
     expect((document.querySelector('[name=idempotency_key]') as HTMLInputElement).value).not.toBe(originalKey);
     fireEvent.change(screen.getByLabelText('Student'), { target: { value: classId } });
     expect((document.querySelector('[name=idempotency_key]') as HTMLInputElement).value).toBe(originalKey);
+  });
+
+  it('retains the original NQ method/key after reload while a different student gets a new SP purchase', () => {
+    const storage = `kelolakelas:checkout:v1:${parentId}:${classId}`;
+    const values = { student_id: classId, schedule_id: classId, billing_cycle: 'monthly', payment_method: 'NQ', voucher_code: '' };
+    window.sessionStorage.setItem(storage, JSON.stringify({ key: originalKey, values }));
+    const second = { ...existingStudent, id: '523e4567-e89b-42d3-a456-426614174000', first_name: 'Second' };
+    render(<EnrollmentPanel parentId={parentId} classId={classId} classType="group" isParent students={[existingStudent, second]} schedules={[{ id: classId, label: 'Senin', available: true }]} idempotencyKey={nextPageKey} />);
+    const payload = () => Object.fromEntries(new FormData(screen.getByRole('button', { name: 'Lanjut ke pembayaran' }).closest('form')!).entries());
+    expect(payload()).toMatchObject({ ...values, idempotency_key: originalKey });
+    fireEvent.change(screen.getByLabelText('Student'), { target: { value: second.id } });
+    expect(payload()).toMatchObject({ student_id: second.id, payment_method: 'SP' });
+    expect(payload().idempotency_key).not.toBe(originalKey);
+    // Merely editing a new purchase must not mutate the saved NQ attempt.
+    expect(JSON.parse(window.sessionStorage.getItem(storage)!).values.payment_method).toBe('NQ');
+    fireEvent.change(screen.getByLabelText('Student'), { target: { value: classId } });
+    expect(payload()).toMatchObject({ ...values, idempotency_key: originalKey });
   });
 
   it('does not restore another parent’s attempt or an invalid stored payload', () => {

@@ -95,7 +95,15 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
   const shownStudentId = shownValue('student_id', selectedStudentId);
   const shownScheduleId = shownValue('schedule_id', selectedScheduleId);
   const shownCycle = shownValue('billing_cycle', selectedCycle);
-  const shownMethod = shownValue('payment_method', selectedMethod);
+  const rawMethod = shownValue('payment_method', selectedMethod);
+  // The owner approved SP for new group purchases. A saved NQ purchase keeps
+  // its exact method/key; changing student is a new purchase, never a rewrite
+  // of the old invoice. Private request options remain unchanged.
+  const recoveringNQ = restoredValues?.payment_method === 'NQ' && shownStudentId === restoredValues.student_id;
+  const shownMethod = rawMethod === 'NQ' && !recoveringNQ ? 'SP' : rawMethod;
+  const groupPaymentOptions = PAYMENT_CHANNEL_OPTIONS.map(option =>
+    option.value === 'NQ' && !recoveringNQ ? { ...option, value: 'SP' } : option,
+  );
   const shownVoucher = shownValue('voucher_code', voucherCode);
   const [preview, setPreview] = useState<VoucherPreviewState | null>(null);
   const [previewPending, startPreview] = useTransition();
@@ -235,7 +243,7 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
         <fieldset className="rounded-2xl border border-[#c8d0c5] bg-white p-4">
           <legend className="px-1 text-sm font-bold">Metode pembayaran</legend>
           <div className="mt-2 space-y-2">
-            {PAYMENT_CHANNEL_OPTIONS.map((option) => (
+            {groupPaymentOptions.map((option) => (
               <label key={option.value} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl p-2 hover:bg-[#f4f8ec]">
                 <input type="radio" name="payment_method" value={option.value} checked={shownMethod === option.value} onChange={(event) => { setSelectedMethod(event.target.value); markEditedAfterFailure('payment_method'); }} required className="mt-1 h-5 w-5 accent-[#617c35]" />
                 <span><span className="block font-bold">{option.label}</span><span className="block text-sm text-[#52615b]">{option.hint}</span></span>
