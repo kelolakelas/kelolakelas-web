@@ -16,7 +16,7 @@ const initialState: ScheduleRequestDecisionState = { success: false, message: ''
  * Split out so `useFormStatus` reads the enclosing Server Action form: the
  * button disables itself while the approval is in flight.
  */
-function ConfirmSubmitButton() {
+function ConfirmSubmitButton({ recovery = false }: { recovery?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -25,7 +25,7 @@ function ConfirmSubmitButton() {
       aria-busy={pending}
       className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:opacity-60"
     >
-      {pending ? 'Menyetujui…' : 'Ya, setujui'}
+      {pending ? 'Memproses…' : recovery ? 'Lihat/pulihkan pembayaran' : 'Ya, setujui'}
     </button>
   );
 }
@@ -114,11 +114,13 @@ export function ApproveScheduleRequestDialog({
   requestId,
   studentName,
   idPrefix,
+  recovery = false,
 }: {
   requestId: string;
   studentName: string;
   /** Distinguishes the mobile and desktop copies of the control, which are both in the DOM. */
   idPrefix: string;
+  recovery?: boolean;
 }) {
   const [state, formAction] = useActionState(approveScheduleRequest, initialState);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -142,7 +144,7 @@ export function ApproveScheduleRequestDialog({
         }}
         className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
       >
-        Setujui
+        {recovery ? 'Lihat/pulihkan pembayaran' : 'Setujui'}
       </button>
 
       <dialog
@@ -155,7 +157,7 @@ export function ApproveScheduleRequestDialog({
         }}
       >
         <h2 id={titleId} className="text-xl font-bold">
-          Setujui permintaan jadwal {studentName}?
+          {recovery ? `Lihat/pulihkan pembayaran ${studentName}?` : `Setujui permintaan jadwal ${studentName}?`}
         </h2>
 
         {state.success ? (
@@ -179,8 +181,9 @@ export function ApproveScheduleRequestDialog({
         ) : (
           <>
             <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
-              Permintaan yang disetujui menerbitkan enrollment dan tautan pembayaran untuk
-              parent. Tindakan ini tidak dapat diurungkan.
+              {recovery
+                ? 'Ambil kembali pembayaran dari permintaan yang sama. Jika penerbitan invoice sebelumnya gagal, proses akan dilanjutkan tanpa membuat enrollment atau jadwal baru. Invoice aktif tetap digunakan.'
+                : 'Permintaan yang disetujui menerbitkan enrollment dan tautan pembayaran untuk parent. Tindakan ini tidak dapat diurungkan.'}
             </p>
 
             <form action={formAction} className="mt-6 flex flex-wrap justify-end gap-3">
@@ -192,7 +195,7 @@ export function ApproveScheduleRequestDialog({
               >
                 Tidak jadi
               </button>
-              <ConfirmSubmitButton />
+              <ConfirmSubmitButton recovery={recovery} />
             </form>
 
             {dialogOpen && !state.success && state.message && (

@@ -86,6 +86,15 @@ describe('ApproveScheduleRequestDialog', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('recovers an approved request using the same request id and accessible confirmation', () => {
+    render(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="desktop" recovery />);
+    fireEvent.click(screen.getByRole('button', { name: 'Lihat/pulihkan pembayaran' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.textContent).toContain('tanpa membuat enrollment atau jadwal baru');
+    expect(dialog.querySelector<HTMLInputElement>('input[name="request_id"]')?.value).toBe(REQUEST_ID);
+    expect(dialog.querySelector('button[type="submit"]')?.textContent).toBe('Lihat/pulihkan pembayaran');
+  });
+
   it('keeps the dialog open with the mapped refusal message', () => {
     mocks.approveState.current = {
       success: false,
@@ -185,6 +194,15 @@ describe('RejectScheduleRequestDialog', () => {
     expect(reason.value).toBe('');
     // The confirm control is available with the field untouched.
     expect(screen.getByRole('button', { name: 'Tolak permintaan' })).toBeTruthy();
+  });
+
+  it('recovers an approved request using the same request id and accessible confirmation', () => {
+    render(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="desktop" recovery />);
+    fireEvent.click(screen.getByRole('button', { name: 'Lihat/pulihkan pembayaran' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.textContent).toContain('tanpa membuat enrollment atau jadwal baru');
+    expect(dialog.querySelector<HTMLInputElement>('input[name="request_id"]')?.value).toBe(REQUEST_ID);
+    expect(dialog.querySelector('button[type="submit"]')?.textContent).toBe('Lihat/pulihkan pembayaran');
   });
 
   it('keeps the dialog open with the mapped refusal message', () => {

@@ -109,7 +109,9 @@ export async function approveScheduleRequest(
     if (!response.ok || result?.status !== 'success') {
       return {
         success: false,
-        message: scheduleRequestDecisionErrorMessage(response.status, result?.message, result?.code),
+        message: response.status >= 500
+          ? 'Pembayaran belum tersedia. Persetujuan mungkin sudah tersimpan. Coba lagi dengan permintaan yang sama; setelah muat ulang, buka filter Disetujui lalu pilih Lihat/pulihkan pembayaran.'
+          : scheduleRequestDecisionErrorMessage(response.status, result?.message, result?.code),
       };
     }
 
@@ -117,8 +119,8 @@ export async function approveScheduleRequest(
     revalidatePath(TENANT_SCHEDULE_REQUESTS_PATH);
     if (!payment) {
       return {
-        success: true,
-        message: 'Permintaan jadwal disetujui. Tautan pembayaran belum tersedia dari layanan billing.',
+        success: false,
+        message: 'Tautan pembayaran belum tersedia. Coba lagi dengan permintaan yang sama; setelah muat ulang, buka filter Disetujui lalu pilih Lihat/pulihkan pembayaran.',
       };
     }
     return {
@@ -130,7 +132,7 @@ export async function approveScheduleRequest(
   } catch (error) {
     return {
       success: false,
-      message: getGatewayConfigurationErrorMessage(error) || 'Persetujuan belum dapat diproses. Coba lagi nanti.',
+      message: getGatewayConfigurationErrorMessage(error) || 'Hasil persetujuan belum terkonfirmasi. Coba lagi dengan permintaan yang sama; setelah muat ulang, periksa filter Disetujui dan pilih Lihat/pulihkan pembayaran.',
     };
   }
 }
