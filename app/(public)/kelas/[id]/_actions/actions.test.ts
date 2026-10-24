@@ -113,7 +113,7 @@ describe('enrollInClass platform fee rejection', () => {
   });
 
   it('still redirects to checkout on success', async () => {
-    respondWith(201, { status: 'success', data: { payment: { checkout_session_url: 'https://checkout.test/session' } } });
+    respondWith(201, { status: 'success', data: { enrollment: { id }, payment: { checkout_session_url: 'https://checkout.test/session' } } });
     await expect(enrollInClass(id, { success: false, message: '' }, form())).rejects.toThrow('REDIRECT');
     const { redirect } = await import('next/navigation');
     expect(redirect).toHaveBeenCalledWith('https://checkout.test/session');

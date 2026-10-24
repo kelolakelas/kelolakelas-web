@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  checkoutPending: { current: false },
   enrollmentState: { current: { success: false, message: '' } as Record<string, unknown> },
   studentState: { current: { success: false, message: '' } as Record<string, unknown> },
   enrollInClass: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('react', async (importOriginal) => ({
     // directly with a real FormData instead of overwriting the displayed
     // state, so the echo-restore path runs exactly as wired.
     mocks.enrollAction.current = action as (prev: unknown, fd: unknown) => Promise<Record<string, unknown>>;
-    return [mocks.enrollmentState.current, vi.fn()];
+    return [mocks.enrollmentState.current, vi.fn(), mocks.checkoutPending.current];
   },
 }));
 vi.mock('react-dom', async (importOriginal) => ({
@@ -60,6 +61,8 @@ function renderGroup() {
 }
 
 beforeEach(() => {
+  mocks.checkoutPending.current = false;
+  window.sessionStorage.clear();
   mocks.enrollmentState.current = { success: false, message: '' };
   mocks.studentState.current = { success: false, message: '' };
   mocks.enrollInClass.mockReset();
@@ -452,5 +455,71 @@ describe('EnrollmentPanel add student with existing students (KEL-130)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((screen.getByRole('combobox', { name: 'Student' }) as HTMLSelectElement).value).toBe(existingStudent.id);
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+
+describe('checkout recovery after reload (KEL-216)', () => {
+  const parentId = '923e4567-e89b-42d3-a456-426614174000';
+  const originalKey = '723e4567-e89b-42d3-a456-426614174000';
+  const nextPageKey = '823e4567-e89b-42d3-a456-426614174000';
+  const panel = (key: string, owner = parentId, available = true) => <EnrollmentPanel parentId={owner} classId={classId} classType="group" isParent students={[existingStudent]} schedules={[{ id: classId, label: 'Senin 09.00', available }]} idempotencyKey={key} />;
+
+  it('disables duplicate submission while the manually dispatched action is pending', () => {
+    mocks.checkoutPending.current = true;
+    render(panel(originalKey));
+    const button = screen.getByRole('button', { name: 'Menyiapkan checkout…' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('restores the same payload/key after remount and permits same-key retry of a now-full reserved slot', () => {
+    const first = render(panel(originalKey));
+    fireEvent.change(screen.getByLabelText('Student'), { target: { value: classId } });
+    fireEvent.change(screen.getByLabelText('Jadwal'), { target: { value: classId } });
+    fireEvent.change(screen.getByLabelText('Periode pembayaran'), { target: { value: 'quarterly' } });
+    fireEvent.click(screen.getByRole('radio', { name: /QRIS/ }));
+    const form = screen.getByRole('button', { name: 'Lanjut ke pembayaran' }).closest('form')!;
+    const original = Object.fromEntries(new FormData(form).entries());
+    fireEvent.submit(form);
+    first.unmount();
+    render(panel(nextPageKey, parentId, false));
+    const retry = screen.getByRole('button', { name: 'Lanjut ke pembayaran' }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+    expect(Object.fromEntries(new FormData(retry.closest('form')!).entries())).toEqual(original);
+  });
+
+  it('starts a distinct attempt for another student and can return to the original draft before submitting', () => {
+    const key = `kelolakelas:checkout:v1:${parentId}:${classId}`;
+    window.sessionStorage.setItem(key, JSON.stringify({ key: originalKey, values: { student_id: classId, schedule_id: classId, billing_cycle: 'monthly', payment_method: 'VA', voucher_code: '' } }));
+    const second = { ...existingStudent, id: '523e4567-e89b-42d3-a456-426614174000', first_name: 'Second' };
+    render(<EnrollmentPanel parentId={parentId} classId={classId} classType="group" isParent students={[existingStudent, second]} schedules={[{ id: classId, label: 'Senin', available: true }]} idempotencyKey={nextPageKey} />);
+    fireEvent.change(screen.getByLabelText('Student'), { target: { value: second.id } });
+    expect((document.querySelector('[name=idempotency_key]') as HTMLInputElement).value).not.toBe(originalKey);
+    fireEvent.change(screen.getByLabelText('Student'), { target: { value: classId } });
+    expect((document.querySelector('[name=idempotency_key]') as HTMLInputElement).value).toBe(originalKey);
+  });
+
+  it('does not restore another parent’s attempt or an invalid stored payload', () => {
+    const key = `kelolakelas:checkout:v1:${parentId}:${classId}`;
+    window.sessionStorage.setItem(key, JSON.stringify({ key: originalKey, values: { student_id: classId, schedule_id: classId, billing_cycle: 'monthly', payment_method: 'VA', voucher_code: '' } }));
+    const view = render(panel(nextPageKey, '623e4567-e89b-42d3-a456-426614174000'));
+    expect((screen.getByLabelText('Student') as HTMLSelectElement).value).toBe('');
+    view.unmount();
+    window.sessionStorage.setItem(key, '{invalid-json');
+    render(panel(nextPageKey));
+    expect((document.querySelector('[name=idempotency_key]') as HTMLInputElement).value).toBe(nextPageKey);
+  });
+
+  it('warns when storage is unavailable while retaining the in-tab form and identity', async () => {
+    const view = render(panel(originalKey));
+    fireEvent.change(screen.getByLabelText('Student'), { target: { value: classId } });
+    fireEvent.change(screen.getByLabelText('Jadwal'), { target: { value: classId } });
+    const fail = vi.spyOn(window, 'sessionStorage', 'get').mockReturnValue({ getItem: () => null, setItem: () => { throw new Error('storage denied'); } } as unknown as Storage);
+    fireEvent.submit(screen.getByRole('button', { name: 'Lanjut ke pembayaran' }).closest('form')!);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Jangan muat ulang'));
+    expect((document.querySelector('[name=idempotency_key]') as HTMLInputElement).value).toBe(originalKey);
+    fail.mockRestore();
+    view.unmount();
   });
 });

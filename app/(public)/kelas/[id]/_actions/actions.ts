@@ -98,6 +98,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
 
     destination = checkoutUrl(result.data?.payment?.checkout_session_url);
     if (!destination) return { success: false, message: 'Enrollment tersimpan tetapi URL checkout belum tersedia. Silakan buka riwayat enrollment Anda.', values: submitted };
+    if (!enrollmentId) return { success: false, message: 'Pembayaran belum terkonfirmasi karena data enrollment tidak lengkap. Coba lagi dengan pilihan yang sama.', values: submitted };
   } catch (error) {
     return { success: false, message: getGatewayConfigurationErrorMessage(error) || 'Layanan enrollment sedang tidak tersedia. Coba lagi nanti.', values: submitted };
   }
@@ -112,7 +113,7 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
   // fallback with the history link.
   if ((INSTRUCTION_PAYMENT_CHANNELS as readonly string[]).includes(channel)) {
     if (!enrollmentId) {
-      return { success: true, message: 'Enrollment tersimpan. Lihat instruksi pembayaran pada riwayat enrollment Anda.', link: { href: '/dashboard/parent/enrollments', label: 'Lihat status enrollment' } };
+      return { success: false, message: 'Data enrollment belum tersedia. Coba lagi dengan pilihan yang sama.', values: submitted };
     }
     const instructions = await getCheckoutInstructions({ enrollmentId });
     if (instructions.error) {
@@ -123,6 +124,9 @@ export async function enrollInClass(classId: string, _previous: EnrollmentAction
     // panel for that card transaction; send the parent to the hosted link.
     if (instructions.data.channel === 'VC') {
       redirect(destination);
+    }
+    if (!instructions.data.instructions) {
+      return { success: false, message: 'Instruksi pembayaran belum tersedia. Coba lagi dengan pilihan yang sama atau periksa riwayat enrollment Anda.', values: submitted, link: { href: '/dashboard/parent/enrollments', label: 'Lihat status enrollment' } };
     }
     return { success: true, message: 'Enrollment tersimpan. Selesaikan pembayaran di bawah sebelum batas waktu.', payment: instructions.data };
   }
