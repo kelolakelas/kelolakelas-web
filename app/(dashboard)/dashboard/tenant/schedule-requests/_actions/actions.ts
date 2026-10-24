@@ -84,9 +84,9 @@ async function readDecisionEnvelope(
  * (KEL-110).
  *
  * The backend owns the transition through the tenant claim: the browser
- * supplies only the request id. On success the page is revalidated so the
- * row re-renders as approved, and the billing checkout link is returned for
- * the dialog to display with its copy button. Billing carries no expiry
+ * supplies only the request id. The billing checkout link is returned for
+ * the dialog to display with its copy button; the dialog refreshes the row
+ * after the member closes that successful confirmation. Billing carries no expiry
  * field on this answer, so no deadline is shown — only the link itself.
  */
 export async function approveScheduleRequest(
@@ -109,16 +109,20 @@ export async function approveScheduleRequest(
     if (!response.ok || result?.status !== 'success') {
       return {
         success: false,
-        message: scheduleRequestDecisionErrorMessage(response.status, result?.message, result?.code),
+        message: response.status >= 500
+          ? 'Pembayaran belum tersedia. Persetujuan mungkin sudah tersimpan. Coba lagi dengan permintaan yang sama; setelah muat ulang, buka filter Disetujui lalu pilih Lihat/pulihkan pembayaran.'
+          : scheduleRequestDecisionErrorMessage(response.status, result?.message, result?.code),
       };
     }
 
     const payment = normalizeApprovePayment(result?.data);
-    revalidatePath(TENANT_SCHEDULE_REQUESTS_PATH);
+    // The dialog refreshes on close after displaying the payment link. An
+    // immediate refresh would remove this row from the pending filter and
+    // unmount its confirmation before the user can copy the link.
     if (!payment) {
       return {
-        success: true,
-        message: 'Permintaan jadwal disetujui. Tautan pembayaran belum tersedia dari layanan billing.',
+        success: false,
+        message: 'Tautan pembayaran belum tersedia. Coba lagi dengan permintaan yang sama; setelah muat ulang, buka filter Disetujui lalu pilih Lihat/pulihkan pembayaran.',
       };
     }
     return {
@@ -130,7 +134,7 @@ export async function approveScheduleRequest(
   } catch (error) {
     return {
       success: false,
-      message: getGatewayConfigurationErrorMessage(error) || 'Persetujuan belum dapat diproses. Coba lagi nanti.',
+      message: getGatewayConfigurationErrorMessage(error) || 'Hasil persetujuan belum terkonfirmasi. Coba lagi dengan permintaan yang sama; setelah muat ulang, periksa filter Disetujui dan pilih Lihat/pulihkan pembayaran.',
     };
   }
 }

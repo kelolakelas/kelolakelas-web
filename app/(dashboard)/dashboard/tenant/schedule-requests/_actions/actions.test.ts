@@ -163,18 +163,33 @@ describe('approveScheduleRequest', () => {
     // The browser supplies the identifier and nothing else: no tenant id, no
     // status, and no price can influence which request is approved.
     expect(init.body).toBeUndefined();
-    expect(revalidatePath).toHaveBeenCalledWith(TENANT_SCHEDULE_REQUESTS_PATH);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it('confirms the approval when billing carries no usable link', async () => {
+  it('keeps incomplete payment retryable without claiming success', async () => {
     respondWith(200, { status: 'success', data: { enrollment: { id: 'enrollment-1' } } });
 
     const state = await approveScheduleRequest({ success: false, message: '' }, approveForm());
 
-    expect(state.success).toBe(true);
+    expect(state.success).toBe(false);
     expect(state.message).toContain('belum tersedia');
+    expect(state.message).toContain('permintaan yang sama');
     expect(state.paymentUrl).toBeUndefined();
-    expect(revalidatePath).toHaveBeenCalledWith(TENANT_SCHEDULE_REQUESTS_PATH);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('retries an uncertain approval with the identical request and no new purchase identity', async () => {
+    const network = vi.fn()
+      .mockRejectedValueOnce(new Error('private upstream detail'))
+      .mockResolvedValueOnce(new Response(JSON.stringify(approveSuccessBody()), { status: 200 }));
+    vi.stubGlobal('fetch', network);
+    const failed = await approveScheduleRequest({ success: false, message: '' }, approveForm());
+    expect(failed.success).toBe(false);
+    expect(failed.message).toContain('belum terkonfirmasi');
+    expect(failed.message).not.toContain('private upstream');
+    const recovered = await approveScheduleRequest(failed, approveForm());
+    expect(recovered.paymentUrl).toBe(PAYMENT_URL);
+    expect(network.mock.calls[0]).toEqual(network.mock.calls[1]);
   });
 
   it('never approves an invalid identifier over the network', async () => {
@@ -243,7 +258,8 @@ describe('approveScheduleRequest', () => {
     respondWith(500, { status: 'error', message: 'ERROR: deadlock', data: null });
     const failed = await approveScheduleRequest({ success: false, message: '' }, approveForm());
     expect(failed.success).toBe(false);
-    expect(failed.message).toContain('tidak tersedia');
+    expect(failed.message).toContain('belum tersedia');
+    expect(failed.message).toContain('mungkin sudah tersimpan');
     expect(failed.message).not.toContain('deadlock');
   });
 });

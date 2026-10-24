@@ -479,8 +479,8 @@ export type ScheduleRequestApprovePayment = {
  * Reads the `{enrollment, payment}` payload of a successful approve call.
  *
  * Returns null when the payment side is missing or its checkout URL is not
- * usable: the dialog then confirms the approval without rendering a link
- * rather than showing a broken one.
+ * usable. Approval callers keep this outcome retryable rather than claiming
+ * a complete purchase without a payment link.
  */
 export function normalizeApprovePayment(data: unknown): ScheduleRequestApprovePayment | null {
   if (!data || typeof data !== 'object') return null;

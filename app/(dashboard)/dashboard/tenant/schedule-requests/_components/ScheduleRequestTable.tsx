@@ -121,8 +121,9 @@ function EmptyState() {
  *
  * Rendered as cards on small screens and as a table from `md` up, matching the
  * enrollment overview on this dashboard. Only `pending` rows offer the approve
- * and reject dialogs; every other status is display-only. Rejected rows show
- * the tenant's own reason when one was recorded.
+ * and reject dialogs. Approved tenant decisions also offer payment recovery
+ * through the same idempotent approval endpoint. Rejected rows show the
+ * tenant's own reason when one was recorded.
  *
  * The component is a Server Component: it receives already-fetched rows and
  * renders them. The approve/reject dialogs underneath are Client Components
@@ -184,7 +185,19 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
               <RecommendationStatus request={request} />
             </div>
 
-            {request.status === 'approved' && <SendPaymentLinkButton requestId={request.id} />}
+            {request.status === 'approved' && (
+              <div className="flex flex-wrap gap-2">
+                {!request.recommended_slots?.length && (
+                  <ApproveScheduleRequestDialog
+                    requestId={request.id}
+                    studentName={scheduleRequestStudentName(student)}
+                    idPrefix="mobile"
+                    recovery
+                  />
+                )}
+                <SendPaymentLinkButton requestId={request.id} />
+              </div>
+            )}
             {request.status === 'pending' && (
               <div className="flex flex-wrap gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
                 <ApproveScheduleRequestDialog
@@ -297,7 +310,17 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                       />
                     </div>
                   ) : request.status === 'approved' ? (
-                    <SendPaymentLinkButton requestId={request.id} />
+                    <div className="flex flex-wrap gap-2">
+                      {!request.recommended_slots?.length && (
+                        <ApproveScheduleRequestDialog
+                          requestId={request.id}
+                          studentName={scheduleRequestStudentName(student)}
+                          idPrefix="desktop"
+                          recovery
+                        />
+                      )}
+                      <SendPaymentLinkButton requestId={request.id} />
+                    </div>
                   ) : (
                     <span className="text-xs text-gray-400">—</span>
                   )}

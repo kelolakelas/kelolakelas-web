@@ -117,7 +117,8 @@ describe('ScheduleRequestTable', () => {
     expect(approved.split('Kirim tautan pembayaran')).toHaveLength(3);
     expect(render([row()])).not.toContain('Kirim tautan pembayaran');
     expect(render([row({ status: 'rejected' })])).not.toContain('Kirim tautan pembayaran');
-    expect(approved).not.toContain('Setujui');
+    expect(approved).not.toContain('>Setujui<');
+    expect(approved).toContain('Lihat/pulihkan pembayaran');
     expect(approved).not.toContain('>Tolak<');
 
     const rejected = render([row({ status: 'rejected', rejection_reason: 'Slot penuh, usulkan hari lain.' })]);
@@ -131,6 +132,12 @@ describe('ScheduleRequestTable', () => {
     // Chat entries live with the pending decision controls only; decided rows
     // keep their neutral placeholder.
     expect(cancelled).not.toContain('Chat dengan parent');
+  });
+
+  it('does not replay tenant approval for recommendations accepted by the parent', () => {
+    const html = render([row({ status: 'approved', recommended_slots: [{ day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }] })]);
+    expect(html).not.toContain('Lihat/pulihkan pembayaran');
+    expect(html).toContain('Kirim tautan pembayaran');
   });
 
   it('hides the rejection reason line when none was recorded', () => {
