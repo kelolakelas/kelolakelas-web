@@ -1,3 +1,5 @@
+import { ChatUnreadProvider } from '@/components/chat/ChatUnreadProvider';
+import { readChatUnreadScope } from '@/lib/chat-unread-scope';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ParentNavLinks } from './_components/ParentNav';
@@ -7,9 +9,10 @@ import { ParentNavLinks } from './_components/ParentNav';
  * nav on desktop and mobile. Child pages keep their own `<main>` landmark;
  * this layout renders a plain wrapper so landmarks are never nested.
  */
-export default function ParentLayout({ children }: { children: ReactNode }) {
+export default async function ParentLayout({ children }: { children: ReactNode }) {
+  const scope = await readChatUnreadScope();
   return (
-    <>
+    <ChatUnreadProvider scope={scope}>
       <div className="border-b border-[#dfe3d7] bg-white/80">
         <div className="mx-auto max-w-6xl px-5 py-4 sm:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -21,6 +24,6 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
       {children}
-    </>
+    </ChatUnreadProvider>
   );
 }
