@@ -57,6 +57,15 @@ describe('enrollInClass payment channel routing (KEL-127)', () => {
     expect(JSON.parse(String(request?.body))).toMatchObject({ payment_method: channel });
   });
 
+  it.each(['VA', 'VC'])('does not claim success for %s without a valid enrollment identity', async (channel) => {
+    respondWith(201, { status: 'success', data: { payment: { checkout_session_url: 'https://checkout.example.test/session' } } });
+    const state = await enrollInClass(id, { success: false, message: '' }, form(channel));
+    expect(state.success).toBe(false);
+    expect(state.values?.payment_method).toBe(channel);
+    expect(redirect).not.toHaveBeenCalled();
+    expect(getCheckoutInstructions).not.toHaveBeenCalled();
+  });
+
   it('redirects card checkout to the provider without reading card details', async () => {
     success();
     await expect(enrollInClass(id, { success: false, message: '' }, form('VC'))).rejects.toThrow('REDIRECT');
@@ -74,12 +83,14 @@ describe('enrollInClass payment channel routing (KEL-127)', () => {
     expect(redirect).toHaveBeenCalledWith('https://checkout.example.test/session');
   });
 
-  it('uses a safe fallback when the instruction row has not appeared yet', async () => {
+  it('keeps incomplete instructions retryable without claiming checkout success', async () => {
     success();
     getCheckoutInstructions.mockResolvedValue({ data: { channel: '', merchantOrderId: null, instructions: null, qrImage: null }, error: null });
     const state = await enrollInClass(id, { success: false, message: '' }, form('NQ'));
-    expect(state.success).toBe(true);
-    expect(state.payment?.instructions).toBeNull();
+    expect(state.success).toBe(false);
+    expect(state.payment).toBeUndefined();
+    expect(state.message).toContain('Coba lagi');
+    expect(state.values?.payment_method).toBe('NQ');
   });
 
   it.each(['forbidden', 'api'] as const)('reports a %s billing lookup without exposing a payment panel', async (error) => {

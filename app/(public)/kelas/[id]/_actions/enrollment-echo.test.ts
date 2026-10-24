@@ -15,7 +15,7 @@ vi.mock('@/lib/payment-instructions', () => ({
       merchantOrderId: '423e4567-e89b-12d3-a456-426614174001',
       amount: 150000,
       currency: 'IDR',
-      instructions: null,
+      instructions: { kind: 'va', channelLabel: 'Virtual Account', vaNumber: '88001234', expiresLabel: '1 Jan 2100' },
       qrImage: null,
     },
     error: null,
