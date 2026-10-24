@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { NavigationBadge } from '@/components/chat/NavigationBadge';
+import { useChatUnreadCount } from '@/components/chat/ChatUnreadProvider';
 import { usePathname } from 'next/navigation';
 import { PARENT_NAV_ITEMS } from '../_lib/nav';
 
@@ -15,6 +17,7 @@ function isActive(current: string, href: string): boolean {
  * Client-side only so the current route can be marked with aria-current.
  */
 export function ParentNavLinks() {
+  const unread = useChatUnreadCount();
   const current = usePathname() ?? '';
   return (
     <>
@@ -30,7 +33,7 @@ export function ParentNavLinks() {
                 active ? 'bg-[#17231f] text-white' : 'text-[#365047] hover:bg-[#eef4e8]'
               }`}
             >
-              {item.label}
+              {item.label}{item.href === '/dashboard/parent/chat' && <NavigationBadge count={unread} />}
             </Link>
           );
         })}
@@ -49,7 +52,7 @@ export function ParentNavLinks() {
                   : 'border-[#dfe3d7] bg-white text-[#365047]'
               }`}
             >
-              {item.label}
+              {item.label}{item.href === '/dashboard/parent/chat' && <NavigationBadge count={unread} />}
             </Link>
           );
         })}

@@ -30,8 +30,9 @@ async function chatRequest<T>(path: string, method = 'GET', body?: unknown): Pro
   }
 }
 
-export async function listChatConversations(): Promise<ChatResult<ChatConversation[]>> {
-  return chatRequest<ChatConversation[]>('/conversations?page=1&page_size=100');
+export async function listChatConversations(page = 1): Promise<ChatResult<ChatConversation[]>> {
+  if (!Number.isSafeInteger(page) || page < 1) return { data: null, error: 'Halaman percakapan tidak valid.' };
+  return chatRequest<ChatConversation[]>(`/conversations?page=${page}&page_size=100`);
 }
 
 export async function getChatConversation(id: string): Promise<ChatResult<ChatConversation>> {

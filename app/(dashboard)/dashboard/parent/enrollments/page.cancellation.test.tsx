@@ -39,12 +39,12 @@ it.each(['before', 'after'])('keeps success visible when server row updates %s a
   if (timing === 'before') await refresh();
   await act(async () => { resolve({ status: 'success', message: ENROLLMENT_CANCELLATION_SUCCESS_MESSAGE }); });
   if (timing === 'after') await refresh();
-  expect((await view.findByRole('status')).textContent).toBe(ENROLLMENT_CANCELLATION_SUCCESS_MESSAGE);
+  expect((await within(view.getByRole('region', { name: 'Riwayat enrollment' })).findByRole('status')).textContent).toBe(ENROLLMENT_CANCELLATION_SUCCESS_MESSAGE);
   expect(view.getByText(/Enrollment dropped/)).toBeDefined();
   expect(view.queryByRole('button', { name: 'Batalkan pendaftaran' })).toBeNull();
   expect(view.queryByRole('dialog')).toBeNull();
   expect(mocks.cancel).toHaveBeenCalledOnce();
   // A later backend refresh also preserves feedback on the same keyed card.
   await refresh();
-  expect(view.getByRole('status').textContent).toBe(ENROLLMENT_CANCELLATION_SUCCESS_MESSAGE);
+  expect(within(view.getByRole('region', { name: 'Riwayat enrollment' })).getByRole('status').textContent).toBe(ENROLLMENT_CANCELLATION_SUCCESS_MESSAGE);
 });

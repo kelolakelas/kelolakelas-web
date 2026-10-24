@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { NavigationBadge } from '@/components/chat/NavigationBadge';
+import { useChatUnreadCount } from '@/components/chat/ChatUnreadProvider';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
@@ -105,6 +107,7 @@ function MobileNavContent({
   roleName: string | null;
   hasNavError: boolean;
 }) {
+  const unread = useChatUnreadCount();
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -183,7 +186,7 @@ function MobileNavContent({
                     }`}
                   >
                     <NavIcon href={item.href} />
-                    <span>{item.label}</span>
+                    <span>{item.label}</span>{item.href === '/dashboard/tenant/chat' && <NavigationBadge count={unread} />}
                   </Link>
                 );
               })}
