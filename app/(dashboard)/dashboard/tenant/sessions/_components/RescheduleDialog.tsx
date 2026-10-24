@@ -1,5 +1,7 @@
 'use client';
 
+import { DateInput } from '@/components/DateInput';
+
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { rescheduleSession, type ScheduleActionState } from '../_actions/schedule';
@@ -137,14 +139,13 @@ export function RescheduleDialog({
             >
               Tanggal baru
             </label>
-            <input
+            <DateInput label="Tanggal baru"
               id={`${dialogId}-date`}
               name="new_session_date"
-              type="date"
               required
               value={newSessionDate}
-              onChange={(event) => setNewSessionDate(event.target.value)}
-              className="block w-full min-h-[44px] rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              onValueChange={setNewSessionDate}
+              className="w-full min-h-[44px] rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
           </div>
 

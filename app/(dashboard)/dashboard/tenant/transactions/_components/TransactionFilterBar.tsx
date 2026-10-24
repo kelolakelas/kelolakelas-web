@@ -1,5 +1,7 @@
 'use client';
 
+import { DateInput } from '@/components/DateInput';
+
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { TENANT_TRANSACTIONS_PATH, TRANSACTION_STATUSES } from '../_lib/transactions';
@@ -114,10 +116,9 @@ export function TransactionFilterBar({
           >
             Dari tanggal (UTC)
           </label>
-          <input
+          <DateInput label="Dari tanggal (UTC)"
             id="transaction-date-from"
             name="date_from"
-            type="date"
             defaultValue={dateFrom}
             disabled={disabled}
             className="mt-1.5 min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-60"
@@ -131,10 +132,9 @@ export function TransactionFilterBar({
           >
             Sampai tanggal (UTC)
           </label>
-          <input
+          <DateInput label="Sampai tanggal (UTC)"
             id="transaction-date-to"
             name="date_to"
-            type="date"
             defaultValue={dateTo}
             disabled={disabled}
             className="mt-1.5 min-h-[44px] w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-60"
