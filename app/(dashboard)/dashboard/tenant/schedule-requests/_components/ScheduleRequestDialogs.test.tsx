@@ -3,11 +3,14 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  refresh: vi.fn(),
   approveState: { current: { success: false, message: '' } as Record<string, unknown> },
   rejectState: { current: { success: false, message: '' } as Record<string, unknown> },
   approveScheduleRequest: vi.fn(),
   rejectScheduleRequest: vi.fn(),
 }));
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
@@ -51,6 +54,7 @@ const REQUEST_ID = '9a1c3e5f-2b4d-4e6f-8a0b-1c2d3e4f5a6b';
 const PAYMENT_URL = 'https://pay.test/checkout/session-1';
 
 beforeEach(() => {
+  mocks.refresh.mockClear();
   mocks.approveState.current = { success: false, message: '' };
   mocks.rejectState.current = { success: false, message: '' };
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
@@ -135,18 +139,21 @@ describe('ApproveScheduleRequestDialog', () => {
     // Closing the dialog here would lose the only copy of the link, so the
     // confirm form is gone and only the dismiss control remains.
     expect(screen.queryByRole('button', { name: 'Ya, setujui' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Tutup' })).toBeTruthy();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Tutup' }));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('confirms the approval without a link block when billing has none', () => {
+  it('keeps missing payment retryable inside the dialog', () => {
     mocks.approveState.current = {
-      success: true,
-      message: 'Permintaan jadwal disetujui. Tautan pembayaran belum tersedia dari layanan billing.',
+      success: false,
+      message: 'Tautan pembayaran belum tersedia. Coba lagi dengan permintaan yang sama.',
     };
     render(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="mobile" />);
     fireEvent.click(screen.getByRole('button', { name: 'Setujui' }));
 
-    expect(screen.getByRole('status').textContent).toContain('belum tersedia');
+    expect(screen.getByRole('alert').textContent).toContain('belum tersedia');
+    expect(screen.getByRole('button', { name: 'Ya, setujui' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Salin tautan' })).toBeNull();
   });
 });

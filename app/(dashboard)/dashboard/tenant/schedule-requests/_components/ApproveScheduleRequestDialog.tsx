@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/payment-status';
 import {
   approveScheduleRequest,
@@ -123,6 +124,7 @@ export function ApproveScheduleRequestDialog({
   recovery?: boolean;
 }) {
   const [state, formAction] = useActionState(approveScheduleRequest, initialState);
+  const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -154,6 +156,7 @@ export function ApproveScheduleRequestDialog({
         onClose={() => {
           setDialogOpen(false);
           triggerRef.current?.focus();
+          if (state.success) router.refresh();
         }}
       >
         <h2 id={titleId} className="text-xl font-bold">

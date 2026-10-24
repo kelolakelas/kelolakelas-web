@@ -163,7 +163,7 @@ describe('approveScheduleRequest', () => {
     // The browser supplies the identifier and nothing else: no tenant id, no
     // status, and no price can influence which request is approved.
     expect(init.body).toBeUndefined();
-    expect(revalidatePath).toHaveBeenCalledWith(TENANT_SCHEDULE_REQUESTS_PATH);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('keeps incomplete payment retryable without claiming success', async () => {
@@ -175,7 +175,7 @@ describe('approveScheduleRequest', () => {
     expect(state.message).toContain('belum tersedia');
     expect(state.message).toContain('permintaan yang sama');
     expect(state.paymentUrl).toBeUndefined();
-    expect(revalidatePath).toHaveBeenCalledWith(TENANT_SCHEDULE_REQUESTS_PATH);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('retries an uncertain approval with the identical request and no new purchase identity', async () => {
