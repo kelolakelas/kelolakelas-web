@@ -1,5 +1,7 @@
 'use client';
 
+import { DateInput } from '@/components/DateInput';
+
 import { useScheduleTeachers } from './useScheduleTeachers';
 import { TeacherLoadStatus } from './TeacherLoadStatus';
 
@@ -380,20 +382,19 @@ function ScheduleVersionEditor({
             <TeacherLoadStatus read={teachers} loading={teachersLoading} retry={retryTeachers} />
             {teachers?.state === 'ok' && slot.tutor_id && !teachers.teachers.some(teacher => teacher.id === slot.tutor_id) && <p role="alert">The assigned Teacher is no longer eligible. Choose an active Teacher when changing the assignment.</p>}
 
-            <label className={scheduleFieldClass}>
-              <span className={scheduleLabelClass}>Effective from</span>
-              <input
-                type="date"
+            <div className={scheduleFieldClass}>
+              <label htmlFor={`${formId}-effective`} className={scheduleLabelClass}>Effective from</label>
+              <DateInput id={`${formId}-effective`} label="Effective from"
                 required
                 min={[today(), schedule.valid_from?.slice(0, 10) ?? '']
                   .sort()
                   .at(-1)}
                 max={schedule.valid_until?.slice(0, 10)}
                 value={effective}
-                onChange={(event) => setEffective(event.target.value)}
+                onValueChange={setEffective}
                 className={scheduleControlClass}
               />
-            </label>
+            </div>
             <p className="text-xs">
               Changes create a new schedule version. Existing attendance and
               sold prices remain. Capacity must cover reserved seats.

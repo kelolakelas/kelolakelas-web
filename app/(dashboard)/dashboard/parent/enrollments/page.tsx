@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ChatUnreadBadge } from '@/components/chat/ChatUnreadBadge';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
 import { PaymentInstructionsPanel } from '@/app/_components/PaymentInstructionsPanel';
 import { canCancelEnrollment } from '@/lib/enrollment-cancellation';
@@ -33,7 +34,7 @@ export default async function ParentEnrollmentHistoryPage() {
       <div className="mx-auto max-w-4xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/kelas" className="text-sm font-bold text-[#617c35] hover:underline">← Kembali ke katalog</Link>
-          <Link href="/dashboard/parent/chat" className="text-sm font-bold text-[#617c35] hover:underline">Chat</Link>
+          <Link href="/dashboard/parent/chat" className="text-sm font-bold text-[#617c35] hover:underline">Chat<ChatUnreadBadge /></Link>
           <LogoutButton className="min-h-11 rounded-xl border border-[#dfe3d7] bg-white px-4 text-sm font-bold text-[#617c35] hover:bg-[#eef4e8]" />
         </div>
         <header className="mt-7 border-b border-[#dfe3d7] pb-7">

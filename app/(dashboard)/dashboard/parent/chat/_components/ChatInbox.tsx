@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyChatUnreadChanged } from '@/lib/chat-unread-events';
+
 import {
   useCallback,
   useEffect,
@@ -132,10 +134,12 @@ export function ChatInbox({
     setLoading((previous) => ({ ...previous, [id]: false }));
     const read = await markChatRead(id);
     if (read.error) setError(read.error);
-    else
+    else {
+      notifyChatUnreadChanged();
       setConversations((previous) =>
         previous.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
       );
+    }
   }, []);
 
   useEffect(() => {
@@ -156,10 +160,12 @@ export function ChatInbox({
         }
       });
       void markChatRead(id).then((result) => {
-        if (!result.error)
+        if (!result.error) {
+          notifyChatUnreadChanged();
           setConversations((previous) =>
             previous.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
           );
+        }
       });
     }
   }, []);
@@ -198,6 +204,7 @@ export function ChatInbox({
         socket = new WebSocket(url);
         socket.onopen = () => {
           retry = 0;
+          notifyChatUnreadChanged();
           setConnection('connected');
           setError('');
           void refresh(activeRef.current);
@@ -225,8 +232,9 @@ export function ChatInbox({
                 activeRef.current === event.conversation_id &&
                 event.message.sender_user_id !== userId
               )
-                void markChatRead(event.conversation_id);
+                void markChatRead(event.conversation_id).then(result => { if (!result.error) notifyChatUnreadChanged(); });
             }
+            notifyChatUnreadChanged();
             // Refresh the list to discover conversations created since connect.
             void refresh(activeRef.current);
             setConversations((previous) =>

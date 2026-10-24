@@ -1,5 +1,7 @@
 'use client';
 
+import { DateInput } from '@/components/DateInput';
+
 import { useId, useState, useSyncExternalStore } from 'react';
 import { voucherDateTimePayload, voucherLocalDateTime } from '../_lib/datetime';
 
@@ -57,15 +59,13 @@ function LocalDateTimeField({
           >
             Date
           </label>
-          <input
+          <DateInput label={`${label} date`}
             id={`${id}-date`}
-            type="date"
             value={parts.date}
             aria-label={`${label} date`}
             aria-invalid={Boolean(error)}
             aria-describedby={description}
-            onChange={(event) => {
-              const date = event.target.value;
+            onValueChange={(date) => {
               setParts({
                 date,
                 time:

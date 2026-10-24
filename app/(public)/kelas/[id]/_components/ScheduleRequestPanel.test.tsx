@@ -150,6 +150,35 @@ describe('EnrollmentPanel private vs group (KEL-109)', () => {
     fireEvent.submit(form);
 
     expect(screen.getByRole('alert').textContent).toContain('setelah jam mulai');
+    for (const label of ['Hari', 'Jam mulai', 'Jam selesai']) {
+      const control = screen.getByLabelText(label);
+      expect(control.getAttribute('aria-invalid')).toBe('true');
+      expect(control.getAttribute('aria-describedby')).toContain(screen.getByRole('alert').id);
+    }
+  });
+
+
+  it('keeps slot payload and numeric weekdays after adding and removing slots', () => {
+    const { container } = renderPrivate();
+    fireEvent.change(screen.getByLabelText('Hari'), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText('Jam mulai'), { target: { value: '09:15' } });
+    fireEvent.change(screen.getByLabelText('Jam selesai'), { target: { value: '10:45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tambah slot' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Hapus slot ini' })[1]);
+    const payload = container.querySelector<HTMLInputElement>('input[name="slots"]');
+    expect(JSON.parse(payload!.value)).toEqual([{ day_of_week: 7, start_time: '09:15', end_time: '10:45' }]);
+    expect(screen.getByLabelText('Jam mulai').getAttribute('type')).toBe('time');
+    expect(screen.getByLabelText('Hari').tagName).toBe('SELECT');
+  });
+
+  it('associates server slot errors with each affected control', () => {
+    mocks.requestState.current = { success: false, message: '', errors: { slots: ['Slot tidak tersedia.'] } };
+    renderPrivate();
+    const error = screen.getByRole('alert');
+    expect(error.textContent).toBe('Slot tidak tersedia.');
+    for (const label of ['Hari', 'Jam mulai', 'Jam selesai']) {
+      expect(screen.getByLabelText(label).getAttribute('aria-describedby')).toContain(error.id);
+    }
   });
 
   it('links a duplicate error to the request list', () => {
