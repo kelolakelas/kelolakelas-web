@@ -1,3 +1,4 @@
+import { PendingScheduleRequestProvider } from '@/components/PendingScheduleRequestProvider';
 import { ChatUnreadProvider } from '@/components/chat/ChatUnreadProvider';
 import { readChatUnreadScope } from '@/lib/chat-unread-scope';
 import type { ReactNode } from 'react';
@@ -23,20 +24,22 @@ export default async function TenantLayout({ children }: TenantLayoutProps) {
   };
   return (
     <ChatUnreadProvider scope={scope} enabled={nav.items.some(item => item.href === '/dashboard/tenant/chat')}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-        {/* Mobile Sticky Navigation Topbar */}
-        <MobileNav {...navProps} />
+      <PendingScheduleRequestProvider scope={scope} enabled={nav.items.some(item => item.href === '/dashboard/tenant/schedule-requests')}>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+          {/* Mobile Sticky Navigation Topbar */}
+          <MobileNav {...navProps} />
 
-        {/* Desktop Fixed Sidebar */}
-        <TenantSidebar {...navProps} />
+          {/* Desktop Fixed Sidebar */}
+          <TenantSidebar {...navProps} />
 
-        {/* Main Content Area */}
-        <div className="md:pl-64 flex flex-col min-h-screen transition-all">
-          <main className="flex-1 p-4 sm:p-6 md:p-8">
-            {children}
-          </main>
+          {/* Main Content Area */}
+          <div className="md:pl-64 flex flex-col min-h-screen transition-all">
+            <main className="flex-1 p-4 sm:p-6 md:p-8">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </PendingScheduleRequestProvider>
     </ChatUnreadProvider>
   );
 }

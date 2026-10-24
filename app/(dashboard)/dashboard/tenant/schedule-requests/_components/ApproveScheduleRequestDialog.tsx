@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useRef, useState } from 'react';
+import { notifyScheduleRequestCountChanged } from '@/lib/schedule-request-count-events';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/payment-status';
@@ -124,6 +125,9 @@ export function ApproveScheduleRequestDialog({
   recovery?: boolean;
 }) {
   const [state, formAction] = useActionState(approveScheduleRequest, initialState);
+  useEffect(() => {
+    if (state.success) notifyScheduleRequestCountChanged();
+  }, [state]);
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);

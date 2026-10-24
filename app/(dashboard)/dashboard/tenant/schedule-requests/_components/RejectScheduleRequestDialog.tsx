@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useRef, useState } from 'react';
+import { notifyScheduleRequestCountChanged } from '@/lib/schedule-request-count-events';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { WEEKDAY_NAMES } from '@/lib/enrollment-schedule';
 import {
@@ -60,6 +61,9 @@ export function RejectScheduleRequestDialog({
   idPrefix: string;
 }) {
   const [state, formAction] = useActionState(rejectScheduleRequest, initialState);
+  useEffect(() => {
+    if (state.success) notifyScheduleRequestCountChanged();
+  }, [state]);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePendingScheduleRequestCount } from '@/components/PendingScheduleRequestProvider';
 import { NavigationBadge } from '@/components/chat/NavigationBadge';
 import { useChatUnreadCount } from '@/components/chat/ChatUnreadProvider';
 import { usePathname } from 'next/navigation';
@@ -119,6 +120,7 @@ export function TenantSidebar({
 }) {
   const pathname = usePathname();
   const unread = useChatUnreadCount();
+  const pendingRequests = usePendingScheduleRequestCount();
 
   return (
     <aside className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 z-30">
@@ -157,6 +159,7 @@ export function TenantSidebar({
             >
               <NavIcon href={item.href} />
               <span>{item.label}</span>{item.href === '/dashboard/tenant/chat' && <NavigationBadge count={unread} />}
+                    {item.href === '/dashboard/tenant/schedule-requests' && <NavigationBadge count={pendingRequests} label="permintaan jadwal menunggu" />}
             </Link>
           );
         })}
