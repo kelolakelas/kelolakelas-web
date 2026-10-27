@@ -5,6 +5,8 @@ import { CHAT_ID } from '@/lib/chat';
 import { listChatConversations } from '@/lib/chat-actions';
 import { ChatInbox } from '../../parent/chat/_components/ChatInbox';
 import { ReportChatStarter } from './_components/ReportChatStarter';
+import { readChatUnreadScope } from '@/lib/chat-unread-scope';
+import { ChatReadError } from '@/components/chat/ChatReadError';
 
 export const metadata: Metadata = { title: 'Chat tenant - KelolaKelas' };
 export const dynamic = 'force-dynamic';
@@ -46,12 +48,7 @@ export default async function TenantChatPage({ searchParams }: Props) {
         Chat
       </h1>
       {result.error || !userId ? (
-        <p
-          role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
-        >
-          {result.error}
-        </p>
+        <ChatReadError message={result.error || 'Sesi Anda tidak valid.'} />
       ) : (
         <>
           <ChatInbox
@@ -59,6 +56,7 @@ export default async function TenantChatPage({ searchParams }: Props) {
             userId={userId}
             tenant
             initialConversationId={initialConversationId}
+            scope={await readChatUnreadScope()}
           />
           <div className="min-w-0">
             <ReportChatStarter />

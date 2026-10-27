@@ -4,14 +4,14 @@ import { cookies } from 'next/headers';
 import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from '@/lib/gateway';
 import { CHAT_ID, type ChatConversation, type ChatMessage } from '@/lib/chat';
 
-type ChatResult<T> = { data: T; error: null } | { data: null; error: string };
+export type ChatResult<T> = { data: T; error: null } | { data: null; error: string; reason?: 'denied' | 'unavailable' | 'invalid' };
 const PATH = '/api/v1/chat';
 const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME || 'auth_token';
 
 async function chatRequest<T>(path: string, method = 'GET', body?: unknown): Promise<ChatResult<T>> {
   try {
     const token = (await cookies()).get(AUTH_COOKIE)?.value;
-    if (!token) return { data: null, error: 'Sesi Anda tidak valid. Silakan login kembali.' };
+    if (!token) return { data: null, error: 'Sesi Anda tidak valid. Silakan login kembali.', reason: 'denied' };
     const response = await fetch(`${getGatewayBaseUrl()}${PATH}${path}`, {
       method,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -19,14 +19,14 @@ async function chatRequest<T>(path: string, method = 'GET', body?: unknown): Pro
       cache: 'no-store',
     });
     const result = await response.json().catch(() => ({}));
-    if (response.status === 401) return { data: null, error: 'Sesi Anda tidak valid. Silakan login kembali.' };
-    if (response.status === 403) return { data: null, error: 'Anda tidak memiliki akses ke percakapan ini.' };
-    if (response.status === 404) return { data: null, error: 'Percakapan tidak ditemukan.' };
+    if (response.status === 401) return { data: null, error: 'Sesi Anda tidak valid. Silakan login kembali.', reason: 'denied' };
+    if (response.status === 403) return { data: null, error: 'Anda tidak memiliki akses ke percakapan ini.', reason: 'denied' };
+    if (response.status === 404) return { data: null, error: 'Percakapan tidak ditemukan.', reason: 'denied' };
     if (response.status === 400) return { data: null, error: 'Input chat tidak valid. Periksa kembali pesan Anda.' };
-    if (!response.ok || result.status !== 'success') return { data: null, error: 'Layanan chat sedang tidak tersedia. Coba lagi nanti.' };
+    if (!response.ok || result.status !== 'success') return { data: null, error: 'Layanan chat sedang tidak tersedia. Coba lagi nanti.', reason: 'unavailable' };
     return { data: result.data as T, error: null };
   } catch (error) {
-    return { data: null, error: getGatewayConfigurationErrorMessage(error) || 'Layanan chat sedang tidak tersedia. Coba lagi nanti.' };
+    return { data: null, error: getGatewayConfigurationErrorMessage(error) || 'Layanan chat sedang tidak tersedia. Coba lagi nanti.', reason: 'unavailable' };
   }
 }
 
