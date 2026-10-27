@@ -6,6 +6,8 @@ vi.mock('./_queries/membership', () => ({ readTenantNav: async () => ({ items: [
 vi.mock('./_components/MobileNav', () => ({ MobileNav: () => null }));
 vi.mock('./_components/TenantSidebar', () => ({ TenantSidebar: () => null }));
 vi.mock('@/lib/chat-unread-scope', () => ({ readChatUnreadScope: async () => 'scope' }));
+vi.mock('@/lib/tenant-session-actions', () => ({ readTenantChoices: async () => ({ choices: [], activeTenant: '', error: false }) }));
+vi.mock('@/components/TenantContextBoundary', () => ({ TenantContextBoundary: ({ children }: { children: import('react').ReactNode }) => children }));
 vi.mock('@/components/chat/ChatUnreadProvider', () => ({ ChatUnreadProvider: ({children}: {children: import('react').ReactNode}) => children }));
 import Layout from './layout';
 
