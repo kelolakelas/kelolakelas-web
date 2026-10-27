@@ -46,6 +46,12 @@ export function getLoginDestination(identity: LoginIdentity, requestedPath?: unk
     return fallback;
   }
 
+  // Exact invitation surface only; a login return cannot become an open redirect.
+  const invitationUrl = new URL(requestedPath, 'http://localhost');
+  if (invitationUrl.pathname === '/invitations/verify' && invitationUrl.searchParams.get('token')) {
+    return `/invitations/verify?token=${encodeURIComponent(invitationUrl.searchParams.get('token')!)}`;
+  }
+
   if (identity.is_parent && (isPathWithin(requestedPath, PARENT_DESTINATION) || isPathWithin(requestedPath, PARENT_DASHBOARD_ROOT))) {
     return requestedPath;
   }

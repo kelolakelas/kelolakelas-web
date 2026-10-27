@@ -9,6 +9,7 @@ import {
   lookupInvitationTenantName,
   verifyInvitation,
 } from '@/lib/invitation';
+import { ExistingInvitationForm } from './_components/ExistingInvitationForm';
 import { InvitationRegisterForm } from './_components/InvitationRegisterForm';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -88,12 +89,12 @@ export default async function InvitationVerifyPage({ searchParams }: InvitationP
   const { invitation } = verification;
   // Best effort: the tenant name lives in the catalog projection, not in the
   // invitation contract, so a missing name degrades to the generic sentence.
-  const tenantName = await lookupInvitationTenantName(invitation.tenantId);
+  const tenantName = invitation.tenantName || await lookupInvitationTenantName(invitation.tenantId);
   const expiresLabel = formatInvitationExpiry(invitation.expiresAt);
 
   const cookieStore = await cookies();
   const session = getSessionIdentityFromToken(cookieStore.get(AUTH_COOKIE_NAME)?.value);
-  const signedInNotice = session
+  const signedInNotice = session && !invitation.existingAccount
     ? 'You are signed in with another account in this browser. Creating this account signs nobody out, but the invitation belongs to the address above, not to the signed-in account.'
     : null;
 
@@ -105,7 +106,7 @@ export default async function InvitationVerifyPage({ searchParams }: InvitationP
             {tenantName ? `You are invited to join ${tenantName}` : 'You are invited to join a tenant'}
           </h1>
           <p className="mt-2 text-xs text-gray-500 sm:text-sm">
-            Verify the details below before creating your account.
+            Periksa tenant, role, dan email tujuan sebelum menerima undangan.
           </p>
           <dl className="mt-4 space-y-2 text-xs sm:text-sm">
             <div className="flex flex-wrap gap-x-2">
@@ -125,9 +126,9 @@ export default async function InvitationVerifyPage({ searchParams }: InvitationP
               </div>
             )}
           </dl>
+          {invitation.roleName && <p className="mt-3 text-sm text-gray-700">Role: {invitation.roleName}</p>}
           <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-            The tenant and the member role of this account are fixed by the invitation, so the form
-            below only asks for the name and password you want to use.
+            Tenant dan role ditentukan oleh undangan. Akun existing harus masuk dengan email yang diundang.
           </p>
         </div>
 
@@ -140,7 +141,9 @@ export default async function InvitationVerifyPage({ searchParams }: InvitationP
           </div>
         )}
 
-        <InvitationRegisterForm token={token} email={invitation.email} expiresLabel={expiresLabel} />
+        {invitation.existingAccount
+          ? <ExistingInvitationForm token={token} signedIn={!!session} />
+          : <InvitationRegisterForm token={token} email={invitation.email} expiresLabel={expiresLabel} />}
       </div>
     </main>
   );

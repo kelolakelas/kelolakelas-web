@@ -1,5 +1,11 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { clearSessionCookies } from '@/lib/logout';
+import { invitationReturnPath } from '@/lib/invitation';
+
 import {
   INVITATION_SUCCESS_REDIRECT,
   invitationRegisterErrorMessage,
@@ -12,6 +18,41 @@ export interface InvitationActionState {
   message: string;
   errors?: Record<string, string[]>;
   redirectTo?: string;
+}
+
+export async function acceptExistingInvitation(_previous: InvitationActionState, form: FormData): Promise<InvitationActionState> {
+  const token = form.get('token');
+  if (typeof token !== 'string' || !token.trim() || token.length > 255) return { success: false, message: 'Tautan undangan tidak lengkap.' };
+  const accessToken = (await cookies()).get(process.env.AUTH_COOKIE_NAME || 'auth_token')?.value;
+  const login = `/login?redirectTo=${encodeURIComponent(invitationReturnPath(token))}`;
+  if (!accessToken) return { success: false, message: 'Sesi berakhir. Masuk dengan email yang diundang, lalu coba lagi.', redirectTo: login };
+  try {
+    const response = await fetch(`${getGatewayBaseUrl()}/api/v1/invitations/accept`, {
+      method: 'POST', cache: 'no-store',
+      headers: await withGatewayClientIp({ 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` }),
+      body: JSON.stringify({ token }),
+    });
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.status === 'success' && result.data?.member_id) {
+      revalidatePath('/dashboard/tenant', 'layout');
+      return { success: true, message: 'Undangan diterima. Buka dashboard lalu pilih tenant baru melalui Pilih tenant.' };
+    }
+    if (response.status === 401) return { success: false, message: 'Sesi berakhir. Masuk kembali dengan email yang diundang.', redirectTo: login };
+    if (response.status === 403) return { success: false, message: 'Gunakan akun Teacher aktif dengan email yang sama dengan undangan. Akun ini tidak dapat menerima undangan tersebut.' };
+    if (response.status === 409) return { success: false, message: 'Undangan sudah digunakan/dicabut, atau membership nonaktif. Periksa dashboard atau hubungi admin tenant.' };
+    if (response.status === 400 || response.status === 404) return { success: false, message: 'Undangan kedaluwarsa atau tidak ditemukan. Minta admin mengirim ulang.' };
+    return { success: false, message: 'Undangan belum dapat diproses. Coba lagi; konteks undangan tetap tersimpan.' };
+  } catch {
+    return { success: false, message: 'Layanan tidak dapat dihubungi. Coba lagi; konteks undangan tetap tersimpan.' };
+  }
+}
+
+export async function signInForInvitation(form: FormData) {
+  const token = form.get('token');
+  if (typeof token !== 'string' || !token.trim() || token.length > 255) return;
+  clearSessionCookies(await cookies(), process.env);
+  revalidatePath('/', 'layout');
+  redirect(`/login?redirectTo=${encodeURIComponent(invitationReturnPath(token))}`);
 }
 
 /**
