@@ -23,6 +23,9 @@ import { getGatewayBaseUrl, getGatewayConfigurationErrorMessage } from './gatewa
 
 /** Invitation facts the acceptance page is allowed to display. */
 export type InvitationDetails = {
+	 tenantName?: string;
+	 roleName?: string;
+	 existingAccount?: boolean;
   tenantId: string;
   roleId: string;
   email: string;
@@ -44,6 +47,9 @@ export function normalizeInvitationDetails(raw: unknown): InvitationDetails | nu
   if (!tenantId || !email) return null;
 
   return {
+    ...(typeof data.tenant_name === 'string' ? { tenantName: data.tenant_name } : {}),
+    ...(typeof data.role_name === 'string' ? { roleName: data.role_name } : {}),
+    ...(typeof data.existing_account === 'boolean' ? { existingAccount: data.existing_account } : {}),
     tenantId,
     roleId: typeof data.role_id === 'string' ? data.role_id.trim() : '',
     email,
@@ -305,6 +311,10 @@ export async function lookupInvitationTenantName(tenantId: string): Promise<stri
 
 /** Where a successful registration continues: the existing login success flow. */
 export const INVITATION_SUCCESS_REDIRECT = '/login?registered=1';
+
+export function invitationReturnPath(token: string) {
+  return `/invitations/verify?token=${encodeURIComponent(token)}`;
+}
 
 /**
  * Formats the invitation expiry for display in Jakarta time.
