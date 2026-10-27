@@ -9,6 +9,8 @@ import { classUpdateErrorMessage } from '@/lib/class-edit';
 import { normalizeListEnvelope } from '@/lib/list-envelope';
 import { memberSchema } from '../../members/_schemas/schema';
 import type { ScheduleTeacher, ScheduleTeachersRead } from '../_lib/teachers';
+import { savedClassSchema, savedScheduleSchema, savedCategorySchema, savedPage } from '../_lib/configuration-read';
+import type { z } from 'zod';
 
 /** Read every member page; never offer a partial list as the complete teacher list. */
 export async function getScheduleTeachers(): Promise<ScheduleTeachersRead> {
@@ -730,67 +732,52 @@ export async function createClassConfiguration(
   }
 }
 
-/** Re-read every page after an editor operation; an unavailable read is never an empty-success. */
+/** Reload one protected class and all of its schedules; retain complete category choices. */
 export async function readClassConfiguration(
   classId: string,
-): Promise<
-  ActionResponse<{
-    class: ClassEntity;
-    schedules: ClassSchedule[];
-    categories: import('../_lib/schema').Category[];
-  }>
-> {
+): Promise<ActionResponse<{ class: ClassEntity; schedules: ClassSchedule[]; categories: import('../_lib/schema').Category[] }>> {
   if (!categoryIdSchema.safeParse(classId).success)
     return { success: false, message: 'Invalid class.' };
   try {
     const headers = await getAuthHeaders();
-    const read = async <T>(resource: string) => {
-      const items: T[] = [];
-      for (let page = 1; page <= 1000; page++) {
-        const response = await fetch(
-          `${getGatewayBaseUrl()}/api/v1/${resource}?page=${page}&page_size=100`,
-          { headers, cache: 'no-store' },
-        );
-        const result = await response.json();
-        if (
-          !response.ok ||
-          result.status !== 'success' ||
-          (!Array.isArray(result.data) && !Array.isArray(result.data?.items))
-        )
-          throw new Error('read failed');
-        const normalized = normalizeListEnvelope<T>(result.data);
-        items.push(...normalized.items);
-        if (page >= normalized.pagination.total_pages) return items;
-        if (normalized.items.length === 0) throw new Error('incomplete read');
-      }
-      throw new Error('incomplete read');
+    const expectedTenant = new Headers(headers).get('X-Tenant-ID');
+    const request = async (resource: string): Promise<unknown> => {
+      const response = await fetch(`${getGatewayBaseUrl()}/api/v1/${resource}`, { headers, cache: 'no-store' });
+      const body = await response.json();
+      if (!response.ok || body?.status !== 'success') throw new Error('Saved read unavailable');
+      return body.data;
     };
-    const [classes, schedules, categories] = await Promise.all([
-      read<ClassEntity>('classes'),
-      read<ClassSchedule>('schedules'),
-      read<import('../_lib/schema').Category>('categories'),
+    const read = async <T extends { id: string }>(resource: string, schema: z.ZodType<T>, scoped: (item: T) => boolean) => {
+      const items: T[] = [], seen = new Set<string>();
+      let total: number | undefined;
+      for (let page = 1; page <= 1000; page++) {
+        const value = savedPage(await request(`${resource}?page=${page}&page_size=100`), schema, page);
+        if (total !== undefined && total !== value.pagination.total_items) throw new Error('Saved list changed; retry');
+        total = value.pagination.total_items;
+        for (const item of value.items) {
+          if (!scoped(item) || seen.has(item.id)) throw new Error('Saved scope or pagination mismatch');
+          seen.add(item.id); items.push(item);
+        }
+        if (page >= value.pagination.total_pages) {
+          if (items.length !== total) throw new Error('Incomplete saved list');
+          return items;
+        }
+      }
+      throw new Error('Incomplete saved list');
+    };
+    const [rawClass, schedules, categories] = await Promise.all([
+      request(`classes/${classId}`),
+      read(`classes/${classId}/schedules`, savedScheduleSchema, (item) => item.class_id === classId),
+      read('categories', savedCategorySchema, (item) => !expectedTenant || item.tenant_id === expectedTenant),
     ]);
-    const record = classes.find((item) => item.id === classId);
-    if (!record)
-      return {
-        success: false,
-        message: 'Class is no longer available. Refresh the class list.',
-      };
+    const record = savedClassSchema.parse(rawClass);
+    if (record.id !== classId || (expectedTenant && record.tenant_id !== expectedTenant)) throw new Error('Saved class scope mismatch');
     return {
-      success: true,
-      message: 'Saved configuration reloaded.',
-      data: {
-        class: record,
-        schedules: schedules.filter((item) => item.class_id === classId),
-        categories,
-      },
+      success: true, message: 'Saved configuration reloaded.',
+      data: { class: record as unknown as ClassEntity, schedules: schedules as ClassSchedule[], categories: categories as import('../_lib/schema').Category[] },
     };
   } catch {
-    return {
-      success: false,
-      message:
-        'The saved configuration could not be reloaded. Close and reopen to check it before another change.',
-    };
+    return { success: false, message: 'The saved configuration could not be reloaded. Retry before another change.' };
   }
 }
 
