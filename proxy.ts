@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { hasTenantContext, PARENT_DESTINATION, UNKNOWN_DESTINATION } from './lib/auth-routing';
 
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'auth_token';
@@ -63,6 +64,13 @@ export function proxy(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
+
+  const expectedScope = request.headers.get('X-Tenant-UI-Scope');
+  if (isTenantRoute && request.method === 'POST' && request.headers.has('Next-Action') && expectedScope) {
+    const tenant = request.cookies.get(process.env.TENANT_ID_COOKIE_NAME || 'tenant_id')?.value || '';
+    const currentScope = token ? createHash('sha256').update(JSON.stringify([token, tenant])).digest('hex') : '';
+    if (expectedScope !== currentScope) return new NextResponse('Sesi tenant berubah. Muat ulang halaman.', { status: 409, headers: { 'X-Tenant-UI-Stale': '1', 'Cache-Control': 'no-store' } });
+  }
 
   // 1. Unauthenticated user accessing a protected route -> Redirect to /login
   if (isProtectedRoute && !isAuthenticated) {

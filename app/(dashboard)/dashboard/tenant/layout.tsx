@@ -5,6 +5,9 @@ import type { ReactNode } from 'react';
 import { MobileNav } from './_components/MobileNav';
 import { TenantSidebar } from './_components/TenantSidebar';
 import { readTenantNav } from './_queries/membership';
+import { readTenantChoices } from '@/lib/tenant-session-actions';
+import { TenantContextBoundary } from '@/components/TenantContextBoundary';
+import { TenantSwitcher } from '@/components/TenantSwitcher';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +19,14 @@ export default async function TenantLayout({ children }: TenantLayoutProps) {
   // KEL-136: the navigation items and the role footer follow the caller's own
   // membership. When the read fails the navs render the minimum safe menu plus
   // an error message, never the full admin menu.
-  const [nav, scope] = await Promise.all([readTenantNav(), readChatUnreadScope()]);
+  const [nav, scope, tenants] = await Promise.all([readTenantNav(), readChatUnreadScope(), readTenantChoices()]);
   const navProps = {
     items: nav.items,
     roleName: nav.roleName,
     hasNavError: nav.state !== 'ok',
   };
   return (
+    <TenantContextBoundary key={scope} scope={scope}>
     <ChatUnreadProvider scope={scope} enabled={nav.items.some(item => item.href === '/dashboard/tenant/chat')}>
       <PendingScheduleRequestProvider scope={scope} enabled={nav.items.some(item => item.href === '/dashboard/tenant/schedule-requests')}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -35,11 +39,13 @@ export default async function TenantLayout({ children }: TenantLayoutProps) {
           {/* Main Content Area */}
           <div className="md:pl-64 flex flex-col min-h-screen transition-all">
             <main className="flex-1 p-4 sm:p-6 md:p-8">
+              <TenantSwitcher {...tenants} scope={scope} />
               {children}
             </main>
           </div>
         </div>
       </PendingScheduleRequestProvider>
     </ChatUnreadProvider>
+    </TenantContextBoundary>
   );
 }

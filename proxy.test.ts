@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { proxy } from './proxy';
+import { createHash } from 'node:crypto';
 
 function encode(value: object) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -17,6 +18,15 @@ function makeRequest(path: string, token?: string) {
 }
 
 describe('authentication proxy', () => {
+  it('rejects a tenant action from a stale UI before the action runs with replacement cookies', () => {
+    const token = makeToken({ tenant_id: 'new-tenant', exp: 9999999999 });
+    const request = (scope: string) => new NextRequest('http://localhost/dashboard/tenant/classes', {
+      method: 'POST', headers: { cookie: `auth_token=${token}; tenant_id=new-tenant`, 'Next-Action': 'create-class', 'X-Tenant-UI-Scope': scope },
+    });
+    expect(proxy(request('previous-ui-scope')).status).toBe(409);
+    const current = createHash('sha256').update(JSON.stringify([token, 'new-tenant'])).digest('hex');
+    expect(proxy(request(current)).status).toBe(200);
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-14T00:00:00.000Z'));
