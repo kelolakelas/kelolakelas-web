@@ -47,10 +47,7 @@ beforeEach(() => {
     data: null,
     error: 'Layanan chat sedang tidak tersedia.',
   });
-  vi.mocked(getChatConversation).mockResolvedValue({
-    data: null,
-    error: 'Percakapan tidak ditemukan.',
-  });
+  vi.mocked(getChatConversation).mockImplementation(async id => ({ data: { ...room, id }, error: null }));
 });
 afterEach(() => {
   cleanup();
@@ -206,7 +203,7 @@ describe('chat deep-link (KEL-124)', () => {
     await waitFor(() =>
       expect(listChatMessages).toHaveBeenCalledWith(requested.id)
     );
-    expect(getChatConversation).not.toHaveBeenCalled();
+    expect(getChatConversation).toHaveBeenCalledWith(requested.id);
   });
 
   it('fetches a just-created conversation missing from the first list read', async () => {
@@ -236,6 +233,7 @@ describe('chat deep-link (KEL-124)', () => {
   });
 
   it('falls back to no selection when the linked conversation cannot be read', async () => {
+    vi.mocked(getChatConversation).mockResolvedValue({ data: null, error: 'Percakapan tidak ditemukan.', reason: 'denied' });
     vi.mocked(listChatConversations).mockResolvedValue({
       data: [room],
       error: null,

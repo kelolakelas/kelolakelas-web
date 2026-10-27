@@ -11,7 +11,6 @@ import {
 } from 'react';
 import { BellRing } from 'lucide-react';
 import {
-  applyChatEvent,
   chatTitle,
   chatWebSocketUrl,
   conversationTenantLabel,
@@ -35,18 +34,21 @@ import {
 } from '@/lib/chat-actions';
 
 type Connection = 'connecting' | 'connected' | 'disconnected';
+function pendingMessages(previous: Record<string, ChatMessage[]>) {
+  return Object.fromEntries(Object.entries(previous).map(([id, items]) => [id, items.filter(item => item.delivery)]));
+}
 
-export function ChatInbox({
-  initial,
-  userId,
-  tenant,
-  initialConversationId,
-}: {
+interface InboxProps {
   initial: ChatConversation[];
   userId: string;
   tenant: boolean;
   initialConversationId?: string | null;
-}) {
+  scope?: string | null;
+}
+export function ChatInbox(props: InboxProps) {
+  return <ScopedChatInbox key={`${props.scope || props.userId}:${props.tenant}:${props.initialConversationId || ''}`} {...props} />;
+}
+function ScopedChatInbox({ initial, userId, tenant, initialConversationId }: InboxProps) {
   const [conversations, setConversations] = useState(initial);
   const [activeId, setActiveId] = useState<string | null>(
     initialConversationId || initial[0]?.id || null
@@ -64,6 +66,11 @@ export function ChatInbox({
       : 'disconnected'
   );
   const [error, setError] = useState('');
+  const errorSerial = useRef(0);
+  const reportError = useCallback((message: string) => {
+    if (message) errorSerial.current++;
+    setError(message);
+  }, []);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const activeRef = useRef(activeId);
@@ -71,115 +78,114 @@ export function ChatInbox({
     activeRef.current = activeId;
   }, [activeId]);
 
-  const refresh = useCallback(async (id?: string | null) => {
-    const [list, items] = await Promise.all([
-      listChatConversations(),
-      id ? listChatMessages(id) : Promise.resolve(null),
-    ]);
-    if (list.error) setError(list.error);
-    // A deep-linked conversation may be missing from the first list read
-    // (e.g. just created): fetch it directly so the entry button's landing
-    // target is selectable rather than silently defaulting elsewhere.
-    else if (list.data) {
-      setConversations(list.data);
-      if (id && !list.data.some((c) => c.id === id)) {
-        const direct = await getChatConversation(id);
-        if (!direct.error && direct.data) {
-          const conversation = direct.data;
-          setConversations((previous) =>
-            previous.some((c) => c.id === conversation.id)
-              ? previous
-              : [conversation, ...previous]
-          );
+  const mounted = useRef(false);
+  const version = useRef(0);
+  const selectionVersion = useRef(0);
+  const pages = useRef(1);
+  const [hasMoreConversations, setHasMoreConversations] = useState(initial.length === 100);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Every read path (selection, poll, refresh, paging and reconnect) revalidates
+  // the selected room. Only the latest request in this mounted context commits.
+  const refresh = useCallback(async (id?: string | null, pageCount = pages.current, readList = true, markSelectedRead = true) => {
+    // Reserve the user's paging intent before awaiting: a reconnect/poll that
+    // starts during Load more must refresh that expanded window too.
+    if (readList) { pages.current = Math.max(pages.current, pageCount); pageCount = pages.current; }
+    const request = ++version.current;
+    const startingError = errorSerial.current;
+    const current = () => mounted.current && request === version.current;
+    if (readList) setRefreshing(true);
+    try {
+      const [lists, direct, items] = await Promise.all([
+        readList ? Promise.all(Array.from({ length: pageCount }, (_, i) => listChatConversations(i + 1))) : Promise.resolve(null),
+        id ? getChatConversation(id) : Promise.resolve(null),
+        id ? listChatMessages(id) : Promise.resolve(null),
+      ]);
+      if (!current()) return;
+      const failedList = lists?.find(result => result.error);
+      if (failedList?.error) {
+        setConversations([]); setMessages(previous => failedList.reason === 'denied' ? {} : pendingMessages(previous)); reportError(failedList.error);
+        if (failedList.reason === 'denied') { activeRef.current = null; setActiveId(null); }
+        return;
+      }
+      const seen = new Set<string>();
+      const next = lists?.flatMap(result => result.data || []).filter(room => {
+        if (seen.has(room.id)) return false;
+        seen.add(room.id); return true;
+      });
+      if (lists) {
+        pages.current = pageCount;
+        setHasMoreConversations((lists.at(-1)?.data?.length || 0) === 100);
+      }
+      if (id && (direct?.error || direct?.data?.id !== id || items?.error)) {
+        const problem = direct?.error ? direct : items?.error ? items : null;
+        if (next) setConversations(next.filter(room => room.id !== id));
+        else setConversations(previous => previous.filter(room => room.id !== id));
+        setMessages(previous => { const copy = { ...previous }; if (problem?.reason === 'unavailable') copy[id] = (copy[id] || []).filter(item => item.delivery); else delete copy[id]; return copy; });
+        reportError(problem?.error || 'Percakapan tidak ditemukan.');
+        if (problem?.reason === 'denied' || (!direct?.error && direct?.data?.id !== id)) {
+          activeRef.current = null; setActiveId(null);
+        }
+        return;
+      }
+      if (next) {
+        if (direct?.data && !next.some(room => room.id === direct.data.id)) next.push(direct.data);
+        setConversations(next);
+      } else if (direct?.data) {
+        const room = direct.data;
+        setConversations(previous => previous.some(item => item.id === room.id) ? previous : [...previous, room]);
+      }
+      if (id && items?.data) {
+        setMessages(previous => ({ ...previous, [id]: mergeMessages(previous[id] || [], items.data) }));
+        setOlder(previous => ({ ...previous, [id]: items.data.length === 100 }));
+        if (markSelectedRead) {
+          const read = await markChatRead(id);
+          if (!current()) return;
+          if (read.error) {
+            setMessages(previous => read.reason === 'denied' ? {} : pendingMessages(previous)); setConversations([]); reportError(read.error);
+            if (read.reason === 'denied') { activeRef.current = null; setActiveId(null); }
+            return;
+          }
+          notifyChatUnreadChanged();
+          setConversations(previous => previous.map(room => room.id === id ? { ...room, unread_count: 0 } : room));
         }
       }
-    }
-    if (id && items) {
-      if (items.error) setError(items.error);
-      else if (items.data) {
-        setMessages((previous) => ({
-          ...previous,
-          [id]: mergeMessages(previous[id] || [], items.data),
-        }));
-        setOlder((previous) => ({
-          ...previous,
-          [id]: items.data.length === 100,
-        }));
+      if (errorSerial.current === startingError) reportError('');
+    } catch {
+      if (current()) { setConversations([]); setMessages(pendingMessages); reportError('Layanan chat sedang tidak tersedia. Coba lagi nanti.'); }
+    } finally {
+      if (current()) {
+        setRefreshing(false);
+        if (id) setLoading(previous => ({ ...previous, [id]: false }));
       }
     }
-    if (
-      !list.error &&
-      list.data &&
-      (!id || (items && !items.error && items.data))
-    )
-      setError('');
-  }, []);
+  }, [reportError]);
 
   const select = useCallback(async (id: string) => {
-    activeRef.current = id;
-    setActiveId(id);
-    setLoading((previous) => ({ ...previous, [id]: true }));
-    const result = await listChatMessages(id);
-    if (result.error) setError(result.error);
-    else if (result.data) {
-      setMessages((previous) => ({
-        ...previous,
-        [id]: mergeMessages(previous[id] || [], result.data),
-      }));
-      setOlder((previous) => ({
-        ...previous,
-        [id]: result.data.length === 100,
-      }));
+    selectionVersion.current++;
+    activeRef.current = id; setActiveId(id);
+    if (window.location.pathname.endsWith('/chat')) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('conversation', id);
+      window.history.replaceState(window.history.state, '', url);
     }
-    setLoading((previous) => ({ ...previous, [id]: false }));
-    const read = await markChatRead(id);
-    if (read.error) setError(read.error);
-    else {
-      notifyChatUnreadChanged();
-      setConversations((previous) =>
-        previous.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
-      );
-    }
-  }, []);
+    setLoading(previous => ({ ...previous, [id]: true }));
+    await refresh(id, pages.current, false);
+  }, [refresh]);
 
   useEffect(() => {
-    if (activeRef.current) {
-      const id = activeRef.current;
-      void listChatMessages(id).then((result) => {
-        setLoading((previous) => ({ ...previous, [id]: false }));
-        if (result.error) setError(result.error);
-        else if (result.data) {
-          setMessages((previous) => ({
-            ...previous,
-            [id]: mergeMessages(previous[id] || [], result.data),
-          }));
-          setOlder((previous) => ({
-            ...previous,
-            [id]: result.data.length === 100,
-          }));
-        }
-      });
-      void markChatRead(id).then((result) => {
-        if (!result.error) {
-          notifyChatUnreadChanged();
-          setConversations((previous) =>
-            previous.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
-          );
-        }
-      });
-    }
-  }, []);
-
-  // Conversation creation has no WS event; periodically reconcile the list so
-  // an admin sees a newly opened (still empty) staff conversation.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      void listChatConversations().then((result) => {
-        if (result.data) setConversations(result.data);
-      });
-    }, 10000);
-    return () => clearInterval(timer);
-  }, []);
+    mounted.current = true;
+    if (activeRef.current) void select(activeRef.current);
+    const reconcile = () => { if (document.visibilityState !== 'hidden') void refresh(activeRef.current); };
+    const timer = setInterval(reconcile, 10000);
+    window.addEventListener('focus', reconcile);
+    document.addEventListener('visibilitychange', reconcile);
+    return () => {
+      mounted.current = false;
+      clearInterval(timer); window.removeEventListener('focus', reconcile);
+      document.removeEventListener('visibilitychange', reconcile);
+    };
+  }, [refresh, select]);
 
   useEffect(() => {
     const base = process.env.NEXT_PUBLIC_CHAT_WS_URL;
@@ -206,43 +212,17 @@ export function ChatInbox({
           retry = 0;
           notifyChatUnreadChanged();
           setConnection('connected');
-          setError('');
           void refresh(activeRef.current);
         };
         socket.onmessage = (message) => {
           try {
             const event = JSON.parse(message.data) as ChatEvent;
-            if (
-              event.type !== 'message.created' &&
-              event.type !== 'conversation.read'
-            )
-              return;
-            if (
-              event.type === 'message.created' &&
-              event.message?.conversation_id === event.conversation_id
-            ) {
-              setMessages((previous) => ({
-                ...previous,
-                [event.conversation_id]: mergeMessages(
-                  previous[event.conversation_id] || [],
-                  [event.message]
-                ),
-              }));
-              if (
-                activeRef.current === event.conversation_id &&
-                event.message.sender_user_id !== userId
-              )
-                void markChatRead(event.conversation_id).then(result => { if (!result.error) notifyChatUnreadChanged(); });
-            }
+            if (event.type !== 'message.created' && event.type !== 'conversation.read') return;
+            // Frames trigger an authoritative REST read. Never reinsert a room
+            // or message from a connection whose rights snapshot may be stale.
             notifyChatUnreadChanged();
-            // Refresh the list to discover conversations created since connect.
-            void refresh(activeRef.current);
-            setConversations((previous) =>
-              applyChatEvent(previous, event, userId, activeRef.current)
-            );
-          } catch {
-            /* Ignore malformed frames and keep the connection alive. */
-          }
+            void refresh(activeRef.current, pages.current, true, event.type === 'message.created');
+          } catch { /* Ignore malformed frames. */ }
         };
         socket.onclose = () => {
           if (!stopped) {
@@ -280,7 +260,7 @@ export function ChatInbox({
     const result = await createStaffChat();
     setBusy(false);
     if (result.error || !result.data) {
-      setError(result.error || 'Layanan chat sedang tidak tersedia.');
+      reportError(result.error || 'Layanan chat sedang tidak tersedia.');
       return;
     }
     const conversation = result.data;
@@ -292,16 +272,21 @@ export function ChatInbox({
   }
 
   async function deliver(id: string, body: string, clientId: string) {
+    // A poll may finish while the send is pending. Only a changed selection or
+    // context invalidates its delivery result; keep the original retry key.
+    const generation = selectionVersion.current;
     const result = await sendChatMessage(id, body, clientId);
+    if (!mounted.current || activeRef.current !== id || generation !== selectionVersion.current) return;
     if (result.error) {
-      setError(result.error);
+      reportError(result.error);
+      if (result.reason === 'denied') { setConversations([]); setMessages({}); activeRef.current = null; setActiveId(null); return; }
       setMessages((previous) => ({
         ...previous,
         [id]: updateDelivery(previous[id] || [], clientId, 'failed'),
       }));
     } else if (result.data) {
       const confirmed = result.data;
-      setError('');
+      reportError('');
       setMessages((previous) => ({
         ...previous,
         [id]: mergeMessages(previous[id] || [], [confirmed]),
@@ -338,9 +323,15 @@ export function ChatInbox({
     const oldest = messages[activeId]?.find((message) => !message.delivery);
     if (!oldest) return;
     const id = activeId;
+    const generation = version.current;
     const result = await listChatMessages(id, oldest.id);
-    if (result.error) setError(result.error);
-    else if (result.data) {
+    if (!mounted.current || activeRef.current !== id || generation !== version.current) return;
+    if (result.error) {
+      reportError(result.error);
+      setConversations([]);
+      setMessages(previous => result.reason === 'denied' ? {} : pendingMessages(previous));
+      if (result.reason === 'denied') { activeRef.current = null; setActiveId(null); }
+    } else if (result.data) {
       setMessages((previous) => ({
         ...previous,
         [id]: mergeMessages(previous[id] || [], result.data),
@@ -366,7 +357,7 @@ export function ChatInbox({
   }
 
   const active = conversations.find((c) => c.id === activeId);
-  const activeMessages = activeId ? messages[activeId] || [] : [];
+  const activeMessages = active && activeId && !loading[activeId] ? messages[activeId] || [] : [];
   const loadingMessages = Boolean(activeId && loading[activeId]);
   const buttonClass =
     'min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800';
@@ -390,7 +381,7 @@ export function ChatInbox({
             </button>
           )}
         </div>
-        {conversations.length === 0 && (
+        {conversations.length === 0 && !error && !refreshing && (
           <p className="p-5 text-sm text-gray-600 dark:text-gray-400">
             Belum ada percakapan. Percakapan baru akan tampil di sini.
           </p>
@@ -441,6 +432,13 @@ export function ChatInbox({
             );
           })}
         </ul>
+        {hasMoreConversations && <div className="border-t border-gray-200 p-3 dark:border-gray-800">
+          <button type="button" disabled={refreshing} aria-busy={refreshing} className={buttonClass}
+            onClick={() => { void refresh(activeRef.current, pages.current + 1); }}>
+            Muat percakapan lebih lama
+          </button>
+        </div>}
+
       </div>
 
       <section
