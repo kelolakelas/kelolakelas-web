@@ -7,7 +7,7 @@ import {
   render,
   screen,
 } from '@testing-library/react';
-import { useScheduleTeachers } from './useScheduleTeachers';
+import { ScheduleTeachersProvider, useScheduleTeachers } from './useScheduleTeachers';
 import { TeacherLoadStatus } from './TeacherLoadStatus';
 import { getScheduleTeachers } from '../_actions/classActions';
 import type { ScheduleTeachersRead } from '../_lib/teachers';
@@ -93,4 +93,26 @@ it('ignores a late request from an unmounted form', async () => {
     old.resolve({ state: 'ok', teachers: [{ id: 'old', name: 'Old' }] }),
   );
   expect(screen.getByText(/do not have permission/)).toBeTruthy();
+});
+
+it('shares one loader and one pending retry across every form of an editor',async()=>{
+ const retry=deferred();
+ vi.mocked(getScheduleTeachers).mockResolvedValueOnce({state:'error'}).mockReturnValueOnce(retry.promise);
+ render(<ScheduleTeachersProvider><Form/><Form/></ScheduleTeachersProvider>);
+ const buttons=await screen.findAllByRole('button',{name:'Retry teachers'});
+ expect(getScheduleTeachers).toHaveBeenCalledTimes(1);
+ fireEvent.click(buttons[0]);fireEvent.click(buttons[1]);
+ await act(async()=>{});
+ expect(getScheduleTeachers).toHaveBeenCalledTimes(2);
+ await act(async()=>retry.resolve({state:'ok',teachers:[{id:'current',name:'Current Teacher'}]}));
+ expect(await screen.findAllByText('Choose an active Teacher.')).toHaveLength(2);
+});
+it('keeps different editor scopes independent and does not reuse a closed editor result',async()=>{
+ vi.mocked(getScheduleTeachers).mockResolvedValue({state:'forbidden'});
+ const first=render(<><ScheduleTeachersProvider><Form/></ScheduleTeachersProvider><ScheduleTeachersProvider><Form/></ScheduleTeachersProvider></>);
+ await screen.findAllByText(/do not have permission/);expect(getScheduleTeachers).toHaveBeenCalledTimes(2);
+ first.unmount();
+ vi.mocked(getScheduleTeachers).mockResolvedValue({state:'ok',teachers:[{id:'new',name:'New scope'}]});
+ render(<ScheduleTeachersProvider><Form/></ScheduleTeachersProvider>);
+ await screen.findByText('Choose an active Teacher.');expect(getScheduleTeachers).toHaveBeenCalledTimes(3);
 });

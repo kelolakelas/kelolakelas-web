@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -335,16 +336,49 @@ it('retains saved teacher assignment and edited fields across read retry, and re
   actions.getScheduleTeachers.mockResolvedValue({state:'error'});
   render(<ClassConfigurationEditor classRecord={record} categories={[category]} schedules={[slot]} permissions={permissions} />);
   await screen.findAllByRole('button',{name:'Retry teachers'});
+  expect(actions.getScheduleTeachers).toHaveBeenCalledTimes(1);
   const saved = within(screen.getByRole('button',{name:'Save Schedule Change'}).closest('section')!);
   fireEvent.change(saved.getByLabelText('Location'),{target:{value:'Draft Room'}});
   actions.getScheduleTeachers.mockResolvedValue({state:'ok',teachers:[]});
-  // Class assignment and saved schedule each own an independent read.
+  // All editor forms share one teacher read and one coalesced retry.
   for(const button of screen.getAllByRole('button',{name:'Retry teachers'})) fireEvent.click(button);
   await screen.findByText(/The assigned Teacher is no longer eligible/);
+  expect(actions.getScheduleTeachers).toHaveBeenCalledTimes(2);
   expect((saved.getByLabelText('Location') as HTMLInputElement).value).toBe('Draft Room');
   expect((saved.getByLabelText('Schedule Teacher') as HTMLSelectElement).value).toBe(teacher);
   expect((screen.getByLabelText('Assigned Teachers') as HTMLSelectElement).value).toBe(teacher);
   expect((saved.getByLabelText('Start time') as HTMLInputElement).value).toBe(slot.start_time);
   expect(actions.changeClassSchedule).not.toHaveBeenCalled();
   expect(actions.updateClass).not.toHaveBeenCalled();
+});
+
+function pending<T>() { let resolve!: (value:T)=>void;const promise=new Promise<T>(done=>{resolve=done});return {promise,resolve}; }
+it('ignores an older modal read after closing and reopening the editor',async()=>{
+ const old=pending<unknown>();
+ actions.readClassConfiguration.mockReturnValueOnce(old.promise).mockResolvedValue({success:true,data:{class:{...record,name:'Fresh reopened'},categories:[category],schedules:[slot]}});
+ render(<ClassEditModal classRecord={record} categories={[category]} permissions={permissions}/>);
+ fireEvent.click(screen.getByRole('button',{name:/Edit Algebra/}));
+ fireEvent.click(screen.getByRole('button',{name:'Close modal'}));
+ fireEvent.click(screen.getByRole('button',{name:/Edit Algebra/}));
+ await screen.findByDisplayValue('Fresh reopened');
+ await act(async()=>old.resolve({success:true,data:{class:{...record,name:'Stale response'},categories:[category],schedules:[slot]}}));
+ expect(screen.queryByDisplayValue('Stale response')).toBeNull();
+ expect(screen.getByDisplayValue('Fresh reopened')).toBeTruthy();
+});
+it('fences out-of-order reloads after two already-started operations',async()=>{
+ const classSave=pending<unknown>(),scheduleSave=pending<unknown>(),older=pending<unknown>(),newer=pending<unknown>();
+ actions.updateClass.mockReturnValue(classSave.promise);actions.changeClassSchedule.mockReturnValue(scheduleSave.promise);
+ actions.readClassConfiguration.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+ editor();await screen.findAllByRole('option',{name:'Teacher One'});
+ fireEvent.click(screen.getByRole('button',{name:'Save Changes'}));
+ fireEvent.click(screen.getByRole('button',{name:'Save Schedule Change'}));
+ await waitFor(()=>expect(actions.changeClassSchedule).toHaveBeenCalledTimes(1));
+ await act(async()=>classSave.resolve({success:true,message:'Class committed'}));
+ await waitFor(()=>expect(actions.readClassConfiguration).toHaveBeenCalledTimes(1));
+ await act(async()=>scheduleSave.resolve({success:true,message:'Schedule committed'}));
+ await waitFor(()=>expect(actions.readClassConfiguration).toHaveBeenCalledTimes(2));
+ await act(async()=>newer.resolve({success:true,data:{class:{...record,price:250000},categories:[category],schedules:[slot]}}));
+ await waitFor(()=>expect(screen.getByText(/Saved class:/).textContent).toContain('250000'));
+ await act(async()=>older.resolve({success:true,data:{class:{...record,price:175000},categories:[category],schedules:[slot]}}));
+ expect(screen.getByText(/Saved class:/).textContent).toContain('250000');
 });

@@ -2,10 +2,10 @@
 
 import { DateInput } from '@/components/DateInput';
 
-import { useScheduleTeachers } from './useScheduleTeachers';
+import { ScheduleTeachersProvider, useScheduleTeachers } from './useScheduleTeachers';
 import { TeacherLoadStatus } from './TeacherLoadStatus';
 
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   changeClassSchedule,
   deleteClassSchedule,
@@ -455,7 +455,16 @@ function ScheduleVersionEditor({
   );
 }
 
-export function ClassConfigurationEditor({
+export function ClassConfigurationEditor(props: {
+  classRecord: ClassEntity;
+  categories: Category[];
+  schedules: ClassSchedule[];
+  permissions: readonly string[];
+}) {
+  return <ScheduleTeachersProvider key={props.classRecord.id}><ClassConfigurationEditorContent {...props} /></ScheduleTeachersProvider>;
+}
+
+function ClassConfigurationEditorContent({
   classRecord,
   categories,
   schedules,
@@ -466,6 +475,13 @@ export function ClassConfigurationEditor({
   schedules: ClassSchedule[];
   permissions: readonly string[];
 }) {
+  const { retry: retryTeachers } = useScheduleTeachers();
+  const request = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [record, setRecord] = useState(classRecord);
   const [savedCategories, setCategories] = useState(categories);
   const [savedSchedules, setSchedules] = useState(
@@ -479,30 +495,36 @@ export function ClassConfigurationEditor({
   const addDetails = useRef<HTMLDetailsElement>(null);
   const reload = useCallback(
     async (message: string, resetClass = false) => {
+      const current = ++request.current;
       setReloading(true);
       setMessage(message);
       try {
         const result = await readClassConfiguration(classRecord.id);
+        if (!mounted.current || current !== request.current) return;
         if (result.success && result.data) {
           setRecord(result.data.class);
           setCategories(result.data.categories);
           setSchedules(result.data.schedules);
           setBlocked(false);
-          if (resetClass) setClassVersion((version) => version + 1);
+          if (resetClass) {
+            setClassVersion((version) => version + 1);
+            retryTeachers();
+          }
         } else {
           setBlocked(true);
           setMessage(`${message} ${result.message}`);
         }
       } catch {
+        if (!mounted.current || current !== request.current) return;
         setBlocked(true);
         setMessage(
           `${message} Saved configuration is unavailable. Reload before another change.`,
         );
       } finally {
-        setReloading(false);
+        if (mounted.current && current === request.current) setReloading(false);
       }
     },
-    [classRecord.id],
+    [classRecord.id, retryTeachers],
   );
   const classSettled = useCallback(
     (success: boolean) => {
