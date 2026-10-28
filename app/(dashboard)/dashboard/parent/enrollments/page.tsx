@@ -59,7 +59,7 @@ export default async function ParentEnrollmentHistoryPage() {
                       <h2 className="text-xl font-black">{enrollment.class?.name || 'Kelas'}</h2>
                       <p className="mt-1 text-sm text-[#52615b]">{enrollment.student?.first_name || 'Student'} · {parentEnrollmentStatusLabel(enrollment.status)}</p>
                       {transaction && isRenewalTransaction(transaction) && <p className="mt-1 inline-block rounded-full bg-[#eef3f1] px-3 py-1 text-sm font-bold text-[#365047]">Tagihan perpanjangan{renewalExpirySuffix(transaction.invoice_expires_at)}</p>}
-                      {schedule && <p className="mt-1 text-sm font-semibold text-[#365047]">{schedule === SCHEDULE_UNAVAILABLE_LABEL ? schedule : `Jadwal: ${schedule}`}</p>}
+                      {schedule && <p className="mt-1 whitespace-pre-line text-sm font-semibold text-[#365047]">{schedule === SCHEDULE_UNAVAILABLE_LABEL ? schedule : `Jadwal: ${schedule}`}</p>}
                     </div>
                     <span className={`rounded-full px-3 py-1 text-sm font-bold ${tones[status.tone]}`}>{status.label}</span>
                   </div>

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ListPagination } from '@/lib/list-envelope';
-import { formatCurrency, type TransactionRecord } from '@/lib/payment-status';
+import { formatCurrency, type EnrollmentScheduleSummary, type EnrollmentPrivateScheduleSummary, type TransactionRecord } from '@/lib/payment-status';
 import { studentLastName, type StudentSurnameFields } from '@/lib/students';
 
 /**
@@ -102,6 +102,8 @@ export interface TenantEnrollment {
   id: string;
   status: string;
   schedule_id?: string | null;
+  schedule?: EnrollmentScheduleSummary | null;
+  private_schedules?: EnrollmentPrivateScheduleSummary[] | null;
   billing_cycle?: string;
   joined_at?: string;
   class?: EnrollmentClass | null;

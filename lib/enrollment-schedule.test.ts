@@ -47,3 +47,25 @@ describe('enrollmentScheduleLabel (KEL-70)', () => {
     expect(enrollmentScheduleLabel({ schedule_id: SCHEDULE_ID, schedule })).toBe(SCHEDULE_UNAVAILABLE_LABEL);
   });
 });
+
+describe('private enrollment schedules (KEL-222)', () => {
+  const slots = [
+    { id: 'version-old', day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00', valid_from: '2026-01-01T00:00:00Z', valid_until: '2026-10-31T00:00:00Z' },
+    { id: 'version-new', day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00', valid_from: '2026-11-01T00:00:00Z' },
+    { id: 'second-slot', day_of_week: 4, start_time: '14:00:00', end_time: '15:00:00' },
+  ];
+  it('renders every version once with effective dates and stable server order', () => {
+    const label = enrollmentScheduleLabel({ private_schedules: [...slots, slots[0]] });
+    expect(label?.split('\n')).toHaveLength(3);
+    expect(label).toContain('Selasa, 10:00–11:00 · Berlaku 1 Jan 2026–31 Okt 2026');
+    expect(label).toContain('Berlaku 1 Nov 2026–seterusnya');
+    expect(label?.split('\n')[2]).toBe('Kamis, 14:00–15:00');
+  });
+  it('distinguishes a confirmed empty collection from unavailable or malformed data', () => {
+    expect(enrollmentScheduleLabel({ private_schedules: [] })).toBe('Belum ada jadwal');
+    expect(enrollmentScheduleLabel({ class: { type: 'private' } })).toBe(SCHEDULE_UNAVAILABLE_LABEL);
+    expect(enrollmentScheduleLabel({ private_schedules: null })).toBe(SCHEDULE_UNAVAILABLE_LABEL);
+    expect(enrollmentScheduleLabel({ private_schedules: [{ ...slots[0], valid_from: 'broken' }] })).toBe(SCHEDULE_UNAVAILABLE_LABEL);
+    expect(enrollmentScheduleLabel({ private_schedules: [{ ...slots[0], day_of_week: 9 }] })).toBe(SCHEDULE_UNAVAILABLE_LABEL);
+  });
+});

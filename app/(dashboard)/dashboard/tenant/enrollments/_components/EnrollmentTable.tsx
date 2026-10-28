@@ -1,4 +1,5 @@
 import { paymentPresentation, type PaymentPresentation } from '@/lib/payment-status';
+import { enrollmentScheduleLabel } from '@/lib/enrollment-schedule';
 import {
   enrollmentClassName,
   enrollmentStatusLabel,
@@ -23,6 +24,10 @@ const PAYMENT_FORBIDDEN: PaymentPresentation = {
 
 /** Amount placeholder for a payment the member may not read. */
 const AMOUNT_FORBIDDEN = 'Nominal tidak tersedia';
+
+function rowSchedule({ enrollment, schedule }: TenantEnrollmentRow) {
+  return enrollmentScheduleLabel(enrollment) ?? scheduleLabel(schedule) ?? 'Belum ada jadwal';
+}
 
 function rowPayment({ enrollment, transaction, paymentForbidden }: TenantEnrollmentRow) {
   if (paymentForbidden) {
@@ -163,7 +168,7 @@ export function EnrollmentTable({
       {/* Mobile stacked cards */}
       <div className="block space-y-3 md:hidden">
         {rows.map((row) => {
-          const { enrollment, schedule } = row;
+          const { enrollment } = row;
           const { presentation: payment, amount } = rowPayment(row);
 
           return (
@@ -186,8 +191,8 @@ export function EnrollmentTable({
               <div className="space-y-2 border-t border-gray-100 dark:border-gray-800 pt-3 text-xs">
                 <div>
                   <span className="block text-[11px] text-gray-500 dark:text-gray-400">Jadwal</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {scheduleLabel(schedule) ?? 'Belum ada jadwal'}
+                  <span className="whitespace-pre-line font-semibold text-gray-900 dark:text-gray-100">
+                    {rowSchedule(row)}
                   </span>
                 </div>
                 <div>
@@ -242,7 +247,7 @@ export function EnrollmentTable({
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {rows.map((row) => {
-              const { enrollment, transaction, schedule } = row;
+              const { enrollment, transaction } = row;
               const { presentation: payment, amount } = rowPayment(row);
 
               return (
@@ -264,10 +269,8 @@ export function EnrollmentTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    {scheduleLabel(schedule) ?? (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
+                  <td className="whitespace-pre-line px-6 py-4">
+                    {rowSchedule(row)}
                   </td>
                   <td className="px-6 py-4">
                     <EnrollmentStatusBadge status={enrollment.status} />

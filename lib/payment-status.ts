@@ -12,14 +12,21 @@ export type EnrollmentScheduleSummary = {
   location?: string | null;
 };
 
+export type EnrollmentPrivateScheduleSummary = EnrollmentScheduleSummary & {
+  id: string;
+  valid_from?: string | null;
+  valid_until?: string | null;
+};
+
 export type EnrollmentRecord = {
   id: string;
   status: string;
-  class?: { name?: string | null } | null;
+  class?: { name?: string | null; type?: string } | null;
   student?: ({ first_name?: string | null } & StudentSurnameFields) | null;
   joined_at?: string;
   schedule_id?: string | null;
   schedule?: EnrollmentScheduleSummary | null;
+  private_schedules?: EnrollmentPrivateScheduleSummary[] | null;
 };
 
 export type TransactionRecord = {

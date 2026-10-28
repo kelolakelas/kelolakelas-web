@@ -103,7 +103,7 @@ afterEach(() => {
 });
 
 describe('getTenantEnrollments', () => {
-  it('reads enrollments and schedules with the session credentials', async () => {
+  it('reads scoped enrollments with the session credentials without scanning schedules', async () => {
     installFetch((url) => {
       if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments`)) {
         return success({ items: [{ id: EMAIL_ENROLLMENT_ID, status: 'active' }], pagination: pagination() });
@@ -391,7 +391,7 @@ describe('getTenantEnrollments', () => {
       if (url.startsWith(`${GATEWAY_URL}/api/v1/enrollments`)) {
         return success({
           items: [
-            { id: EMAIL_ENROLLMENT_ID, status: 'active', schedule_id: scheduleId },
+            { id: EMAIL_ENROLLMENT_ID, status: 'active', schedule_id: scheduleId, schedule: { day_of_week: 3, start_time: '15:30:00', end_time: '17:00:00' } },
             { id: SECOND_ENROLLMENT_ID, status: 'active' },
           ],
           pagination: pagination({ total_items: 2 }),
@@ -422,7 +422,8 @@ describe('getTenantEnrollments', () => {
     if (result.error === null) {
       const [scheduled, unscheduled] = result.data.rows;
 
-      expect(scheduled.schedule?.id).toBe(scheduleId);
+      expect(scheduled.enrollment.schedule?.day_of_week).toBe(3);
+      expect(requestedPaths().some(path => path.includes('/api/v1/schedules'))).toBe(false);
       expect(unscheduled.schedule).toBeUndefined();
     }
   });
@@ -481,4 +482,18 @@ describe('getTenantEnrollments', () => {
       expect(result.data.rows[0].transaction).toBeUndefined();
     }
   });
+});
+
+it('uses all scoped private slots beyond 100 without fetching a tenant schedule list', async () => {
+  const slots = Array.from({ length: 105 }, (_, i) => ({ id: `version-${i}`, day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00' }));
+  installFetch((url) => {
+    if (url.includes('/api/v1/enrollments?')) return success({ items: [{ id: EMAIL_ENROLLMENT_ID, status: 'pending', schedule_id: null, private_schedules: slots }], pagination: pagination() });
+    if (url.includes('/billing/transactions?')) return success({ items: [], pagination: pagination() });
+    throw new Error('unexpected global schedule scan');
+  });
+  const result = await getTenantEnrollments({});
+  expect(result.error).toBeNull();
+  if (!result.error) expect(result.data.rows[0].enrollment.private_schedules).toHaveLength(105);
+  expect(requestedPaths()).toHaveLength(2);
+  expect(requestedPaths().some(path => path.includes('/api/v1/schedules'))).toBe(false);
 });

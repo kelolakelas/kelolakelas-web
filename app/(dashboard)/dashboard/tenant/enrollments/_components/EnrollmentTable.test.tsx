@@ -183,3 +183,16 @@ describe('EnrollmentTable', () => {
     expect(filtered).toContain('Ubah atau atur ulang filter status');
   });
 });
+
+it('shows both approved private slots and effective periods in mobile and desktop while pending', () => {
+  const html = render([{
+    enrollment: { id: ENROLLMENT_ID, status: 'pending', class: { type: 'private', name: 'Private' }, private_schedules: [
+      { id: 'slot1', day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00', valid_from: '2026-10-27T00:00:00Z' },
+      { id: 'slot2', day_of_week: 4, start_time: '14:00:00', end_time: '15:00:00' },
+    ] },
+  }]);
+  expect(html.match(/Selasa, 10:00–11:00/g)).toHaveLength(2);
+  expect(html.match(/Kamis, 14:00–15:00/g)).toHaveLength(2);
+  expect(html.match(/Berlaku 27 Okt 2026–seterusnya/g)).toHaveLength(2);
+  expect(html).toContain('whitespace-pre-line');
+});
