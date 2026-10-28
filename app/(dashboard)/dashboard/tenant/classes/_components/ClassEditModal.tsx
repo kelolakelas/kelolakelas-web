@@ -1,5 +1,6 @@
 'use client';
 
+import { ModalDialog } from '@/components/ModalDialog';
 import { useCallback, useId, useRef, useState } from 'react';
 import { readClassConfiguration } from '../_actions/classActions';
 import { ClassConfigurationEditor } from './ClassConfigurationEditor';
@@ -42,8 +43,11 @@ export function ClassEditModal({
   const handleClose = useCallback(() => {
     request.current++;
     setIsOpen(false);
-    trigger.current?.focus();
-  }, []);
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-class-edit-trigger]'));
+    const visible = buttons.find(button => button.dataset.classEditTrigger === classRecord.id && button.getClientRects().length);
+    // Defer until the native dialog has left the top layer and background is active.
+    queueMicrotask(() => (visible ?? trigger.current)?.focus());
+  }, [classRecord.id]);
   const open = async () => {
     const current = ++request.current;
     setIsOpen(true);
@@ -68,6 +72,7 @@ export function ClassEditModal({
       <button
         type="button"
         ref={trigger}
+        data-class-edit-trigger={classRecord.id}
         onClick={() => void open()}
         className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
       >
@@ -89,35 +94,10 @@ export function ClassEditModal({
       </button>
 
       {isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') handleClose();
-            if (event.key === 'Tab') {
-              const items = Array.from(
-                event.currentTarget.querySelectorAll<HTMLElement>(
-                  'button, input, select, textarea, summary, [tabindex="0"]',
-                ),
-              ).filter(
-                (item) =>
-                  !item.matches(':disabled') &&
-                  item.getAttribute('type') !== 'hidden' &&
-                  !item.closest('details:not([open]) :not(summary)'),
-              );
-              const first = items[0],
-                last = items.at(-1);
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last?.focus();
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first?.focus();
-              }
-            }
-          }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6 backdrop-blur-xs overflow-y-auto"
+        <ModalDialog
+          labelledBy={titleId}
+          onClose={handleClose}
+          className="items-center justify-center p-3 sm:p-6"
         >
           <div className="my-auto w-full max-w-3xl space-y-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl sm:p-6 dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
@@ -166,7 +146,7 @@ export function ClassEditModal({
               />
             )}
           </div>
-        </div>
+        </ModalDialog>
       )}
     </>
   );

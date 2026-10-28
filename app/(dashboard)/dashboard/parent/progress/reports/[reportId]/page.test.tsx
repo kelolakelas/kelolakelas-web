@@ -47,7 +47,7 @@ describe('parent report detail page', () => {
 
     expect(html).toContain('Laporan Tengah Semester');
     expect(html).toContain('Rajin.');
-    expect(html).toContain('Diskusikan laporan ini via chat');
+    expect(html).toContain('Buka chat');
   });
 
   it('renders the not-found state for another parent id without leaking the row', async () => {
@@ -60,7 +60,7 @@ describe('parent report detail page', () => {
     const html = await render('323e4567-e89b-12d3-a456-426614174099');
 
     expect(html).toContain('Laporan tidak ditemukan pada akun Anda.');
-    expect(html).not.toContain('Diskusikan laporan ini via chat');
+    expect(html).not.toContain('Buka chat');
   });
 
   it('reports a forbidden read as access denied', async () => {

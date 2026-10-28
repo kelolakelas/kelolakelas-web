@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { installDialogDOM } from '@/test-support/dialog';
+installDialogDOM();
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {

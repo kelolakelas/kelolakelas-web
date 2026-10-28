@@ -5,7 +5,8 @@ import { usePendingScheduleRequestCount } from '@/components/PendingScheduleRequ
 import { NavigationBadge } from '@/components/chat/NavigationBadge';
 import { useChatUnreadCount } from '@/components/chat/ChatUnreadProvider';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ModalDialog } from '@/components/ModalDialog';
 import { LogoutButton } from '@/app/(auth)/logout/_components/LogoutButton';
 import type { NavItem } from '../_constants/constants';
 import { TENANT_NAV_ERROR_MESSAGE } from '../_lib/nav';
@@ -111,6 +112,13 @@ function MobileNavContent({
   const unread = useChatUnreadCount();
   const pendingRequests = usePendingScheduleRequestCount();
   const [isOpen, setIsOpen] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const closeOnDesktop = () => { if (desktop.matches) setIsOpen(false); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 md:hidden">
@@ -133,6 +141,7 @@ function MobileNavContent({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
+        ref={toggle}
         aria-expanded={isOpen}
         aria-label="Toggle navigation menu"
         className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/80 transition-colors"
@@ -148,20 +157,14 @@ function MobileNavContent({
 
       {/* Slide-out Mobile Drawer */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          {/* Backdrop Overlay */}
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsOpen(false)}
-            aria-hidden="true"
-          />
-
+        <ModalDialog label="Tenant navigation menu" onClose={() => setIsOpen(false)} dismissOnBackdrop>
           {/* Drawer Content */}
           <div className="relative flex w-4/5 max-w-xs flex-col bg-white dark:bg-gray-900 shadow-2xl z-10 border-r border-gray-200 dark:border-gray-800">
             <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Navigation</span>
               <button
                 type="button"
+                autoFocus
                 onClick={() => setIsOpen(false)}
                 className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
                 aria-label="Close menu"
@@ -218,7 +221,7 @@ function MobileNavContent({
               </div>
             </div>
           </div>
-        </div>
+        </ModalDialog>
       )}
     </header>
   );

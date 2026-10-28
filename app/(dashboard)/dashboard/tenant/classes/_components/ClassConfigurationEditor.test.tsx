@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { installDialogDOM } from '@/test-support/dialog';
+installDialogDOM();
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   act,
@@ -292,7 +294,7 @@ it('blocks editing when initial configuration read fails and retries the complet
   );
   await screen.findByLabelText('Class Name');
   expect(actions.readClassConfiguration).toHaveBeenCalledTimes(2);
-  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('rereads stored details after an uncertain class save without showing success', async () => {
