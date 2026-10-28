@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { installDialogDOM } from '@/test-support/dialog';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { TENANT_NAV_ERROR_MESSAGE } from '../_lib/nav';
 
 /**
@@ -23,6 +24,17 @@ vi.mock('@/app/(auth)/logout/_components/LogoutButton', () => ({
   LogoutButton: () => <button type="submit">Keluar</button>,
 }));
 
+let desktopListener: () => void;
+let desktop = false;
+beforeEach(() => {
+  installDialogDOM();
+  desktop = false;
+  vi.stubGlobal('matchMedia', () => ({
+    get matches() { return desktop; },
+    addEventListener: (_name: string, listener: () => void) => { desktopListener = listener; },
+    removeEventListener: vi.fn(),
+  }));
+});
 const { MobileNav } = await import('./MobileNav');
 
 const ITEMS = [
@@ -55,4 +67,15 @@ describe('MobileNav footer (KEL-171)', () => {
     expect(screen.queryByText('Tenant Member')).toBeNull();
     expect(screen.getByText(TENANT_NAV_ERROR_MESSAGE)).toBeTruthy();
   });
+});
+
+it('closes on native Escape/cancel and when the viewport becomes desktop', () => {
+  openDrawer('Teacher', false);
+  fireEvent(screen.getByRole('dialog', { name: 'Tenant navigation menu' }), new Event('cancel', { cancelable: true }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Toggle navigation menu' }));
+  desktop = true;
+  act(() => desktopListener());
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(document.body.style.overflow).toBe('');
 });

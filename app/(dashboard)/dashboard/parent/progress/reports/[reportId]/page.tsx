@@ -27,8 +27,7 @@ function backHref(searchParams: Record<string, string | string[] | undefined>): 
  *
  * The report is fetched parent-scoped: another parent's id answers 404
  * upstream and renders the not-found state, never a forbidden leak. Chat
- * uses the existing inbox entry point (`/dashboard/parent/chat`), which
- * starts a `report` conversation get-or-create from the report row.
+ * links to the existing inbox; only staff can initiate report conversations.
  */
 export default async function ParentReportDetailPage({ params, searchParams }: Props) {
   const { reportId } = await params;
@@ -81,9 +80,9 @@ export default async function ParentReportDetailPage({ params, searchParams }: P
             </p>
           </section>
           <div className="mt-6 border-t border-[#edf0e9] pt-5">
-            <ReportChatButton reportId={report.id} />
+            <ReportChatButton />
             <p className="mt-2 text-sm text-[#65726c]">
-              Chat dibuka di inbox pada percakapan laporan ini.
+              Pilih percakapan laporan yang telah dibagikan di inbox.
             </p>
           </div>
         </article>
