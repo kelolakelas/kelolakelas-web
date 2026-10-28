@@ -6,22 +6,31 @@ export const WEEKDAY_NAMES: readonly string[] = ['Senin', 'Selasa', 'Rabu', 'Kam
 /** Label shown when an enrollment points at a schedule the backend no longer describes. */
 export const SCHEDULE_UNAVAILABLE_LABEL = 'Jadwal tidak tersedia';
 
-/**
- * Schedule line for a parent enrollment card (KEL-70), or `null` when the card
- * should show no schedule row at all.
- *
- * - A private enrollment has no `schedule_id` and no summary: no row.
- * - A valid summary renders as `Senin, 16:00–17:30 · Ruang A`, the same format
- *   as the catalog and the tenant dashboard (`lib/catalog.ts::scheduleLabels`),
- *   with the location appended only when it is present.
- * - An enrollment with a `schedule_id` whose summary is missing or unusable
- *   (the schedule was deleted, or an older backend that does not send the field)
- *   renders {@link SCHEDULE_UNAVAILABLE_LABEL} rather than guessing.
- *
- * The summary arrives from the network, so every field is re-checked: day_of_week
- * must be an integer 1–7 (ISO, Senin = 1) and both times must be strings.
- */
-export function enrollmentScheduleLabel(enrollment: Pick<EnrollmentRecord, 'schedule_id' | 'schedule'>): string | null {
+/** Shared enrollment schedule text. Private collections retain server order and
+ * render each version once with its effective dates. Explicit [] is empty;
+ * missing private projection, malformed data and missing group summaries are
+ * unavailable. Group singular summaries retain the KEL-70 format. */
+export function enrollmentScheduleLabel(enrollment: Pick<EnrollmentRecord, 'schedule_id' | 'schedule' | 'private_schedules' | 'class'>): string | null {
+  if (enrollment.private_schedules !== undefined) {
+    if (!Array.isArray(enrollment.private_schedules)) return SCHEDULE_UNAVAILABLE_LABEL;
+    if (!enrollment.private_schedules.length) return 'Belum ada jadwal';
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const slot of enrollment.private_schedules) {
+      if (!slot || typeof slot.id !== 'string' || !slot.id) return SCHEDULE_UNAVAILABLE_LABEL;
+      if (seen.has(slot.id)) continue;
+      seen.add(slot.id);
+      const label = enrollmentScheduleLabel({ schedule_id: slot.id, schedule: slot });
+      if (!label || label === SCHEDULE_UNAVAILABLE_LABEL) return SCHEDULE_UNAVAILABLE_LABEL;
+      const from = effectiveDate(slot.valid_from);
+      const until = effectiveDate(slot.valid_until);
+      if (from === false || until === false) return SCHEDULE_UNAVAILABLE_LABEL;
+      const period = from || until ? ` · Berlaku ${from || 'awal'}–${until || 'seterusnya'}` : '';
+      labels.push(label + period);
+    }
+    return labels.join('\n');
+  }
+  if (enrollment.class?.type === 'private') return SCHEDULE_UNAVAILABLE_LABEL;
   const schedule = enrollment.schedule;
   const hasScheduleId = typeof enrollment.schedule_id === 'string' && enrollment.schedule_id !== '';
   if (!schedule || typeof schedule !== 'object') return hasScheduleId ? SCHEDULE_UNAVAILABLE_LABEL : null;
@@ -35,4 +44,12 @@ export function enrollmentScheduleLabel(enrollment: Pick<EnrollmentRecord, 'sche
   const label = `${day}, ${start}–${end}`;
   const location = typeof schedule.location === 'string' ? schedule.location.trim() : '';
   return location ? `${label} · ${location}` : label;
+}
+
+function effectiveDate(value: string | null | undefined): string | false | null {
+  if (value == null) return null;
+  if (typeof value !== 'string') return false;
+  const date = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date + 'T00:00:00Z'))) return false;
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(date + 'T00:00:00Z'));
 }

@@ -7,8 +7,6 @@ import {
   isEnrollmentId,
   parseEnrollmentFilters,
   pickEnrollmentTransaction,
-  scheduleQueryString,
-  schedulesById,
   transactionQueryString,
   type EnrollmentFilters,
   type TenantEnrollment,
@@ -147,7 +145,8 @@ function isForbidden(read: ListRead<unknown>): boolean {
  * Reads the tenant enrollment overview for one filter state.
  *
  * Enrollments and their payments live in two services, so the page makes one
- * academic request and then one billing request per visible enrollment. The
+ * academic request (including scoped schedule summaries) and then one billing
+ * request per visible enrollment. No tenant-wide schedule lookup is needed. The
  * payment lookups run together and a lookup that fails for a single row is
  * treated as "no payment to show" instead of failing the page: the enrollment
  * list is the primary content, and `paymentPresentation` already renders a
@@ -167,10 +166,7 @@ export async function getTenantEnrollments(
   try {
     const headers = await getAuthHeaders();
 
-    const [enrollmentRead, scheduleRead] = await Promise.all([
-      readList<TenantEnrollment>(`/api/v1/enrollments?${enrollmentQueryString(filters)}`, headers),
-      readList<TenantSchedule>(`/api/v1/schedules?${scheduleQueryString()}`, headers),
-    ]);
+    const enrollmentRead = await readList<TenantEnrollment>(`/api/v1/enrollments?${enrollmentQueryString(filters)}`, headers);
 
     if (isForbidden(enrollmentRead)) {
       return { data: null, error: 'forbidden', message: FORBIDDEN_MESSAGE };
@@ -185,24 +181,14 @@ export async function getTenantEnrollments(
       enrollmentRead.items.map((enrollment) => enrollment.id)
     );
 
-    // A schedule lookup is only a labelling aid; losing it must not hide the
-    // enrollments themselves.
-    const schedules = scheduleRead.ok ? schedulesById(scheduleRead.items) : new Map();
-
     return {
       data: {
         rows: enrollmentRead.items.map((enrollment) => {
           const transaction = payments.transactions.get(enrollment.id);
-          const scheduleId = enrollment.schedule_id;
-          const schedule =
-            typeof scheduleId === 'string' && scheduleId !== ''
-              ? schedules.get(scheduleId)
-              : undefined;
 
           return {
             enrollment,
             ...(transaction ? { transaction } : {}),
-            ...(schedule ? { schedule } : {}),
             ...(payments.forbidden.has(enrollment.id) ? { paymentForbidden: true } : {}),
           } satisfies TenantEnrollmentRow;
         }),
