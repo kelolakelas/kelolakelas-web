@@ -1,0 +1,41 @@
+// @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+const config: Record<string,string> = process.env.KEL229_INTEGRATION_CONFIG ? JSON.parse(readFileSync(process.env.KEL229_INTEGRATION_CONFIG,'utf8')) : {};
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: (key: string) => key === 'auth_token' ? {value:config.token} : undefined }) }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+import { ClassForm } from './ClassForm';
+import { ClassEditForm } from './ClassEditForm';
+import { createClassConfiguration, updateClass } from '../_actions/classActions';
+import type { ClassEntity } from '../_lib/schema';
+afterEach(() => {cleanup();vi.unstubAllEnvs();});
+describe.skipIf(!config.gateway)('private limit form → server actions → gateway → academic → PostgreSQL', () => {
+  it.each([1,3])('persists form limit %i and edits it through the real API', async (limit) => {
+    vi.stubEnv('GATEWAY_API_URL',config.gateway);
+    const category = {id:config.category,tenant_id:config.tenant,name:'Existing',created_at:''};
+    const drafted = vi.fn();
+    const view = render(<ClassForm draft selectedCategory={category} onClassCreated={drafted} onBack={() => {}} />);
+    fireEvent.click(screen.getByRole('button',{name:/Private 1-on-1/}));
+    fireEvent.change(screen.getByLabelText(/^Class \/ Course Name/),{target:{value:`Private limit ${limit}`}});
+    fireEvent.change(screen.getByLabelText(/^Price/),{target:{value:'100000'}});
+    fireEvent.change(screen.getByLabelText('Batas slot mingguan per enrollment'),{target:{value:String(limit)}});
+    fireEvent.submit(view.container.querySelector('form')!);
+    const draft = drafted.mock.calls[0][0] as ClassEntity;
+    expect(draft.private_slot_limit).toBe(limit);
+    const saved = await createClassConfiguration({category_id:config.category,class:{name:draft.name,type:'private',price:draft.price,private_slot_limit:draft.private_slot_limit!},teacher_ids:[config.teacher],schedules:[]},crypto.randomUUID());
+    expect(saved.success).toBe(true);
+    const record = saved.data!.class;
+    expect(record.private_slot_limit).toBe(limit);
+    cleanup();
+    const editor = render(<ClassEditForm classRecord={record} categories={[category]} />);
+    const input = screen.getByLabelText('Batas slot mingguan per enrollment') as HTMLInputElement;
+    expect(input.value).toBe(String(limit));
+    fireEvent.change(input,{target:{value:String(limit+1)}});
+    const edited = await updateClass({success:false,message:''},new FormData(editor.container.querySelector('form')!));
+    expect(edited.success).toBe(true);
+    const response = await fetch(`${config.gateway}/api/v1/classes`,{headers:{Authorization:`Bearer ${config.token}`}});
+    const body = await response.json();
+    expect(body.data.items.find((item:ClassEntity) => item.id===record.id).private_slot_limit).toBe(limit+1);
+  }, 60000);
+});

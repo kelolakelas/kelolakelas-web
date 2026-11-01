@@ -138,7 +138,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
     <>
       {/* Mobile stacked cards */}
       <div className="block space-y-3 md:hidden">
-        {rows.map(({ request, className, student }) => (
+        {rows.map(({ request, className, student, privateSlotLimit }) => (
           <article
             key={request.id}
             className="space-y-3 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-xs"
@@ -192,6 +192,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                     requestId={request.id}
                     studentName={scheduleRequestStudentName(student)}
                     idPrefix="mobile"
+                        privateSlotLimit={privateSlotLimit}
                     recovery
                   />
                 )}
@@ -204,6 +205,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                   requestId={request.id}
                   studentName={scheduleRequestStudentName(student)}
                   idPrefix="mobile"
+                        privateSlotLimit={privateSlotLimit}
                 />
                 <RejectScheduleRequestDialog
                   requestId={request.id}
@@ -248,7 +250,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {rows.map(({ request, className, student }) => (
+            {rows.map(({ request, className, student, privateSlotLimit }) => (
               <tr
                 key={request.id}
                 className="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-800/40"
@@ -296,6 +298,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                         requestId={request.id}
                         studentName={scheduleRequestStudentName(student)}
                         idPrefix="desktop"
+                        privateSlotLimit={privateSlotLimit}
                       />
                       <RejectScheduleRequestDialog
                         requestId={request.id}
@@ -316,6 +319,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                           requestId={request.id}
                           studentName={scheduleRequestStudentName(student)}
                           idPrefix="desktop"
+                        privateSlotLimit={privateSlotLimit}
                           recovery
                         />
                       )}

@@ -287,6 +287,12 @@ export function ClassEditForm({
         )}
       </div>
 
+      {classRecord.type === 'private' && <div>
+        <label htmlFor={`${fieldId}-private-slot-limit`} className="mb-1 block text-sm font-medium">Batas slot mingguan per enrollment</label>
+        <input id={`${fieldId}-private-slot-limit`} name="private_slot_limit" type="number" min="1" max="2147483647" step="1" defaultValue={classRecord.private_slot_limit ?? ''} required={classRecord.private_slot_limit != null} aria-describedby={`${fieldId}-private-slot-limit-hint`} className="min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+        <p id={`${fieldId}-private-slot-limit-hint`} className="mt-1 text-xs text-gray-600 dark:text-gray-400">{classRecord.private_slot_limit == null ? 'Legacy: kosong mempertahankan perilaku lama. Isi integer positif untuk menetapkan batas.' : 'Batas terbaru berlaku untuk keputusan yang belum menghasilkan enrollment; jadwal dan pembayaran existing tidak berubah.'}</p>
+        {state.errors?.private_slot_limit && <p role="alert" className="text-sm text-red-600">{state.errors.private_slot_limit[0]}</p>}
+      </div>}
       <div>
         <label
           htmlFor={`${fieldId}-price`}

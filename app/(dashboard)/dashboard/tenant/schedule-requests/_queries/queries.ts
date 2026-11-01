@@ -20,6 +20,7 @@ const TENANT_COOKIE = process.env.TENANT_ID_COOKIE_NAME || 'tenant_id';
 export interface TenantScheduleRequestRow {
   request: ScheduleRequest;
   className: string | null;
+  privateSlotLimit?: number | null;
   student: Student | null;
 }
 
@@ -149,6 +150,7 @@ async function attachLabels(headers: HeadersInit, requests: ScheduleRequest[]): 
   return requests.map((request) => ({
     request,
     className: classIndex.get(request.class_id)?.name ?? null,
+    privateSlotLimit: classIndex.get(request.class_id)?.private_slot_limit ?? null,
     student: studentIndex.get(request.student_id) ?? null,
   }));
 }

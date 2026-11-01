@@ -41,9 +41,10 @@ function FieldError({ errors, name }: { errors?: Record<string, string[]>; name:
  *   "Tambah student" trigger that shares one dialog. The new student is
  *   appended to the options and selected immediately without leaving the page.
  */
-export function EnrollmentPanel({ classId, classType, isParent, students, schedules, idempotencyKey, parentId, studentError, scheduleRequests = [], enrollments = [] }: {
+export function EnrollmentPanel({ classId, classType, privateSlotLimit, isParent, students, schedules, idempotencyKey, parentId, studentError, scheduleRequests = [], enrollments = [] }: {
   classId: string;
   classType: 'private' | 'group';
+  privateSlotLimit?: number | null;
   isParent: boolean;
   students: Student[];
   schedules: CatalogScheduleOption[];
@@ -179,6 +180,7 @@ export function EnrollmentPanel({ classId, classType, isParent, students, schedu
         <p className="text-sm font-bold uppercase tracking-[.14em] text-[#617c35]">Permintaan jadwal private</p>
         <h2 className="mt-2 text-2xl font-black">Ajukan jadwal les private</h2>
         <p className="mt-2 text-[#52615b]">Usulkan slot mingguan; penyelenggara meninjau permintaan Anda sebelum enrollment dibuat. Kelas private tidak melalui checkout dari halaman ini.</p>
+        <p className="mt-2 text-sm text-[#52615b]">{privateSlotLimit != null ? `Maksimum ${privateSlotLimit} slot mingguan disetujui per enrollment. Anda boleh mengajukan beberapa usulan; semuanya tidak otomatis disetujui.` : "Batas slot belum ditetapkan. Usulan tetap memerlukan persetujuan penyelenggara sesuai kebijakan terbaru."}</p>
         {addStudentButton}
         <div id="form-permintaan-jadwal">
           <ScheduleRequestForm

@@ -75,6 +75,7 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack, draft = fa
                 category_id: selectedCategory.id,
                 name: form.get('name'),
                 type: classType,
+                private_slot_limit: classType === 'private' ? Number(form.get('private_slot_limit')) : undefined,
                 price: form.get('price'),
                 description: form.get('description') || undefined,
               });
@@ -188,6 +189,15 @@ export function ClassForm({ selectedCategory, onClassCreated, onBack, draft = fa
           <p className="text-xs text-red-600 dark:text-red-400">{state.errors.type[0]}</p>
         )}
       </div>
+
+      {classType === 'private' && (
+        <div className="space-y-1.5">
+          <label htmlFor="class-private-slot-limit" className="block text-sm font-semibold">Batas slot mingguan per enrollment</label>
+          <input id="class-private-slot-limit" name="private_slot_limit" type="number" min="1" max="2147483647" step="1" defaultValue="1" required aria-describedby="private-slot-limit-hint" className="min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+          <p id="private-slot-limit-hint" className="text-xs text-gray-600 dark:text-gray-400">Maksimum jadwal mingguan yang disetujui untuk satu enrollment, bukan jumlah murid atau sesi. Parent tetap dapat mengusulkan beberapa slot.</p>
+          {state.errors?.private_slot_limit && <p role="alert" className="text-xs text-red-600">{state.errors.private_slot_limit[0]}</p>}
+        </div>
+      )}
 
       {/* Price */}
       <div className="space-y-1.5">

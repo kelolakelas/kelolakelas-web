@@ -244,6 +244,7 @@ export async function createClass(
     category_id: formData.get('category_id')?.toString() || '',
     name: formData.get('name')?.toString() || '',
     type: formData.get('type')?.toString() || 'group',
+    ...(formData.has('private_slot_limit') ? { private_slot_limit: Number(formData.get('private_slot_limit')) } : {}),
     price: formData.get('price') ? Number(formData.get('price')) : 0,
     description: formData.get('description')?.toString() || undefined,
   };
@@ -580,6 +581,7 @@ export async function updateClass(
     }
   }
   const validation = updateClassSchema.safeParse({
+    ...(formData.get('private_slot_limit') ? { private_slot_limit: Number(formData.get('private_slot_limit')) } : {}),
     ...(formData.has('is_published')
       ? { is_published: formData.get('is_published') === 'true' }
       : {}),
