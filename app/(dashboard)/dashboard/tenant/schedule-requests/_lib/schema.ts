@@ -157,6 +157,7 @@ export function scheduleRequestStudentName(
  * `class_id`. Entries without a usable id are skipped.
  */
 export interface ScheduleRequestClassLike {
+  private_slot_limit?: number | null;
   id: string;
   name: string;
 }

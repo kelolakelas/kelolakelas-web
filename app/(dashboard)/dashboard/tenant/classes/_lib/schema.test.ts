@@ -22,6 +22,14 @@ const validPayload = {
 };
 
 describe('updateClassSchema', () => {
+  it('validates positive PostgreSQL integer slot limits without breaking omission', () => {
+    for (const private_slot_limit of [1, 3, 2147483647, undefined]) {
+      expect(updateClassSchema.safeParse({...validPayload, private_slot_limit}).success).toBe(true);
+    }
+    for (const private_slot_limit of [0, -1, 1.5, '2', NaN, 2147483648]) {
+      expect(updateClassSchema.safeParse({...validPayload, private_slot_limit}).success).toBe(false);
+    }
+  });
   it('accepts the editable fields and keeps the numeric price', () => {
     const result = updateClassSchema.safeParse(validPayload);
 

@@ -117,12 +117,14 @@ export function ApproveScheduleRequestDialog({
   studentName,
   idPrefix,
   recovery = false,
+  privateSlotLimit,
 }: {
   requestId: string;
   studentName: string;
   /** Distinguishes the mobile and desktop copies of the control, which are both in the DOM. */
   idPrefix: string;
   recovery?: boolean;
+  privateSlotLimit?: number | null;
 }) {
   const [state, formAction] = useActionState(approveScheduleRequest, initialState);
   useEffect(() => {
@@ -193,6 +195,7 @@ export function ApproveScheduleRequestDialog({
                 : 'Permintaan yang disetujui menerbitkan enrollment dan tautan pembayaran untuk parent. Tindakan ini tidak dapat diurungkan.'}
             </p>
 
+            {!recovery && <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{privateSlotLimit != null ? `Batas saat ditampilkan: ${privateSlotLimit} slot mingguan per enrollment. Approval mengambil semua usulan; jika melebihi batas terbaru, kirim rekomendasi yang lebih sedikit. Server memeriksa kembali batas saat keputusan disimpan.` : 'Batas slot belum ditetapkan (legacy). Approval mengambil seluruh usulan sesuai kebijakan kelas terbaru.'}</p>}
             <form action={formAction} className="mt-6 flex flex-wrap justify-end gap-3">
               <input type="hidden" name="request_id" value={requestId} />
               <button

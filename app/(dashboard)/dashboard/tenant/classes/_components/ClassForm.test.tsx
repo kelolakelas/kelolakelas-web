@@ -59,6 +59,19 @@ afterEach(() => {
 });
 
 describe('ClassForm without class-level capacity', () => {
+	 it.each([1, 3])('keeps private weekly slot limit %i in the validated draft', (limit) => {
+	   const created = vi.fn();
+	   const {container} = render(<ClassForm draft selectedCategory={{...CATEGORY,id:'00000000-0000-0000-0000-000000000001'}} onClassCreated={created} onBack={() => {}} />);
+	   expect(container.querySelector('[name="private_slot_limit"]')).toBeNull();
+	   fireEvent.click(screen.getByRole('button', {name:/Private 1-on-1/}));
+	   const input = screen.getByLabelText('Batas slot mingguan per enrollment') as HTMLInputElement;
+	   expect(input.value).toBe('1');
+	   fireEvent.change(input,{target:{value:String(limit)}});
+	   fireEvent.change(screen.getByLabelText(/^Class \/ Course Name/),{target:{value:'Private lesson'}});
+	   fireEvent.change(screen.getByLabelText(/^Price/),{target:{value:'100000'}});
+	   fireEvent.submit(container.querySelector('form')!);
+	   expect(created).toHaveBeenCalledWith(expect.objectContaining({type:'private',private_slot_limit:limit}));
+	 });
   it('renders no capacity input on the default group type', () => {
     const { container } = renderForm();
 

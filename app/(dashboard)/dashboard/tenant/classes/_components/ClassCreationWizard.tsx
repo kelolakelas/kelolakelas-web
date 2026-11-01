@@ -106,7 +106,7 @@ function WizardDraft({
       return;
     }
     if (!attempt.current) {
-      const { name, type, price, description } = classDraft;
+      const { name, type, price, description, private_slot_limit } = classDraft;
       attempt.current = {
         key: crypto.randomUUID(),
         payload: {
@@ -118,7 +118,7 @@ function WizardDraft({
                 },
               }
             : { category_id: category.id }),
-          class: { name, type, price, description: description ?? undefined },
+          class: { name, type, price, description: description ?? undefined, ...(type === 'private' ? { private_slot_limit: private_slot_limit ?? 1 } : {}) },
           teacher_ids: type === 'private'
             ? [teacherId]
             : [...new Set(slots.flatMap((slot) => slot.tutor_id ? [slot.tutor_id] : []))],

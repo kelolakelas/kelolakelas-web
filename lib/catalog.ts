@@ -1,6 +1,7 @@
 import { getGatewayBaseUrl, withGatewayClientIp } from './gateway';
 
 export type CatalogItem = {
+  private_slot_limit?: number | null;
   id: string;
   tenant_id: string;
   tenant_name: string;

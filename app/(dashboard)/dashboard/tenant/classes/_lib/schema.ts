@@ -124,7 +124,10 @@ const classPriceField = z
  * Capacity is intentionally absent: it is set per schedule on the scheduling
  * step (`scheduleItemSchema`), so the creation form never submits it.
  */
+export const privateSlotLimitSchema = z.number().int().min(1).max(2147483647);
+
 export const createClassSchema = z.object({
+  private_slot_limit: privateSlotLimitSchema.optional(),
   category_id: classCategoryField,
   name: classNameField,
   type: z.enum(['private', 'group'], {
@@ -150,6 +153,7 @@ export const createClassSchema = z.object({
  * into an opaque backend error.
  */
 export const updateClassSchema = z.strictObject({
+  private_slot_limit: privateSlotLimitSchema.optional(),
   is_published: z.boolean().optional(),
   enrollment_status: z.enum(['open','closed','full','archived']).optional(),
   teacher_ids: z.array(z.string().uuid()).min(1).optional(),
@@ -503,6 +507,7 @@ export interface ClassEntity {
   category_id: string;
   name: string;
   type: 'private' | 'group';
+  private_slot_limit?: number | null;
   price: number;
   capacity?: number;
   description?: string;
