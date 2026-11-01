@@ -4,13 +4,14 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 /** Native top-layer focus/inert behavior, outside responsive/overflow ancestors. */
-export function ModalDialog({ children, labelledBy, label, onClose, className = '', dismissOnBackdrop = false }: {
+export function ModalDialog({ children, labelledBy, label, onClose, className = '', dismissOnBackdrop = false, layout = 'centered' }: {
   children: ReactNode;
   labelledBy?: string;
   label?: string;
   onClose: () => void;
   className?: string;
   dismissOnBackdrop?: boolean;
+  layout?: 'centered' | 'drawer';
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -31,12 +32,13 @@ export function ModalDialog({ children, labelledBy, label, onClose, className = 
   return createPortal(
     <dialog
       ref={dialog}
+      data-modal-layout={layout}
       aria-modal="true"
       aria-label={label}
       aria-labelledby={labelledBy}
       onCancel={event => { event.preventDefault(); onClose(); }}
       onClick={event => { if (dismissOnBackdrop && event.target === event.currentTarget) onClose(); }}
-      className={`fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto border-0 bg-transparent p-0 text-inherit backdrop:bg-black/60 backdrop:backdrop-blur-xs open:flex ${className}`}
+      className={`fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto border-0 bg-transparent text-inherit open:flex ${layout === 'drawer' ? 'p-0' : ''} ${className}`}
     >
       {children}
     </dialog>, document.body,

@@ -30,3 +30,28 @@ it('uses native cancel and only dismisses outside content when explicitly reques
   fireEvent(dialog, new Event('cancel', { bubbles: false, cancelable: true }));
   expect(close).toHaveBeenCalledTimes(2);
 });
+
+it('centers ordinary modal content while retaining an explicit drawer opt-out', () => {
+  const centered = render(<ModalDialog label="Centered" onClose={() => {}}><button>Close</button></ModalDialog>);
+  expect(screen.getByRole('dialog').getAttribute('data-modal-layout')).toBe('centered');
+  centered.unmount();
+  render(<ModalDialog label="Drawer" layout="drawer" onClose={() => {}}><nav>Navigation</nav></ModalDialog>);
+  expect(screen.getByRole('dialog').getAttribute('data-modal-layout')).toBe('drawer');
+});
+
+it('does not dismiss a default modal on backdrop clicks', () => {
+  const close = vi.fn();
+  render(<ModalDialog label="Save" onClose={close}><button>Save</button></ModalDialog>);
+  fireEvent.click(screen.getByRole('dialog'));
+  expect(close).not.toHaveBeenCalled();
+});
+
+it('can unmount safely when the trigger disappeared after a successful save', () => {
+  const trigger = document.createElement('button');
+  document.body.append(trigger);
+  trigger.focus();
+  const { unmount } = render(<ModalDialog label="Save" onClose={() => {}}><button>Save</button></ModalDialog>);
+  trigger.remove();
+  expect(() => unmount()).not.toThrow();
+  expect(document.body.style.overflow).toBe('');
+});

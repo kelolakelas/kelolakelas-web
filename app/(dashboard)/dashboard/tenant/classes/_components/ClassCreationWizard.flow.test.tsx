@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installDialogDOM } from '@/test-support/dialog';
 import {
   cleanup,
   fireEvent,
@@ -25,6 +26,7 @@ const existing = {
   created_at: '',
 };
 beforeEach(() => {
+  installDialogDOM();
   vi.resetAllMocks();
   actions.getScheduleTeachers.mockResolvedValue({
     state: 'ok',
@@ -150,9 +152,9 @@ describe('local class creation draft', () => {
     const close = screen.getByRole('button', { name: 'Close modal' });
     const last = screen.getByRole('button', { name: 'Create Category' });
     last.focus();
-    fireEvent.keyDown(dialog, { key: 'Tab' });
+    fireEvent.keyDown(last, { key: 'Tab' });
     expect(document.activeElement).toBe(close);
-    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
     expect(screen.queryByRole('dialog')).toBeNull();
     noMutations();
   });

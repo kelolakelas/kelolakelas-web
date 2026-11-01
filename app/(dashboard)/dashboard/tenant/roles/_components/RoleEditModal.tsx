@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { ModalDialog } from '@/components/ModalDialog';
 import type { Permission, Role } from '../_lib/schema';
 import { RoleEditForm } from './RoleEditForm';
 
@@ -21,15 +22,6 @@ export function RoleEditModal({ role, availablePermissions }: RoleEditModalProps
   const handleClose = useCallback(() => setIsOpen(false), []);
   const titleId = `edit-role-title-${role.id}`;
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen]);
-
   return (
     <>
       <button
@@ -42,11 +34,8 @@ export function RoleEditModal({ role, availablePermissions }: RoleEditModalProps
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6 backdrop-blur-xs overflow-y-auto">
+        <ModalDialog labelledBy={titleId} onClose={handleClose} className="p-3 sm:p-6">
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
             className="my-auto w-full max-w-3xl space-y-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl sm:p-6 dark:border-gray-800 dark:bg-gray-900"
           >
             <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
@@ -75,7 +64,7 @@ export function RoleEditModal({ role, availablePermissions }: RoleEditModalProps
               onCancel={handleClose}
             />
           </div>
-        </div>
+        </ModalDialog>
       )}
     </>
   );

@@ -157,7 +157,7 @@ function MobileNavContent({
 
       {/* Slide-out Mobile Drawer */}
       {isOpen && (
-        <ModalDialog label="Tenant navigation menu" onClose={() => setIsOpen(false)} dismissOnBackdrop>
+        <ModalDialog label="Tenant navigation menu" layout="drawer" onClose={() => setIsOpen(false)} dismissOnBackdrop>
           {/* Drawer Content */}
           <div className="relative flex w-4/5 max-w-xs flex-col bg-white dark:bg-gray-900 shadow-2xl z-10 border-r border-gray-200 dark:border-gray-800">
             <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800">

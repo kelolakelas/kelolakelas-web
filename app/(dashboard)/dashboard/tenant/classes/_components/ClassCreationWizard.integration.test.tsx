@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installDialogDOM } from '@/test-support/dialog';
 import {
   cleanup,
   configure,
@@ -22,6 +23,7 @@ vi.mock('next/headers', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 import { ClassCreationWizard } from './ClassCreationWizard';
+beforeEach(installDialogDOM);
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 describe.skipIf(!process.env.KEL197_INTEGRATION_CONFIG)(
   'wizard → action → existing gateway → academic main → disposable PostgreSQL',

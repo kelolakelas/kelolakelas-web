@@ -2,6 +2,7 @@
 
 import { useScheduleTeachers } from './useScheduleTeachers';
 import { TeacherLoadStatus } from './TeacherLoadStatus';
+import { ModalDialog } from '@/components/ModalDialog';
 
 import { useEffect, useRef, useState } from 'react';
 import type { Category, ClassEntity, ScheduleItemInput } from '../_lib/schema';
@@ -154,12 +155,9 @@ function WizardDraft({
     }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-3 sm:p-6">
+    <ModalDialog labelledBy="class-wizard-title" onClose={() => { if (!busy.current) onClose(); }} className="p-3 sm:p-6">
       <div
         ref={dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="class-wizard-title"
         aria-busy={pending}
         tabIndex={-1}
         onKeyDown={(event) => {
@@ -347,7 +345,7 @@ function WizardDraft({
           </p>
         )}
       </div>
-    </div>
+    </ModalDialog>
   );
 }
 

@@ -1,21 +1,11 @@
 "use client";
 
 import { ArrowUpRight, Clock3, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { ModalDialog } from "@/components/ModalDialog";
 
 export function EarlyAccessModal() {
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
 
   return (
     <>
@@ -30,16 +20,14 @@ export function EarlyAccessModal() {
       </button>
 
       {isOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#17231f]/70 px-5 py-8 backdrop-blur-sm"
-          role="presentation"
-          onClick={() => setIsOpen(false)}
+        <ModalDialog
+          labelledBy="early-access-title"
+          onClose={() => setIsOpen(false)}
+          dismissOnBackdrop
+          className="px-5 py-8 backdrop:bg-[#17231f]/70 backdrop:backdrop-blur-sm"
         >
           <section
             className="relative w-full max-w-md rounded-[2rem] bg-[#f8f7f3] p-7 text-[#17231f] shadow-2xl sm:p-9"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="early-access-title"
             onClick={(event) => event.stopPropagation()}
           >
             <button
@@ -62,7 +50,7 @@ export function EarlyAccessModal() {
               Mengerti
             </button>
           </section>
-        </div>
+        </ModalDialog>
       )}
     </>
   );
