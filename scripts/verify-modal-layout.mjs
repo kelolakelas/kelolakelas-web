@@ -75,7 +75,7 @@ const views = {
   wizard:<ClassCreationWizard existingCategories={[]} />,
   role:<RoleEditModal role={{id:'role',name:'Custom',permissions:[]}} availablePermissions={[]} />,
   early:<EarlyAccessModal />,
-  approve:<ApproveScheduleRequestDialog requestId="request" studentName="Browser student" idPrefix="browser" />,
+  approve:<ApproveScheduleRequestDialog requestId="request" studentName="Browser student" idPrefix="browser" privateSlotLimit={1} slots={[1,3,5].map(day_of_week=>({day_of_week,start_time:'10:00:00',end_time:'11:00:00'}))} />,
   reschedule:<RescheduleDialog sessionId="session" sessionLabel="Browser session" idPrefix="browser" />,
   shared:<Shared />,
   drawer:<Drawer />,
@@ -181,6 +181,17 @@ try {
       await evaluate(`window.scrollTo(0,650);{const trigger=[...document.querySelectorAll('button')].find(element=>element.textContent.trim().startsWith(${JSON.stringify(trigger)}));trigger?.focus();trigger?.click()}`);
       await wait();
       await check(`!!document.querySelector('dialog:modal')`, `${view}: native top layer`);
+      if (view === 'approve') {
+        await check(`document.querySelector('button[type="submit"]').disabled && !document.querySelector('input[type="radio"]:checked')`, 'approval starts without implicit selection');
+        await evaluate(`document.querySelectorAll('input[type="radio"]')[1].focus()`);
+        await command('Input.dispatchKeyEvent',{type:'keyDown',key:' ',code:'Space',windowsVirtualKeyCode:32},sessionId);
+        await command('Input.dispatchKeyEvent',{type:'keyUp',key:' ',code:'Space',windowsVirtualKeyCode:32},sessionId);
+        await wait();
+        await check(`document.querySelector('input[type="radio"]:checked')?.value==='1' && new FormData(document.querySelector('dialog form')).get('selected_slot_indexes')==='1' && !document.querySelector('button[type="submit"]').disabled`, 'keyboard explicitly chooses only second proposal');
+        await evaluate(`document.querySelector('dialog form').requestSubmit()`);
+        await wait();
+        await check(`!!document.querySelector('dialog [role="alert"]') && document.querySelector('input[type="radio"]:checked')?.value==='1'`, 'approval failure preserves decision for retry');
+      }
       let measured;
       if(view==='drawer') {
         const box = await geometry('dialog:modal > nav');

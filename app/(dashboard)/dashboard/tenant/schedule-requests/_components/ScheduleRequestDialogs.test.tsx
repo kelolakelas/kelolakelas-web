@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
+  pending: false,
   approveState: { current: { success: false, message: '' } as Record<string, unknown> },
   rejectState: { current: { success: false, message: '' } as Record<string, unknown> },
   approveScheduleRequest: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('react', async (importOriginal) => ({
 }));
 vi.mock('react-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-dom')>()),
-  useFormStatus: () => ({ pending: false }),
+  useFormStatus: () => ({ pending: mocks.pending }),
 }));
 vi.mock('../_actions/actions', () => ({
   approveScheduleRequest: mocks.approveScheduleRequest,
@@ -54,6 +55,7 @@ const REQUEST_ID = '9a1c3e5f-2b4d-4e6f-8a0b-1c2d3e4f5a6b';
 const PAYMENT_URL = 'https://pay.test/checkout/session-1';
 
 beforeEach(() => {
+  mocks.pending = false;
   mocks.refresh.mockClear();
   mocks.approveState.current = { success: false, message: '' };
   mocks.rejectState.current = { success: false, message: '' };
@@ -79,6 +81,45 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('ApproveScheduleRequestDialog', () => {
+  const slots = [1, 3, 5].map(day_of_week => ({ day_of_week, start_time: '10:00:00', end_time: '11:00:00' }));
+
+  it('requires an explicit second-slot radio choice and preserves the full snapshot', () => {
+    render(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="subset" privateSlotLimit={1} slots={slots} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Setujui' }));
+    const radios = screen.getAllByRole<HTMLInputElement>('radio');
+    const submit = screen.getByRole<HTMLButtonElement>('button', { name: 'Ya, setujui' });
+    expect(submit.disabled).toBe(true);
+    expect(radios.every(radio => !radio.checked)).toBe(true);
+    fireEvent.click(radios[1]);
+    expect(submit.disabled).toBe(false);
+    expect(radios[1].checked).toBe(true);
+    const form = submit.closest('form')!;
+    expect(new FormData(form).getAll('selected_slot_indexes')).toEqual(['1']);
+    expect(JSON.parse(String(new FormData(form).get('proposal_snapshot')))).toEqual(slots);
+    form.reset();
+    expect(radios[1].checked).toBe(true);
+    expect(new FormData(form).getAll('selected_slot_indexes')).toEqual(['1']);
+    expect(screen.getByText(/1 slot dipilih dari maksimum 1/)).toBeTruthy();
+  });
+
+  it('caps checkbox selection at two, retaining choices on error and disabling while pending', () => {
+    const props = { requestId: REQUEST_ID, studentName: 'Budi', idPrefix: 'subset', privateSlotLimit: 2, slots };
+    const view = render(<ApproveScheduleRequestDialog {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Setujui' }));
+    const choices = screen.getAllByRole<HTMLInputElement>('checkbox');
+    fireEvent.click(choices[0]);
+    fireEvent.click(choices[2]);
+    expect(choices[1].disabled).toBe(true);
+    mocks.approveState.current = { success: false, message: 'Usulan berubah. Muat ulang.' };
+    view.rerender(<ApproveScheduleRequestDialog {...props} />);
+    expect(screen.getByRole('alert').textContent).toContain('Usulan berubah');
+    expect(choices[0].checked && choices[2].checked).toBe(true);
+    mocks.pending = true;
+    view.rerender(<ApproveScheduleRequestDialog {...props} />);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Memproses…' }).disabled).toBe(true);
+    expect(choices[0].closest('fieldset')?.disabled).toBe(true);
+  });
+
   it('opens the dialog on trigger and returns focus on cancel', () => {
     render(<ApproveScheduleRequestDialog requestId={REQUEST_ID} studentName="Budi" idPrefix="mobile" />);
     const trigger = screen.getByRole('button', { name: 'Setujui' });

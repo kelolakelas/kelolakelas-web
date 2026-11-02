@@ -78,12 +78,17 @@ export function ScheduleRequestList({
                       {studentName(request.student_id)} · {BILLING_CYCLE_LABELS[request.billing_cycle] || request.billing_cycle}
                     </p>
                     <p className="mt-1 text-sm text-[#52615b]">Metode pembayaran: {scheduleRequestPaymentLabel(request.payment_method)}</p>
+                    <p className="mt-2 text-sm font-bold">Usulan awal</p>
                     <ul className="mt-2 space-y-1 text-sm text-[#52615b]">
                       {request.slots.map((slot, index) => (
                         <li key={index}>{scheduleSlotLabel(slot) || 'Slot tidak valid'}</li>
                       ))}
                       {!request.slots.length && <li>Slot tidak tersedia</li>}
                     </ul>
+                    {!!request.approved_slots?.length && <div className="mt-2 rounded-xl bg-[#eef3dd] p-3 text-sm">
+                      <p className="font-bold">Jadwal keputusan tersimpan</p>
+                      <ul>{request.approved_slots.map((slot, index) => <li key={index}>{scheduleSlotLabel(slot)}</li>)}</ul>
+                    </div>}
                     {request.note && <p className="mt-2 text-sm text-[#52615b]">Catatan: {request.note}</p>}
                     {request.status === 'rejected' && request.rejection_reason && (
                       <p className="mt-2 text-sm font-medium text-[#8e2119]">

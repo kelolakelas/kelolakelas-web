@@ -84,7 +84,7 @@ async function readDecisionEnvelope(
  * (KEL-110).
  *
  * The backend owns the transition through the tenant claim: the browser
- * supplies only the request id. The billing checkout link is returned for
+ * supplies the request id and an optional snapshot-qualified selection. The billing checkout link is returned for
  * the dialog to display with its copy button; the dialog refreshes the row
  * after the member closes that successful confirmation. Billing carries no expiry
  * field on this answer, so no deadline is shown — only the link itself.
@@ -98,11 +98,28 @@ export async function approveScheduleRequest(
     return { success: false, message: 'ID permintaan jadwal tidak valid.' };
   }
 
+  let selectionBody: string | undefined;
+  if (formData.has('proposal_snapshot')) {
+    try {
+      const snapshot: unknown = JSON.parse(String(formData.get('proposal_snapshot')));
+      const limit: unknown = JSON.parse(String(formData.get('expected_private_slot_limit')));
+      const indexes = formData.getAll('selected_slot_indexes').map(value => String(value));
+      if (!Array.isArray(snapshot) || snapshot.length === 0 || !snapshot.every(slot => slot && typeof slot === 'object' && Number.isInteger(slot.day_of_week) && slot.day_of_week >= 1 && slot.day_of_week <= 7 && typeof slot.start_time === 'string' && typeof slot.end_time === 'string') ||
+        (limit !== null && (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit < 1)) ||
+        indexes.length === 0 || new Set(indexes).size !== indexes.length || indexes.some(value => !/^(0|[1-9]\d*)$/.test(value) || Number(value) >= snapshot.length)) {
+        return { success: false, message: 'Pilih jadwal yang valid dari usulan, lalu coba lagi.' };
+      }
+      selectionBody = JSON.stringify({ selected_slot_indexes: indexes.map(Number), proposal_snapshot: snapshot, expected_private_slot_limit: limit });
+    } catch {
+      return { success: false, message: 'Usulan jadwal tidak valid. Muat ulang halaman.' };
+    }
+  }
+
   try {
     const headers = await getAuthHeaders();
     const response = await fetch(
       `${getGatewayBaseUrl()}/api/v1/schedule-requests/${encodeURIComponent(requestId)}/approve`,
-      { method: 'POST', headers, cache: 'no-store' }
+      { method: 'POST', headers, cache: 'no-store', ...(selectionBody ? { body: selectionBody } : {}) }
     );
     const result = await readDecisionEnvelope(response);
 

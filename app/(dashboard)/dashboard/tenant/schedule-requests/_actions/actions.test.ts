@@ -145,6 +145,28 @@ afterEach(() => {
 });
 
 describe('approveScheduleRequest', () => {
+  it('forwards the exact snapshot and explicit second proposal with the reviewed limit', async () => {
+    respondWith(200, approveSuccessBody());
+    const form = approveForm();
+    const snapshot = [1, 3, 5].map(day_of_week => ({ day_of_week, start_time: '10:00:00', end_time: '11:00:00' }));
+    form.set('proposal_snapshot', JSON.stringify(snapshot));
+    form.set('expected_private_slot_limit', '1');
+    form.append('selected_slot_indexes', '1');
+    expect((await approveScheduleRequest({ success: false, message: '' }, form)).success).toBe(true);
+    expect(JSON.parse(String(lastRequest().init.body))).toEqual({ selected_slot_indexes: [1], proposal_snapshot: snapshot, expected_private_slot_limit: 1 });
+  });
+
+  it.each([[], ['1', '1'], ['3'], ['-1']])('rejects invalid proposal references %j without a network call', async (...values) => {
+    const indexes = values.flat();
+    respondWith(200, approveSuccessBody());
+    const form = approveForm();
+    form.set('proposal_snapshot', JSON.stringify([1, 3, 5].map(day_of_week => ({ day_of_week, start_time: '10:00:00', end_time: '11:00:00' }))));
+    form.set('expected_private_slot_limit', '2');
+    indexes.forEach(index => form.append('selected_slot_indexes', index));
+    expect((await approveScheduleRequest({ success: false, message: '' }, form)).success).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('posts the request id and returns the payment link for the dialog', async () => {
     respondWith(200, approveSuccessBody());
 

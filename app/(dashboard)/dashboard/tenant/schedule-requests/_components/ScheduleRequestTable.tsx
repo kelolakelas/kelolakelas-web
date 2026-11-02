@@ -164,6 +164,7 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                 <span className="font-semibold text-gray-900 dark:text-gray-100">
                   <SlotList slots={request.slots} />
                 </span>
+                {!!request.approved_slots?.length && <div className="mt-2 font-semibold">Jadwal keputusan tersimpan: <SlotList slots={request.approved_slots} /></div>}
               </div>
               <div>
                 <span className="block text-[11px] text-gray-500 dark:text-gray-400">
@@ -192,7 +193,9 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                     requestId={request.id}
                     studentName={scheduleRequestStudentName(student)}
                     idPrefix="mobile"
-                        privateSlotLimit={privateSlotLimit}
+                    privateSlotLimit={privateSlotLimit}
+                    slots={request.slots}
+                    approvedSlots={request.approved_slots}
                     recovery
                   />
                 )}
@@ -205,7 +208,9 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                   requestId={request.id}
                   studentName={scheduleRequestStudentName(student)}
                   idPrefix="mobile"
-                        privateSlotLimit={privateSlotLimit}
+                  privateSlotLimit={privateSlotLimit}
+                  slots={request.slots}
+                  approvedSlots={request.approved_slots}
                 />
                 <RejectScheduleRequestDialog
                   requestId={request.id}
@@ -273,7 +278,9 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                   </span>
                 </td>
                 <td className="px-6 py-4">
+                  <span className="block text-xs text-gray-500">Usulan awal</span>
                   <SlotList slots={request.slots} />
+                  {!!request.approved_slots?.length && <div className="mt-2 font-semibold">Jadwal keputusan tersimpan: <SlotList slots={request.approved_slots} /></div>}
                   {request.note && (
                     <span className="mt-1 block max-w-xs text-xs text-gray-500 dark:text-gray-400">
                       Catatan: {request.note}
@@ -299,6 +306,8 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                         studentName={scheduleRequestStudentName(student)}
                         idPrefix="desktop"
                         privateSlotLimit={privateSlotLimit}
+                        slots={request.slots}
+                        approvedSlots={request.approved_slots}
                       />
                       <RejectScheduleRequestDialog
                         requestId={request.id}
@@ -319,7 +328,9 @@ export function ScheduleRequestTable({ rows }: { rows: TenantScheduleRequestRow[
                           requestId={request.id}
                           studentName={scheduleRequestStudentName(student)}
                           idPrefix="desktop"
-                        privateSlotLimit={privateSlotLimit}
+                          privateSlotLimit={privateSlotLimit}
+                          slots={request.slots}
+                          approvedSlots={request.approved_slots}
                           recovery
                         />
                       )}

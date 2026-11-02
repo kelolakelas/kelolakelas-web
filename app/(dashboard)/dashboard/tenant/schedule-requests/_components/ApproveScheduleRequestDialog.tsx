@@ -5,6 +5,7 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/payment-status';
+import { scheduleSlotLabel, type ScheduleRequestSlot } from '@/lib/schedule-request';
 import {
   approveScheduleRequest,
   type ScheduleRequestDecisionState,
@@ -18,17 +19,46 @@ const initialState: ScheduleRequestDecisionState = { success: false, message: ''
  * Split out so `useFormStatus` reads the enclosing Server Action form: the
  * button disables itself while the approval is in flight.
  */
-function ConfirmSubmitButton({ recovery = false }: { recovery?: boolean }) {
+function ConfirmSubmitButton({ recovery = false, invalid = false }: { recovery?: boolean; invalid?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || invalid}
       aria-busy={pending}
       className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:opacity-60"
     >
       {pending ? 'Memproses…' : recovery ? 'Lihat/pulihkan pembayaran' : 'Ya, setujui'}
     </button>
+  );
+}
+
+function SlotSelection({ slots, selected, setSelected, limit, locked }: {
+  slots: ScheduleRequestSlot[];
+  selected: number[];
+  setSelected: (indexes: number[]) => void;
+  limit: number | null | undefined;
+  locked: boolean;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <fieldset disabled={pending || locked} className="w-full space-y-3 rounded-xl border border-gray-300 p-4 dark:border-gray-700">
+      <legend className="px-2 text-sm font-semibold">Pilih jadwal yang disetujui</legend>
+      {slots.map((slot, index) => (
+        <label key={index} className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm">
+          <input type={limit === 1 ? 'radio' : 'checkbox'} name="slot_choice" value={index}
+            checked={selected.includes(index)}
+            ref={input => { if (input) input.defaultChecked = selected.includes(index); }}
+            disabled={limit !== 1 && limit != null && selected.length >= limit && !selected.includes(index)}
+            onChange={() => setSelected(limit === 1 ? [index] : selected.includes(index) ? selected.filter(value => value !== index) : [...selected, index].sort((left, right) => left - right))}
+            className="size-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600" />
+          {scheduleSlotLabel(slot)}
+        </label>
+      ))}
+      <p role="status" className="text-sm">{selected.length} slot dipilih{limit != null ? ` dari maksimum ${limit}` : ' (legacy tanpa batas)'}. Harga kelas tetap.</p>
+      {selected.length > 0 && <p className="text-sm font-medium">Akan disetujui: {selected.map(index => scheduleSlotLabel(slots[index])).join('; ')}</p>}
+      {locked && <p className="text-sm">Keputusan sudah tersimpan; pemulihan memakai jadwal yang sama.</p>}
+    </fieldset>
   );
 }
 
@@ -118,6 +148,8 @@ export function ApproveScheduleRequestDialog({
   idPrefix,
   recovery = false,
   privateSlotLimit,
+  slots = [],
+  approvedSlots,
 }: {
   requestId: string;
   studentName: string;
@@ -125,6 +157,8 @@ export function ApproveScheduleRequestDialog({
   idPrefix: string;
   recovery?: boolean;
   privateSlotLimit?: number | null;
+  slots?: ScheduleRequestSlot[];
+  approvedSlots?: ScheduleRequestSlot[];
 }) {
   const [state, formAction] = useActionState(approveScheduleRequest, initialState);
   useEffect(() => {
@@ -134,6 +168,7 @@ export function ApproveScheduleRequestDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selected, setSelected] = useState<number[]>(() => slots.flatMap((slot, index) => approvedSlots?.some(approved => approved.day_of_week === slot.day_of_week && approved.start_time === slot.start_time && approved.end_time === slot.end_time) ? [index] : []));
   const titleId = `${idPrefix}-approve-schedule-request-title-${requestId}`;
   const paymentInputId = `${idPrefix}-approve-payment-link-${requestId}`;
 
@@ -195,9 +230,15 @@ export function ApproveScheduleRequestDialog({
                 : 'Permintaan yang disetujui menerbitkan enrollment dan tautan pembayaran untuk parent. Tindakan ini tidak dapat diurungkan.'}
             </p>
 
-            {!recovery && <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{privateSlotLimit != null ? `Batas saat ditampilkan: ${privateSlotLimit} slot mingguan per enrollment. Approval mengambil semua usulan; jika melebihi batas terbaru, kirim rekomendasi yang lebih sedikit. Server memeriksa kembali batas saat keputusan disimpan.` : 'Batas slot belum ditetapkan (legacy). Approval mengambil seluruh usulan sesuai kebijakan kelas terbaru.'}</p>}
+            {!recovery && <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">Pilih minimal satu usulan. Hanya jadwal terpilih menjadi jadwal belajar. Server memeriksa kembali usulan dan batas terbaru; jika berubah, muat ulang halaman.</p>}
             <form action={formAction} className="mt-6 flex flex-wrap justify-end gap-3">
               <input type="hidden" name="request_id" value={requestId} />
+              {!recovery && <>
+                <input type="hidden" name="proposal_snapshot" value={JSON.stringify(slots)} />
+                <input type="hidden" name="expected_private_slot_limit" value={JSON.stringify(privateSlotLimit ?? null)} />
+                {selected.map(index => <input key={index} type="hidden" name="selected_slot_indexes" value={index} />)}
+                <SlotSelection slots={slots} selected={selected} setSelected={setSelected} limit={privateSlotLimit} locked={!!approvedSlots?.length} />
+              </>}
               <button
                 type="button"
                 onClick={close}
@@ -205,7 +246,7 @@ export function ApproveScheduleRequestDialog({
               >
                 Tidak jadi
               </button>
-              <ConfirmSubmitButton recovery={recovery} />
+              <ConfirmSubmitButton recovery={recovery} invalid={!recovery && (selected.length === 0 || (!approvedSlots?.length && privateSlotLimit != null && selected.length > privateSlotLimit))} />
             </form>
 
             {dialogOpen && !state.success && state.message && (
