@@ -83,6 +83,7 @@ export type ScheduleRequest = {
   billing_cycle: 'monthly' | 'quarterly' | 'yearly';
   payment_method?: PaymentChannel;
   slots: ScheduleRequestSlot[];
+  approved_slots?: ScheduleRequestSlot[];
   note?: string | null;
   status: ScheduleRequestStatus;
   rejection_reason?: string | null;
@@ -298,6 +299,7 @@ export function normalizeScheduleRequests(value: unknown): ScheduleRequest[] {
         status: record.status as ScheduleRequestStatus,
         rejection_reason: typeof record.rejection_reason === 'string' ? record.rejection_reason : null,
         recommended_slots: normalizeRecommendedSlots(record.recommended_slots),
+        approved_slots: normalizeRecommendedSlots(record.approved_slots),
         decided_at: typeof record.decided_at === 'string' ? record.decided_at : null,
         tenant_id: typeof record.tenant_id === 'string' ? record.tenant_id : null,
         parent_id: typeof record.parent_id === 'string' ? record.parent_id : null,
@@ -412,6 +414,9 @@ export function scheduleRequestDecisionErrorMessage(
 ): string {
   if (status === 401 || status === 403) return DECISION_PERMISSION_MESSAGE;
   if (status === 404) return DECISION_NOT_FOUND_MESSAGE;
+  if (status === 409 && code === 'private_selection_stale') return 'Usulan atau batas slot berubah. Muat ulang halaman untuk melihat jadwal dan batas terbaru.';
+  if (status === 409 && code === 'private_selection_conflict') return 'Keputusan jadwal sudah tersimpan dengan pilihan berbeda. Muat ulang lalu gunakan Lihat/pulihkan pembayaran.';
+  if (status === 422 && code === 'private_selection_required') return 'Pilih minimal satu jadwal dari usulan sesuai batas kelas.';
   if (status === 409) return DECISION_CONFLICT_MESSAGE;
   if (status === 422 && code === PLATFORM_FEE_EXCEEDS_GROSS_CODE) return platformFeeRejectedState.message;
   if (status === 400 || status === 422) return DECISION_VALIDATION_MESSAGE;
