@@ -25,7 +25,36 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+dialog:modal:not([data-modal-layout]) {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: calc(100% - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+dialog[data-modal-layout='centered']:modal {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+dialog[data-modal-layout='centered'] > * {
+  flex-shrink: 0;
+  margin: auto;
+}
+
 @layer base {
+  dialog[data-modal-layout='centered'] {
+    padding: 1rem;
+  }
+
+  dialog[data-modal-layout]::backdrop {
+    background: rgb(0 0 0 / 60%);
+    backdrop-filter: blur(4px);
+  }
+
   /* KEL-114: elemen yang dapat diklik menampilkan cursor pointer. */
   button:not(:disabled),
   [role='button']:not([aria-disabled='true']),
