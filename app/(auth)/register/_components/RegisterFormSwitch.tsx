@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { ParentRegisterForm } from './ParentRegisterForm';
 import { TenantRegisterForm } from './TenantRegisterForm';
 
@@ -52,6 +53,15 @@ export function RegisterFormSwitch() {
       </div>
 
       {isTenant ? <TenantRegisterForm /> : <ParentRegisterForm />}
+      <p className="text-center text-sm text-gray-600">
+        Sudah punya akun?{' '}
+        <Link
+          href="/login"
+          className="inline-flex min-h-11 items-center font-semibold text-indigo-700 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          Masuk
+        </Link>
+      </p>
     </div>
   );
 }

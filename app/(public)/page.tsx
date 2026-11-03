@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { DevelopmentNotice } from "./_components/DevelopmentNotice";
-import { EarlyAccessModal } from "./_components/EarlyAccessModal";
 import { FeaturesSection } from "./_components/FeaturesSection";
 import { HeroSection } from "./_components/HeroSection";
 
@@ -60,7 +60,9 @@ export default function Home() {
           <a className="hidden min-h-11 items-center px-3 text-[#52615b] transition-colors hover:text-[#17231f] sm:flex" href="#fitur">
             Fitur
           </a>
-          <EarlyAccessModal />
+          <Link href="/login" className="flex min-h-11 items-center gap-1 rounded-full bg-[#17231f] px-4 text-[#f8f7f3] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17231f]">
+            Akses awal <ArrowUpRight size={16} aria-hidden="true" />
+          </Link>
         </nav>
       </header>
 
