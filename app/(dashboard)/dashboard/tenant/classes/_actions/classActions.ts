@@ -528,7 +528,7 @@ export async function updateClassPublication(
     return {
       success: true,
       message: isPublished
-        ? 'Class published. It is now visible in /kelas.'
+        ? ''
         : 'Class unpublished. It is no longer visible in /kelas.',
       data: result.data,
     };
