@@ -206,6 +206,39 @@ describe('EnrollmentPanel private vs group (KEL-109)', () => {
     }
   });
 
+  it.each(['2', '24:00', '23:60', ''])('preserves invalid or incomplete parent time %s', (value) => {
+    renderPrivate();
+    const control = screen.getByLabelText('Jam mulai') as HTMLInputElement;
+    fireEvent.change(control, { target: { value } });
+    fireEvent.blur(control);
+    expect(control.value).toBe(value);
+    expect(control.validity.valid).toBe(false);
+    expect(fireEvent.keyDown(control, { key: 'Tab' })).toBe(true);
+    expect(fireEvent.keyDown(control, { key: 'Tab', shiftKey: true })).toBe(true);
+  });
+
+  it('preserves paste, deletion and correction on both parent time fields', () => {
+    renderPrivate();
+    for (const label of ['Jam mulai', 'Jam selesai']) {
+      const control = screen.getByLabelText(label) as HTMLInputElement;
+      control.focus();
+      fireEvent.input(control, {
+        target: { value: '23:59', selectionStart: 5, selectionEnd: 5 },
+        inputType: 'insertFromPaste', data: '23:59',
+      });
+      expect(control.value).toBe('23:59');
+      expect(control.selectionStart).toBe(5);
+      fireEvent.input(control, {
+        target: { value: ':59', selectionStart: 0, selectionEnd: 0 },
+        inputType: 'deleteContentBackward', data: null,
+      });
+      expect(control.value).toBe(':59');
+      expect(control.validity.valid).toBe(false);
+      fireEvent.change(control, { target: { value: '00:59' } });
+      expect(control.validity.valid).toBe(true);
+    }
+  });
+
   it('links a duplicate error to the request list', () => {
     mocks.requestState.current = {
       success: false,

@@ -10,6 +10,14 @@ type Props = Omit<
   onValueChange: (value: string) => void;
 };
 
+function selectTimeSegment(input: HTMLInputElement | null, start: number, end: number) {
+  try {
+    input?.setSelectionRange?.(start, end);
+  } catch {
+    return;
+  }
+}
+
 /** A wall-clock string, never a Date: shared by manual, generated and saved slots. */
 export function ScheduleTimeInput({
   value,
@@ -22,7 +30,7 @@ export function ScheduleTimeInput({
   const advance = useRef(false);
   useLayoutEffect(() => {
     if (advance.current && input.current === document.activeElement) {
-      input.current?.setSelectionRange(3, 5);
+      selectTimeSegment(input.current, 3, 5);
     }
     advance.current = false;
   }, [value]);
@@ -39,7 +47,8 @@ export function ScheduleTimeInput({
       value={value}
       onFocus={(event) => {
         // Keyboard entry starts on hours; a pointer can still select any part.
-        event.currentTarget.setSelectionRange(
+        selectTimeSegment(
+          event.currentTarget,
           0,
           value.indexOf(':') > 0 ? value.indexOf(':') : value.length,
         );
