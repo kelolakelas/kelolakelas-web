@@ -42,7 +42,6 @@ import { EnrollmentPanel } from './app/(public)/kelas/[id]/_components/Enrollmen
 import { ClassEditModal } from './app/(dashboard)/dashboard/tenant/classes/_components/ClassEditModal';
 import { ClassCreationWizard } from './app/(dashboard)/dashboard/tenant/classes/_components/ClassCreationWizard';
 import { RoleEditModal } from './app/(dashboard)/dashboard/tenant/roles/_components/RoleEditModal';
-import { EarlyAccessModal } from './app/(public)/_components/EarlyAccessModal';
 import { ApproveScheduleRequestDialog } from './app/(dashboard)/dashboard/tenant/schedule-requests/_components/ApproveScheduleRequestDialog';
 import { RescheduleDialog } from './app/(dashboard)/dashboard/tenant/sessions/_components/RescheduleDialog';
 const record = { id:'class', category_id:'category', tenant_id:'tenant', name:'Browser class', type:'private', price:100000, private_slot_limit:1, status:'active', created_at:'' };
@@ -74,7 +73,6 @@ const views = {
   edit:<ClassEditModal classRecord={record} categories={[]} />,
   wizard:<ClassCreationWizard existingCategories={[]} />,
   role:<RoleEditModal role={{id:'role',name:'Custom',permissions:[]}} availablePermissions={[]} />,
-  early:<EarlyAccessModal />,
   approve:<ApproveScheduleRequestDialog requestId="request" studentName="Browser student" idPrefix="browser" privateSlotLimit={1} slots={[1,3,5].map(day_of_week=>({day_of_week,start_time:'10:00:00',end_time:'11:00:00'}))} />,
   reschedule:<RescheduleDialog sessionId="session" sessionLabel="Browser session" idPrefix="browser" />,
   shared:<Shared />,
@@ -173,7 +171,7 @@ try {
     }
     results.push({ viewport: name, size: [width,height], nativeTemplates: inventory.length, shortAndLong: true, tolerancePx: 2 });
   }
-  for (const [view, trigger] of Object.entries({ student:'Tambah student', edit:'Edit', wizard:'Create New Class', role:'Edit', early:'Akses awal', approve:'Setujui', reschedule:'Reschedule', shared:'Shared', drawer:'Drawer' })) {
+  for (const [view, trigger] of Object.entries({ student:'Tambah student', edit:'Edit', wizard:'Create New Class', role:'Edit', approve:'Setujui', reschedule:'Reschedule', shared:'Shared', drawer:'Drawer' })) {
     for (const [width,height] of [[1280,900],[390,844]]) {
       await command('Emulation.setDeviceMetricsOverride', {width,height,deviceScaleFactor:1,mobile:false}, sessionId);
       await command('Page.navigate', {url:origin+'/?view='+view}, sessionId);
@@ -198,7 +196,7 @@ try {
         measured = box;
         assert.equal(box.x,0,'drawer remains left aligned');
       } else {
-        const selector = ['edit','wizard','role','early','shared'].includes(view) ? 'dialog:modal > :first-child' : 'dialog:modal';
+        const selector = ['edit','wizard','role','shared'].includes(view) ? 'dialog:modal > :first-child' : 'dialog:modal';
         const box = await geometry(selector);
         measured = box;
         if(box.height <= height-24) centered(box, `${view}:${width}`, 11);

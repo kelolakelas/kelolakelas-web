@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { loginAction, type ActionResponse } from '../_actions/actions';
 
 const initialState: ActionResponse = {
@@ -142,6 +143,15 @@ export function LoginForm({ registered = false, reset = false, redirectTo }: { r
         <SubmitButton />
         <a href="/platform/login" className="block text-center text-sm text-indigo-700 underline">Platform admin sign in</a>
       </form>
+      <p className="mt-6 text-center text-sm text-gray-600">
+        Belum punya akun?{' '}
+        <Link
+          href="/register"
+          className="inline-flex min-h-11 items-center font-semibold text-indigo-700 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          Daftar
+        </Link>
+      </p>
     </div>
   );
 }
