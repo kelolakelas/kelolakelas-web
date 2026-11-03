@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { ScheduleTimeInput } from './ScheduleTimeInput';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 function setup(initial = '09:00') {
   function Form() {
     const [value, setValue] = useState(initial);
@@ -47,6 +50,24 @@ function insert(
 }
 
 describe('schedule wall-clock entry', () => {
+  it('keeps focus and typing when the selection method is missing', () => {
+    const input = setup('');
+    Object.defineProperty(input, 'setSelectionRange', { value: undefined, configurable: true });
+    fireEvent.focus(input);
+    for (const digit of '2359') insert(input, digit);
+    expect(input.value).toBe('23:59');
+    expect(input.validity.valid).toBe(true);
+  });
+  it('keeps manual entry usable when segment selection is unsupported', () => {
+    vi.spyOn(HTMLInputElement.prototype, 'setSelectionRange').mockImplementation(() => {
+      throw new DOMException('Selection unavailable', 'InvalidStateError');
+    });
+    const input = setup('');
+    for (const digit of '1234') insert(input, digit);
+    expect(input.value).toBe('12:34');
+    expect(input.validity.valid).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
   it.each(['00', '12', '23'])(
     'advances valid completed hour %s to minutes and preserves seconds',
     (hour) => {

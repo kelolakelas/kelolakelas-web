@@ -12,6 +12,7 @@ import {
   scheduleDayControlStyle,
   scheduleFieldClass,
 } from '@/lib/schedule-field-styles';
+import { ScheduleTimeInput } from '@/app/(dashboard)/dashboard/tenant/classes/_components/ScheduleTimeInput';
 import { WEEKDAY_NAMES } from '@/lib/enrollment-schedule';
 import {
   validateScheduleSlotDrafts,
@@ -216,11 +217,10 @@ export function ScheduleRequestForm({
                   <label htmlFor={`schedule-request-start-${index}`} className="text-sm font-bold">
                     Jam mulai
                   </label>
-                  <input
+                  <ScheduleTimeInput
                     id={`schedule-request-start-${index}`}
-                    type="time"
                     value={draft.start_time}
-                    onChange={(event) => updateDraft(index, { start_time: event.target.value })}
+                    onValueChange={(value) => updateDraft(index, { start_time: value })}
                     required
                     aria-invalid={!!slotError}
                     aria-describedby="schedule-request-slot-help schedule-request-slot-error"
@@ -231,11 +231,10 @@ export function ScheduleRequestForm({
                   <label htmlFor={`schedule-request-end-${index}`} className="text-sm font-bold">
                     Jam selesai
                   </label>
-                  <input
+                  <ScheduleTimeInput
                     id={`schedule-request-end-${index}`}
-                    type="time"
                     value={draft.end_time}
-                    onChange={(event) => updateDraft(index, { end_time: event.target.value })}
+                    onValueChange={(value) => updateDraft(index, { end_time: value })}
                     required
                     aria-invalid={!!slotError}
                     aria-describedby="schedule-request-slot-help schedule-request-slot-error"

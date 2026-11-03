@@ -167,8 +167,33 @@ describe('EnrollmentPanel private vs group (KEL-109)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Hapus slot ini' })[1]);
     const payload = container.querySelector<HTMLInputElement>('input[name="slots"]');
     expect(JSON.parse(payload!.value)).toEqual([{ day_of_week: 7, start_time: '09:15', end_time: '10:45' }]);
-    expect(screen.getByLabelText('Jam mulai').getAttribute('type')).toBe('time');
+    expect(screen.getByLabelText('Jam mulai').getAttribute('type')).toBe('text');
+    expect(screen.getByLabelText('Jam mulai').getAttribute('placeholder')).toBe('HH:mm');
     expect(screen.getByLabelText('Hari').tagName).toBe('SELECT');
+  });
+
+  it('advances hour to minute on the parent start/end inputs (KEL-233)', () => {
+    renderPrivate();
+    for (const label of ['Jam mulai', 'Jam selesai']) {
+      const control = screen.getByLabelText(label) as HTMLInputElement;
+      fireEvent.change(control, { target: { value: '09:00' } });
+      control.focus();
+      control.setSelectionRange(0, 2);
+      const fire = (data: string) => {
+        const start = control.selectionStart ?? control.value.length;
+        const end = control.selectionEnd ?? control.value.length;
+        const value = control.value.slice(0, start) + data + control.value.slice(end);
+        fireEvent.input(control, {
+          target: { value, selectionStart: start + data.length, selectionEnd: start + data.length },
+          data,
+          inputType: 'insertText',
+        });
+      };
+      fire('1');
+      fire('6');
+      expect([control.selectionStart, control.selectionEnd]).toEqual([3, 5]);
+      expect(control.value).toBe('16:00');
+    }
   });
 
   it('associates server slot errors with each affected control', () => {
@@ -178,6 +203,39 @@ describe('EnrollmentPanel private vs group (KEL-109)', () => {
     expect(error.textContent).toBe('Slot tidak tersedia.');
     for (const label of ['Hari', 'Jam mulai', 'Jam selesai']) {
       expect(screen.getByLabelText(label).getAttribute('aria-describedby')).toContain(error.id);
+    }
+  });
+
+  it.each(['2', '24:00', '23:60', ''])('preserves invalid or incomplete parent time %s', (value) => {
+    renderPrivate();
+    const control = screen.getByLabelText('Jam mulai') as HTMLInputElement;
+    fireEvent.change(control, { target: { value } });
+    fireEvent.blur(control);
+    expect(control.value).toBe(value);
+    expect(control.validity.valid).toBe(false);
+    expect(fireEvent.keyDown(control, { key: 'Tab' })).toBe(true);
+    expect(fireEvent.keyDown(control, { key: 'Tab', shiftKey: true })).toBe(true);
+  });
+
+  it('preserves paste, deletion and correction on both parent time fields', () => {
+    renderPrivate();
+    for (const label of ['Jam mulai', 'Jam selesai']) {
+      const control = screen.getByLabelText(label) as HTMLInputElement;
+      control.focus();
+      fireEvent.input(control, {
+        target: { value: '23:59', selectionStart: 5, selectionEnd: 5 },
+        inputType: 'insertFromPaste', data: '23:59',
+      });
+      expect(control.value).toBe('23:59');
+      expect(control.selectionStart).toBe(5);
+      fireEvent.input(control, {
+        target: { value: ':59', selectionStart: 0, selectionEnd: 0 },
+        inputType: 'deleteContentBackward', data: null,
+      });
+      expect(control.value).toBe(':59');
+      expect(control.validity.valid).toBe(false);
+      fireEvent.change(control, { target: { value: '00:59' } });
+      expect(control.validity.valid).toBe(true);
     }
   });
 

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:modal-browser": "node scripts/verify-modal-layout.mjs"
+    "test:modal-browser": "node scripts/verify-modal-layout.mjs",
+    "test:time-browser": "node scripts/verify-schedule-time-entry.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.28.0",
