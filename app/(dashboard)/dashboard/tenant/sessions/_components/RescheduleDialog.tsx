@@ -1,5 +1,6 @@
 'use client';
 
+import { ScheduleTimeInput } from '@/app/(dashboard)/dashboard/tenant/classes/_components/ScheduleTimeInput';
 import { DateInput } from '@/components/DateInput';
 
 import { useActionState, useEffect, useRef, useState } from 'react';
@@ -157,13 +158,12 @@ export function RescheduleDialog({
               >
                 Jam mulai baru
               </label>
-              <input
+              <ScheduleTimeInput
                 id={`${dialogId}-start`}
                 name="new_start_time"
-                type="time"
                 required
                 value={newStartTime}
-                onChange={(event) => setNewStartTime(event.target.value)}
+                onValueChange={setNewStartTime}
                 className="block w-full min-h-[44px] rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               />
             </div>
@@ -174,13 +174,12 @@ export function RescheduleDialog({
               >
                 Jam selesai baru
               </label>
-              <input
+              <ScheduleTimeInput
                 id={`${dialogId}-end`}
                 name="new_end_time"
-                type="time"
                 required
                 value={newEndTime}
-                onChange={(event) => setNewEndTime(event.target.value)}
+                onValueChange={setNewEndTime}
                 className="block w-full min-h-[44px] rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               />
             </div>
